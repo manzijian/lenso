@@ -23,6 +23,7 @@ struct TextNotesView: View {
                     try? ScreenshotStore.shared.updateTextNote(id: note.id, content: draft)
                     editing = nil
                     reload()
+                    NotificationCenter.default.post(name: .textNotesChanged, object: nil)
                 }
             )
         }
@@ -135,6 +136,7 @@ struct TextNotesView: View {
             sourceApp: NSWorkspace.shared.frontmostApplication?.localizedName
         ) else { return }
         reload()
+        NotificationCenter.default.post(name: .textNotesChanged, object: nil)
         draft = ""
         editing = note
     }
@@ -155,6 +157,7 @@ struct TextNotesView: View {
     private func delete(_ note: TextNote) {
         try? ScreenshotStore.shared.deleteTextNote(id: note.id)
         reload()
+        NotificationCenter.default.post(name: .textNotesChanged, object: nil)
     }
 }
 

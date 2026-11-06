@@ -7,6 +7,7 @@ struct LensoLibraryView: View {
     @State private var selectedIDs: Set<UUID> = []
     @State private var searchText = ""
     @State private var section: Section = .screenshots
+    @State private var noteCount = 0
     var onOpenPreview: ((UUID) -> Void)? = nil
     @Environment(\.openWindow) private var openWindow
 
@@ -51,6 +52,10 @@ struct LensoLibraryView: View {
         ))
         // 参考图为浅色玻璃，固定浅色外观（否则深色模式下文字变白、对比度丢失）
         .environment(\.colorScheme, .light)
+        .onAppear { noteCount = ScreenshotStore.shared.textNoteCount() }
+        .onReceive(NotificationCenter.default.publisher(for: .textNotesChanged)) { _ in
+            noteCount = ScreenshotStore.shared.textNoteCount()
+        }
     }
 
     /// 蓝紫氛围背景（参考图 4）
@@ -99,9 +104,12 @@ struct LensoLibraryView: View {
                 .onTapGesture { section = .screenshots }
 
             navigationItem("文字", icon: "text.alignleft",
-                           count: ScreenshotStore.shared.textNoteCount(),
+                           count: noteCount,
                            isPrimary: section == .text)
-                .onTapGesture { section = .text }
+                .onTapGesture {
+                    section = .text
+                    noteCount = ScreenshotStore.shared.textNoteCount()
+                }
 
             navigationItem("最近", icon: "clock")
             navigationItem("收藏", icon: "star")
