@@ -1,68 +1,74 @@
 import AppKit
 import OSLog
 
-/// 剪贴板监听：记录复制过的图片与文字（已复制过的内容去重，避免重复条目）
-@MainActor
-final class ClipboardMonitor {
+/// 剪贴板监听：记录复制过的图片与文字（自动收进文字收纳）
+///
+/// 注意：必须防止 App Nap —— 应用在后台时系统会大幅节流主线程 Timer，
+/// 导致「在别的 App 里复制，LENSO 收不到」。这里用后台队列的 DispatchSourceTimer，
+/// 并持有 ProcessInfo 活动声明阻止 App Nap。
+final class ClipboardMonitor: @unchecked Sendable {
     static let shared = ClipboardMonitor()
 
     private let log = Logger(subsystem: "com.lenso.app", category: "clipboard")
-    private var timer: Timer?
+    private let queue = DispatchQueue(label: "com.lenso.clipboard", qos: .utility)
+    private var timer: DispatchSourceTimer?
+    private var activity: NSObjectProtocol?
     private var lastChangeCount = NSPasteboard.general.changeCount
     private var lastImageHash: Int?
     private var lastText: String?
     /// 我们自己写回剪贴板时跳过记录
     private var skipNextChange = false
+    private let stateLock = NSLock()
 
     func start() {
-        guard timer == nil else { return }
-        lastChangeCount = NSPasteboard.general.changeCount
-        backfillNotesFromHistory()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.poll() }
-        }
-        log.info("clipboard monitor started")
-    }
+        queue.sync {
+            guard timer == nil else { return }
+            activity = ProcessInfo.processInfo.beginActivity(
+                options: [.userInitiatedAllowingIdleSystemSleep],
+                reason: "LENSO 剪贴板历史监听"
+            )
+            lastChangeCount = NSPasteboard.general.changeCount
+            backfillNotesFromHistory()
 
-    /// 把历史里已有的剪贴板文字补录进「文字收纳」（去重，最多 20 条）
-    private func backfillNotesFromHistory() {
-        let store = ScreenshotStore.shared
-        let notes = (try? store.listTextNotes()) ?? []
-        let existing = Set(notes.map(\.content))
-        let texts = ((try? store.listClipboard(limit: 40)) ?? [])
-            .filter { $0.kind == .text }
-            .prefix(20)
-        var added = 0
-        for item in texts {
-            guard let text = item.text, !existing.contains(text) else { continue }
-            _ = try? store.createTextNote(content: text, sourceApp: item.sourceApp)
-            added += 1
-        }
-        if added > 0 {
-            NotificationCenter.default.post(name: .textNotesChanged, object: nil)
-            log.info("backfilled \(added) notes from clipboard history")
+            let t = DispatchSource.makeTimerSource(queue: queue)
+            t.schedule(deadline: .now() + 1, repeating: 0.7, leeway: .milliseconds(150))
+            t.setEventHandler { [weak self] in self?.poll() }
+            t.resume()
+            timer = t
+            log.info("clipboard monitor started (app-nap disabled)")
         }
     }
 
     func stop() {
-        timer?.invalidate()
-        timer = nil
+        queue.sync {
+            timer?.cancel()
+            timer = nil
+            if let activity {
+                ProcessInfo.processInfo.endActivity(activity)
+                self.activity = nil
+            }
+        }
     }
 
     /// 标记下一次剪贴板变化由本应用写入，无需记录
     func markSelfWrite() {
+        stateLock.lock()
         skipNextChange = true
         lastChangeCount = NSPasteboard.general.changeCount
+        stateLock.unlock()
     }
 
     private func poll() {
+        stateLock.lock()
+        let skipping = skipNextChange
+        if skipping { skipNextChange = false }
+        stateLock.unlock()
+
         let pasteboard = NSPasteboard.general
-        guard pasteboard.changeCount != lastChangeCount else { return }
-        lastChangeCount = pasteboard.changeCount
-        if skipNextChange {
-            skipNextChange = false
-            return
-        }
+        let count = pasteboard.changeCount
+        guard count != lastChangeCount else { return }
+        lastChangeCount = count
+        if skipping { return }
 
         // 来源应用：剪贴板变化时最前台的应用（LENSO 自身除外）
         let sourceApp = frontmostAppName()
@@ -94,12 +100,36 @@ final class ClipboardMonitor {
                 let existing = (try? ScreenshotStore.shared.listTextNotes()) ?? []
                 if !existing.contains(where: { $0.content == text }) {
                     _ = try ScreenshotStore.shared.createTextNote(content: text, sourceApp: sourceApp)
-                    NotificationCenter.default.post(name: .textNotesChanged, object: nil)
+                    DispatchQueue.main.async {
+                        NotificationCenter.default.post(name: .textNotesChanged, object: nil)
+                    }
                 }
                 log.info("recorded clipboard text (\(text.count) chars) from \(sourceApp ?? "?", privacy: .public)")
             } catch {
                 log.error("save clipboard text failed: \(error.localizedDescription, privacy: .public)")
             }
+        }
+    }
+
+    /// 把历史里已有的剪贴板文字补录进「文字收纳」（去重，最多 20 条）
+    private func backfillNotesFromHistory() {
+        let store = ScreenshotStore.shared
+        let notes = (try? store.listTextNotes()) ?? []
+        let existing = Set(notes.map(\.content))
+        let texts = ((try? store.listClipboard(limit: 40)) ?? [])
+            .filter { $0.kind == .text }
+            .prefix(20)
+        var added = 0
+        for item in texts {
+            guard let text = item.text, !existing.contains(text) else { continue }
+            _ = try? store.createTextNote(content: text, sourceApp: item.sourceApp)
+            added += 1
+        }
+        if added > 0 {
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .textNotesChanged, object: nil)
+            }
+            log.info("backfilled \(added) notes from clipboard history")
         }
     }
 
@@ -111,7 +141,6 @@ final class ClipboardMonitor {
     }
 
     private func imageFromPasteboard(_ pasteboard: NSPasteboard) -> CGImage? {
-        // PNG / TIFF 常见格式
         if let data = pasteboard.data(forType: .png),
            let source = CGImageSourceCreateWithData(data as CFData, nil) {
             return CGImageSourceCreateImageAtIndex(source, 0, nil)
