@@ -14,7 +14,10 @@ final class SaveToastController {
 
         let toastView = SaveToastView(title: title, subtitle: subtitle, thumbnail: thumbnail)
         let hosting = NSHostingView(rootView: toastView)
-        let size = hosting.fittingSize
+        hosting.appearance = NSAppearance(named: .aqua)
+        // 固定尺寸：fittingSize 在首次布局前可能为 0，导致窗口不可见
+        let size = NSSize(width: 300, height: 64)
+        hosting.frame = NSRect(origin: .zero, size: size)
 
         // 右下角：主屏右下角向内 24pt
         guard let screen = NSScreen.main else { return }
@@ -33,7 +36,7 @@ final class SaveToastController {
         panel.level = .statusBar
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = false
+        panel.hasShadow = true
         panel.contentView = hosting
         panel.setFrame(frame, display: true)
         panel.orderFrontRegardless()
@@ -41,7 +44,6 @@ final class SaveToastController {
 
         // 入场动画
         hosting.alphaValue = 0
-        hosting.layer?.transform = CATransform3DMakeTranslation(0, -12, 0)
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.25
             ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
@@ -87,18 +89,17 @@ struct SaveToastView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 5))
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background {
-            if #available(macOS 26.0, *) {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(.clear)
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            } else {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(.ultraThinMaterial)
-            }
+            // 透明宿主窗口里玻璃会“隐形”，用实体浅色底保证可见
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(red: 0.98, green: 0.985, blue: 1.0).opacity(0.97))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(.black.opacity(0.08), lineWidth: 1)
+                )
         }
-        .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
+        .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
     }
 }
