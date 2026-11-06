@@ -7,7 +7,9 @@ struct LibraryWindowView: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        LensoLibraryView(images: images)
+        LensoLibraryView(images: images, onOpenPreview: { id in
+            openWindow(id: "preview", value: id)
+        })
             .background(LensoAmbientBackground())
             .onAppear(perform: load)
             .onReceive(NotificationCenter.default.publisher(for: .screenshotSaved)) { _ in
