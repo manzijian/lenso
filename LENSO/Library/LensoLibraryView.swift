@@ -15,8 +15,7 @@ struct LensoLibraryView: View {
     var body: some View {
         HStack(spacing: 0) {
             sidebar
-
-            Divider()
+                .background(sidebarGradient)
 
             VStack(spacing: 12) {
                 toolbar
@@ -34,13 +33,42 @@ struct LensoLibraryView: View {
                 footer
             }
             .padding(12)
+            .background(mainGradient)
         }
         .frame(minWidth: 760, minHeight: 520)
-        .background(.regularMaterial)
         .clipShape(RoundedRectangle(
             cornerRadius: 20,
             style: .continuous
         ))
+    }
+
+    /// 蓝紫氛围背景（参考图 4）
+    private var mainGradient: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.88, green: 0.92, blue: 1.00),
+                    Color(red: 0.82, green: 0.86, blue: 0.99),
+                    Color(red: 0.90, green: 0.87, blue: 1.00),
+                ],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            )
+            // 柔和光斑
+            RadialGradient(colors: [Color.blue.opacity(0.18), .clear], center: UnitPoint(x: 0.2, y: 0.1), startRadius: 0, endRadius: 400)
+            RadialGradient(colors: [Color.purple.opacity(0.15), .clear], center: UnitPoint(x: 0.9, y: 0.85), startRadius: 0, endRadius: 380)
+        }
+        .ignoresSafeArea()
+    }
+
+    private var sidebarGradient: some View {
+        LinearGradient(
+            colors: [
+                Color.white.opacity(0.42),
+                Color.white.opacity(0.28),
+            ],
+            startPoint: .top, endPoint: .bottom
+        )
+        .ignoresSafeArea()
     }
 
     // MARK: - 侧栏（带计数）
@@ -86,14 +114,16 @@ struct LensoLibraryView: View {
         HStack {
             Image(systemName: icon)
                 .font(.system(size: 13))
+                .foregroundStyle(isPrimary ? Color.blue : .primary.opacity(0.7))
                 .frame(width: 18)
             Text(title)
                 .font(.system(size: 13, weight: isPrimary ? .semibold : .medium))
+                .foregroundStyle(isPrimary ? Color.blue : .primary.opacity(0.8))
             Spacer()
             if let count {
                 Text("\(count)")
                     .font(.system(size: 11, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(isPrimary ? Color.blue : .secondary)
             }
         }
         .padding(.horizontal, 10)
@@ -101,7 +131,8 @@ struct LensoLibraryView: View {
         .background {
             if isPrimary {
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.blue.opacity(0.14))
+                    .fill(Color.white.opacity(0.55))
+                    .shadow(color: Color.blue.opacity(0.15), radius: 6, y: 2)
             }
         }
         .contentShape(Rectangle())
@@ -123,7 +154,7 @@ struct LensoLibraryView: View {
         .contentShape(Rectangle())
     }
 
-    // MARK: - 工具栏（胶囊分段）
+    // MARK: - 工具栏（胶囊分段，白玻璃）
 
     private var toolbar: some View {
         HStack(spacing: 10) {
@@ -131,7 +162,7 @@ struct LensoLibraryView: View {
             HStack(spacing: 2) {
                 Image(systemName: "square.grid.2x2")
                     .frame(width: 30, height: 26)
-                    .background(Capsule().fill(.primary.opacity(0.07)))
+                    .background(Capsule().fill(.white.opacity(0.75)))
                 Image(systemName: "list.bullet")
                     .frame(width: 30, height: 26)
             }
@@ -143,21 +174,21 @@ struct LensoLibraryView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 5)
-            .background(Capsule().fill(.primary.opacity(0.07)))
+            .background(Capsule().fill(.white.opacity(0.55)))
             .contentShape(Rectangle())
 
             Spacer()
 
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 14))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary.opacity(0.55))
             Image(systemName: "ellipsis")
                 .font(.system(size: 14))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary.opacity(0.55))
         }
         .padding(6)
-        .background(Capsule().fill(.background.opacity(0.65)))
-        .overlay(Capsule().stroke(.separator.opacity(0.35), lineWidth: 1))
+        .background(Capsule().fill(.white.opacity(0.42)))
+        .overlay(Capsule().stroke(.white.opacity(0.5), lineWidth: 1))
     }
 
     // MARK: - 图片单元（选中蓝框 + 勾角标）
@@ -173,21 +204,28 @@ struct LensoLibraryView: View {
         } label: {
             Image(nsImage: item.thumbnail)
                 .resizable()
-                .aspectRatio(contentMode: .fit)
+                .aspectRatio(contentMode: .fill)
                 .frame(maxWidth: .infinity)
+                .frame(height: 100) // 统一卡片高度（参考图整齐网格）
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay {
                     if isSelected {
                         ZStack(alignment: .topTrailing) {
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 .strokeBorder(Color.blue, lineWidth: 2.5)
+                                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.blue.opacity(0.08)))
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.system(size: 18))
                                 .foregroundStyle(.white, Color.blue)
                                 .padding(7)
                         }
+                    } else {
+                        // 白色细描边（浅底上区分图片边界）
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(.white.opacity(0.6), lineWidth: 1)
                     }
                 }
+                .shadow(color: .black.opacity(0.08), radius: 5, y: 2)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -203,24 +241,24 @@ struct LensoLibraryView: View {
             if selectedIDs.isEmpty {
                 Text("\(images.count) 张截图")
                     .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary.opacity(0.55))
             } else {
                 Text("已选择 \(selectedIDs.count) 张 · \(totalSelectedSize)")
                     .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary.opacity(0.55))
             }
 
             Spacer()
 
             Image(systemName: "square.and.arrow.up")
                 .font(.system(size: 14))
-                .foregroundStyle(selectedIDs.isEmpty ? Color.secondary.opacity(0.4) : .primary)
+                .foregroundStyle(selectedIDs.isEmpty ? Color.primary.opacity(0.25) : .primary.opacity(0.75))
             Image(systemName: "trash")
                 .font(.system(size: 14))
-                .foregroundStyle(selectedIDs.isEmpty ? Color.secondary.opacity(0.4) : .red)
+                .foregroundStyle(selectedIDs.isEmpty ? Color.primary.opacity(0.25) : .red)
             Image(systemName: "ellipsis")
                 .font(.system(size: 14))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary.opacity(0.55))
         }
         .padding(.horizontal, 8)
     }
