@@ -20,8 +20,8 @@ final class CaptureCoordinator: NSObject {
     private var selector: RegionSelectorController?
     private var editorPanel: NSPanel?
     private var editorHost: NSHostingView<CaptureEditorView>?
-    /// 置顶窗口由 WindowKit 后续管理；MVP 用独立轻量窗口
-    private var pinnedPanel: NSPanel?
+    /// 钉图窗口集合（持有引用防止释放）
+    private var pinnedPanels: [NSPanel] = []
 
     func startRegionCapture() {
         log.info("startRegionCapture triggered")
@@ -107,6 +107,10 @@ final class CaptureCoordinator: NSObject {
             onQuickCopy: { [weak coordinator] image in
                 coordinator?.copyToClipboard(image: image)
                 SaveToastController.shared.show(thumbnail: image)
+            },
+            onPin: { [weak coordinator] image in
+                coordinator?.closeEditor()
+                coordinator?.pin(image: image)
             }
         )
         let hosting = NSHostingView(rootView: editorView)
@@ -156,11 +160,14 @@ final class CaptureCoordinator: NSObject {
         }
     }
 
-    /// 置顶：无标题透明悬浮窗口，右键或点击关闭按钮关闭
+    /// 钉图：浮在所有窗口之上的可拖动图片窗
     private func pin(image: CGImage) {
-        let size = NSSize(width: min(CGFloat(image.width), 480), height: CGFloat(image.height) * min(1, 480 / CGFloat(image.width)))
+        let maxWidth: CGFloat = 520
+        let scale = min(1, maxWidth / CGFloat(image.width))
+        let size = NSSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
+
         let panel = NSPanel(
-            contentRect: NSRect(origin: NSEvent.mouseLocation, size: size),
+            contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -170,14 +177,23 @@ final class CaptureCoordinator: NSObject {
         panel.backgroundColor = .clear
         panel.hasShadow = true
         panel.isMovableByWindowBackground = true
+        panel.hidesOnDeactivate = false
 
-        let imageView = NSImageView(frame: NSRect(origin: .zero, size: size))
-        imageView.image = NSImage(cgImage: image, size: size)
-        imageView.imageScaling = .scaleProportionallyUpOrDown
-        let container = PinnedImageView(imageView: imageView, onClose: { [weak panel] in panel?.close() })
-        panel.contentView = container
+        let view = PinnedImageView(frame: NSRect(origin: .zero, size: size), image: image)
+        view.onClose = { [weak panel] in
+            panel?.orderOut(nil)
+            panel?.close()
+        }
+        panel.contentView = view
+        if let screen = NSScreen.main {
+            panel.setFrameOrigin(NSPoint(
+                x: screen.frame.midX - size.width / 2,
+                y: screen.frame.midY - size.height / 2
+            ))
+        }
         panel.orderFrontRegardless()
-        self.pinnedPanel = panel
+        pinnedPanels.append(panel)
+        log.info("pinned image \(size.width)x\(size.height)")
     }
 
     private func copyToClipboard(image: CGImage) {
@@ -187,6 +203,63 @@ final class CaptureCoordinator: NSObject {
             pasteboard.setData(tiff, forType: .tiff)
         }
     }
+}
+
+/// 钉图视图：可拖动；悬停右上角出现关闭按钮；双击关闭
+final class PinnedImageView: NSView {
+    var onClose: (() -> Void)?
+    private let imageView: NSImageView
+    private let closeButton = NSButton()
+    private var tracking: NSTrackingArea?
+
+    init(frame: NSRect, image: CGImage) {
+        imageView = NSImageView(frame: NSRect(origin: .zero, size: frame.size))
+        super.init(frame: frame)
+        imageView.image = NSImage(cgImage: image, size: frame.size)
+        imageView.imageScaling = .scaleProportionallyUpOrDown
+        imageView.autoresizingMask = [.width, .height]
+        imageView.wantsLayer = true
+        imageView.layer?.cornerRadius = 10
+        imageView.layer?.masksToBounds = true
+        addSubview(imageView)
+
+        closeButton.bezelStyle = .circular
+        closeButton.controlSize = .small
+        closeButton.title = "✕"
+        closeButton.target = self
+        closeButton.action = #selector(closeClicked)
+        closeButton.isHidden = true
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(closeButton)
+        NSLayoutConstraint.activate([
+            closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    @objc private func closeClicked() { onClose?() }
+
+    override func mouseDown(with event: NSEvent) {
+        if event.clickCount == 2 {
+            onClose?()
+            return
+        }
+        super.mouseDown(with: event)
+        window?.performDrag(with: event)
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let area = NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways], owner: self)
+        addTrackingArea(area)
+        tracking = area
+    }
+
+    override func mouseEntered(with event: NSEvent) { closeButton.isHidden = false }
+    override func mouseExited(with event: NSEvent) { closeButton.isHidden = true }
 }
 
 /// 置顶图视图：悬停显示关闭按钮

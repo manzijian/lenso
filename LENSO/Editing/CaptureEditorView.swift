@@ -10,6 +10,7 @@ struct CaptureEditorView: View {
     var initialSelection: CGRect  // 全局逻辑坐标
     let onComplete: (CGImage?) -> Void   // 完成时回传最终图像（nil = 取消）
     let onQuickCopy: (CGImage) -> Void
+    let onPin: (CGImage) -> Void
 
     @State private var state = AnnotationState()
     @State private var selection: CGRect
@@ -22,12 +23,15 @@ struct CaptureEditorView: View {
     }
 
     init(frozenImage: CGImage, screenFrame: CGRect, initialSelection: CGRect,
-         onComplete: @escaping (CGImage?) -> Void, onQuickCopy: @escaping (CGImage) -> Void) {
+         onComplete: @escaping (CGImage?) -> Void,
+         onQuickCopy: @escaping (CGImage) -> Void,
+         onPin: @escaping (CGImage) -> Void) {
         self.frozenImage = frozenImage
         self.screenFrame = screenFrame
         self.initialSelection = initialSelection
         self.onComplete = onComplete
         self.onQuickCopy = onQuickCopy
+        self.onPin = onPin
         _selection = State(initialValue: initialSelection)
     }
 
@@ -63,6 +67,12 @@ struct CaptureEditorView: View {
     /// 丢弃本次截图
     private func discard() {
         onComplete(nil)
+    }
+
+    /// 钉图：合成后交给 Coordinator 浮在屏幕上
+    private func pinImage() {
+        guard let composited = renderFinalImage() else { return }
+        onPin(composited)
     }
 
     /// 工具栏挂在选区下边缘中点；属性面板挂在选区右侧垂直居中
@@ -128,6 +138,15 @@ struct CaptureEditorView: View {
 
             ToolIcon(icon: "arrow.uturn.backward", kind: nil, state: state, disabled: !state.canUndo) { state.undo() }
             ToolIcon(icon: "arrow.uturn.forward", kind: nil, state: state, disabled: !state.canRedo) { state.redo() }
+
+            // 钉图：把当前合成结果钉在屏幕最上层
+            Image(systemName: "pin.fill")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 30, height: 30)
+                .contentShape(Rectangle())
+                .onTapGesture { pinImage() }
+                .help("钉在屏幕上")
 
             Text("完成")
                 .font(.system(size: 14, weight: .semibold))
