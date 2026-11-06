@@ -69,6 +69,12 @@ final class ClipboardMonitor {
             lastImageHash = nil
             do {
                 _ = try ScreenshotStore.shared.saveClipboardText(text, sourceApp: sourceApp)
+                // 同时自动收进「文字收纳」（内容去重）
+                let existing = (try? ScreenshotStore.shared.listTextNotes()) ?? []
+                if !existing.contains(where: { $0.content == text }) {
+                    _ = try ScreenshotStore.shared.createTextNote(content: text, sourceApp: sourceApp)
+                    NotificationCenter.default.post(name: .textNotesChanged, object: nil)
+                }
                 log.info("recorded clipboard text (\(text.count) chars) from \(sourceApp ?? "?", privacy: .public)")
             } catch {
                 log.error("save clipboard text failed: \(error.localizedDescription, privacy: .public)")
