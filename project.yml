@@ -1,0 +1,30 @@
+name: LENSO
+options:
+  bundleIdPrefix: com.lenso
+  deploymentTarget:
+    macOS: "26.0"
+  xcodeVersion: "26.6"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    GENERATE_INFOPLIST_FILE: true
+
+targets:
+  LENSO:
+    type: application
+    platform: macOS
+    sources:
+      - path: LENSO
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.lenso.app
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "LENSO 需要访问图片以管理你的截图。"
+        GENERATE_INFOPLIST_FILE: true
+        SWIFT_EMIT_LOC_STRINGS: true
+        ENABLE_PREVIEWS: true

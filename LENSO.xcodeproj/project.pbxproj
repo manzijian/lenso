@@ -1,0 +1,400 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		322C57EFEFC8BCAA7849DD5F /* MenuBarPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 253AE39E10F62B39843EA8E1 /* MenuBarPanelView.swift */; };
+		3F8B2F39F47F8C1AC0BBF278 /* SearchPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5CFCAC958BAEF1C9CDC1C42 /* SearchPanelView.swift */; };
+		63B8E27F17695B0D58261964 /* LensoRadius.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6629E0A218BB4F749B26F653 /* LensoRadius.swift */; };
+		6B8314C2C8C065865B3DA229 /* LensoShadows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F74640FE4B2B2190F58163E /* LensoShadows.swift */; };
+		6C52F17E00DF4F32CDE7BD4F /* SettingsWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23AB2FC879FA87DFEC9E48FD /* SettingsWindowView.swift */; };
+		8A053A317CB5D595422AA5CF /* LibraryWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE319A913EF71A6473D9DA2 /* LibraryWindowView.swift */; };
+		96AC4AAB68AEB4F0EE3EDC30 /* LensoMaterials.swift in Sources */ = {isa = PBXBuildFile; fileRef = B774C35C380B7D917F97F431 /* LensoMaterials.swift */; };
+		B5584BCC1216AF24B332E40D /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AB003CD37209DD64C011EA3 /* AppDelegate.swift */; };
+		B6AC8948238E399699455EF3 /* LensoAnimations.swift in Sources */ = {isa = PBXBuildFile; fileRef = A26280DFFE85B83D0B9A05D2 /* LensoAnimations.swift */; };
+		BEF7EBE7C225F23EF8AA22C4 /* LensoColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = A82C877CAA54F5A72BB7A2C4 /* LensoColors.swift */; };
+		C4BD95196BD5E07833AB4B26 /* ScreenshotItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7C8A9AB017CE80A7495836 /* ScreenshotItem.swift */; };
+		C9F8421873724F37DEE74863 /* LensoSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61EDF15A8E03284FE7451DBE /* LensoSpacing.swift */; };
+		D153AE7F6D916F17FAB9F757 /* LensoTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B7699807F95B1D64ECCC681 /* LensoTypography.swift */; };
+		D4592AF8F65F6735302F596D /* LENSOApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B044ADEB2AF234FFA798A8B5 /* LENSOApp.swift */; };
+		E8A1E10D92154E1F0DDD271E /* PreviewWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD209F1E73612BFE09EF7A77 /* PreviewWindowView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		23AB2FC879FA87DFEC9E48FD /* SettingsWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowView.swift; sourceTree = "<group>"; };
+		253AE39E10F62B39843EA8E1 /* MenuBarPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPanelView.swift; sourceTree = "<group>"; };
+		2AB003CD37209DD64C011EA3 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		4F74640FE4B2B2190F58163E /* LensoShadows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoShadows.swift; sourceTree = "<group>"; };
+		558D02748CC0113C3987ED96 /* LENSO.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LENSO.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5DE319A913EF71A6473D9DA2 /* LibraryWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryWindowView.swift; sourceTree = "<group>"; };
+		61EDF15A8E03284FE7451DBE /* LensoSpacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoSpacing.swift; sourceTree = "<group>"; };
+		6629E0A218BB4F749B26F653 /* LensoRadius.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoRadius.swift; sourceTree = "<group>"; };
+		8B7699807F95B1D64ECCC681 /* LensoTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoTypography.swift; sourceTree = "<group>"; };
+		A26280DFFE85B83D0B9A05D2 /* LensoAnimations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoAnimations.swift; sourceTree = "<group>"; };
+		A5CFCAC958BAEF1C9CDC1C42 /* SearchPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchPanelView.swift; sourceTree = "<group>"; };
+		A82C877CAA54F5A72BB7A2C4 /* LensoColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoColors.swift; sourceTree = "<group>"; };
+		B044ADEB2AF234FFA798A8B5 /* LENSOApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LENSOApp.swift; sourceTree = "<group>"; };
+		B774C35C380B7D917F97F431 /* LensoMaterials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoMaterials.swift; sourceTree = "<group>"; };
+		BE7C8A9AB017CE80A7495836 /* ScreenshotItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotItem.swift; sourceTree = "<group>"; };
+		CD209F1E73612BFE09EF7A77 /* PreviewWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewWindowView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		3739C779A97D70DE8BB7093F /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				A26280DFFE85B83D0B9A05D2 /* LensoAnimations.swift */,
+				A82C877CAA54F5A72BB7A2C4 /* LensoColors.swift */,
+				B774C35C380B7D917F97F431 /* LensoMaterials.swift */,
+				6629E0A218BB4F749B26F653 /* LensoRadius.swift */,
+				4F74640FE4B2B2190F58163E /* LensoShadows.swift */,
+				61EDF15A8E03284FE7451DBE /* LensoSpacing.swift */,
+				8B7699807F95B1D64ECCC681 /* LensoTypography.swift */,
+			);
+			path = DesignSystem;
+			sourceTree = "<group>";
+		};
+		65D8D841CCD853F3FE4311CB /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				23AB2FC879FA87DFEC9E48FD /* SettingsWindowView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		83DD2974D1BFFE7EC5BDEE58 /* Search */ = {
+			isa = PBXGroup;
+			children = (
+				A5CFCAC958BAEF1C9CDC1C42 /* SearchPanelView.swift */,
+			);
+			path = Search;
+			sourceTree = "<group>";
+		};
+		8A9AC966F8A38253E7D87F64 = {
+			isa = PBXGroup;
+			children = (
+				E16F7B283685E5D296EE8555 /* LENSO */,
+				ADC44DF6BAB44C28CF9EBED0 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		9A5269AC9E596D9FFD5123B2 /* MenuBar */ = {
+			isa = PBXGroup;
+			children = (
+				253AE39E10F62B39843EA8E1 /* MenuBarPanelView.swift */,
+			);
+			path = MenuBar;
+			sourceTree = "<group>";
+		};
+		A66FD8BEA0E6DD6D02F54AF4 /* Preview */ = {
+			isa = PBXGroup;
+			children = (
+				CD209F1E73612BFE09EF7A77 /* PreviewWindowView.swift */,
+			);
+			path = Preview;
+			sourceTree = "<group>";
+		};
+		ADC44DF6BAB44C28CF9EBED0 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				558D02748CC0113C3987ED96 /* LENSO.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		E16F7B283685E5D296EE8555 /* LENSO */ = {
+			isa = PBXGroup;
+			children = (
+				2AB003CD37209DD64C011EA3 /* AppDelegate.swift */,
+				B044ADEB2AF234FFA798A8B5 /* LENSOApp.swift */,
+				3739C779A97D70DE8BB7093F /* DesignSystem */,
+				F5587BD6D3768DDBF795C053 /* Library */,
+				9A5269AC9E596D9FFD5123B2 /* MenuBar */,
+				A66FD8BEA0E6DD6D02F54AF4 /* Preview */,
+				83DD2974D1BFFE7EC5BDEE58 /* Search */,
+				65D8D841CCD853F3FE4311CB /* Settings */,
+			);
+			path = LENSO;
+			sourceTree = "<group>";
+		};
+		F5587BD6D3768DDBF795C053 /* Library */ = {
+			isa = PBXGroup;
+			children = (
+				5DE319A913EF71A6473D9DA2 /* LibraryWindowView.swift */,
+				BE7C8A9AB017CE80A7495836 /* ScreenshotItem.swift */,
+			);
+			path = Library;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		F70EC8C13C2F13FC1A247C06 /* LENSO */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 95A61E8A27DA69EAE7C327AC /* Build configuration list for PBXNativeTarget "LENSO" */;
+			buildPhases = (
+				9BAF8EDF9820AA347C26FCE0 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LENSO;
+			packageProductDependencies = (
+			);
+			productName = LENSO;
+			productReference = 558D02748CC0113C3987ED96 /* LENSO.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B4274DD02D33917BA6A2FA2B /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2660;
+				TargetAttributes = {
+					F70EC8C13C2F13FC1A247C06 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 5532D1BCFCF0BE5EB8CEA14E /* Build configuration list for PBXProject "LENSO" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 8A9AC966F8A38253E7D87F64;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = ADC44DF6BAB44C28CF9EBED0 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				F70EC8C13C2F13FC1A247C06 /* LENSO */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		9BAF8EDF9820AA347C26FCE0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B5584BCC1216AF24B332E40D /* AppDelegate.swift in Sources */,
+				D4592AF8F65F6735302F596D /* LENSOApp.swift in Sources */,
+				B6AC8948238E399699455EF3 /* LensoAnimations.swift in Sources */,
+				BEF7EBE7C225F23EF8AA22C4 /* LensoColors.swift in Sources */,
+				96AC4AAB68AEB4F0EE3EDC30 /* LensoMaterials.swift in Sources */,
+				63B8E27F17695B0D58261964 /* LensoRadius.swift in Sources */,
+				6B8314C2C8C065865B3DA229 /* LensoShadows.swift in Sources */,
+				C9F8421873724F37DEE74863 /* LensoSpacing.swift in Sources */,
+				D153AE7F6D916F17FAB9F757 /* LensoTypography.swift in Sources */,
+				8A053A317CB5D595422AA5CF /* LibraryWindowView.swift in Sources */,
+				322C57EFEFC8BCAA7849DD5F /* MenuBarPanelView.swift in Sources */,
+				E8A1E10D92154E1F0DDD271E /* PreviewWindowView.swift in Sources */,
+				C4BD95196BD5E07833AB4B26 /* ScreenshotItem.swift in Sources */,
+				3F8B2F39F47F8C1AC0BBF278 /* SearchPanelView.swift in Sources */,
+				6C52F17E00DF4F32CDE7BD4F /* SettingsWindowView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		53EEB851D99DD5CFDB887179 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "LENSO 需要访问图片以管理你的截图。";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.lenso.app;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Debug;
+		};
+		5C214FBB85A8E5E4D88732C5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		7E07E6FEE1CF2B0CEFDAC827 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		EBB9577FDC74EF6A2B85C4E0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "LENSO 需要访问图片以管理你的截图。";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.lenso.app;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		5532D1BCFCF0BE5EB8CEA14E /* Build configuration list for PBXProject "LENSO" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5C214FBB85A8E5E4D88732C5 /* Debug */,
+				7E07E6FEE1CF2B0CEFDAC827 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		95A61E8A27DA69EAE7C327AC /* Build configuration list for PBXNativeTarget "LENSO" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				53EEB851D99DD5CFDB887179 /* Debug */,
+				EBB9577FDC74EF6A2B85C4E0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = B4274DD02D33917BA6A2FA2B /* Project object */;
+}
