@@ -13,8 +13,8 @@ struct LENSOApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        // 主图库窗口 — 透明浮窗 + 圆角内容
-        WindowGroup("图库", id: "library") {
+        // 主图库窗口 — 单例窗口（重复点击“打开图库”只聚焦，不再叠开新窗）
+        Window("图库", id: "library") {
             LibraryWindowView()
                 .background(WindowConfigurator())
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -36,8 +36,8 @@ struct LENSOApp: App {
         .defaultSize(width: 820, height: 560)
         .restorationBehavior(.disabled)
 
-        // 设置窗口
-        WindowGroup("设置", id: "settings") {
+        // 设置窗口（单例）
+        Window("设置", id: "settings") {
             SettingsWindowView()
                 .background(WindowConfigurator())
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -46,7 +46,6 @@ struct LENSOApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 680, height: 460)
-        .restorationBehavior(.disabled)
 
         // 顶部菜单栏：截图 / 图库 / 搜索 / 设置
         .commands {
