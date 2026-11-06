@@ -16,9 +16,9 @@ final class ClipboardPanelController {
     private var resignObserver: NSObjectProtocol?
 
     func show() {
-        if let panel {
-            panel.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+        // 再次点击菜单即关闭（开关式）
+        if panel != nil {
+            hide()
             return
         }
         let view = ClipboardPanelView { [weak self] in self?.hide() }
@@ -45,6 +45,7 @@ final class ClipboardPanelController {
         panel.contentView = hosting
         panel.setFrame(frame, display: true)
         panel.onCancel = { [weak self] in self?.hide() }
+        NSApp.activate(ignoringOtherApps: true)
         panel.orderFrontRegardless()
         panel.makeKey()
         self.panel = panel
@@ -56,11 +57,8 @@ final class ClipboardPanelController {
             }
             return event
         }
-        resignObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.didResignKeyNotification, object: panel, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.hide() }
-        }
+        // 不监听 resignKey：面板创建瞬间可能收到该通知导致“刚开就关”。
+        // 关闭方式：Esc / ✕ / 再次点击菜单。
     }
 
     func hide() {
