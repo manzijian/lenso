@@ -107,6 +107,7 @@ final class CaptureCoordinator: NSObject {
             }
         )
         let hosting = NSHostingView(rootView: editorView)
+        hosting.appearance = NSAppearance(named: .aqua) // 编辑器浅色玻璃
         editorHost = hosting
 
         let panel = NSPanel(

@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-/// 主图库窗口 — LensoLibraryView（新视觉）+ 真实数据
+/// 主图库窗口 — LensoLibraryView + 真实数据（透明浮窗由 WindowConfigurator 处理）
 struct LibraryWindowView: View {
     @State private var images: [LibraryImage] = []
     @Environment(\.openWindow) private var openWindow
@@ -10,11 +10,11 @@ struct LibraryWindowView: View {
         LensoLibraryView(images: images, onOpenPreview: { id in
             openWindow(id: "preview", value: id)
         })
-            .background(LensoAmbientBackground())
-            .onAppear(perform: load)
-            .onReceive(NotificationCenter.default.publisher(for: .screenshotSaved)) { _ in
-                load()
-            }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear(perform: load)
+        .onReceive(NotificationCenter.default.publisher(for: .screenshotSaved)) { _ in
+            load()
+        }
     }
 
     private func load() {
@@ -29,7 +29,7 @@ struct LibraryWindowView: View {
     }
 }
 
-/// 环境背景 — 蓝紫柔和光晕（玻璃效果需要背景层次才显质感）
+/// 环境背景 — 蓝紫柔和光晕
 struct LensoAmbientBackground: View {
     var body: some View {
         ZStack {

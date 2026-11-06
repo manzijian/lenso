@@ -1,87 +1,126 @@
 import SwiftUI
+import AppKit
 
-/// Spotlight 风格搜索浮动窗口 — 居中胶囊输入 + 展开结果缩略图
+/// Spotlight 风格搜索（参考图 4 顶部）：居中胶囊 + 展开结果
 struct SearchPanelView: View {
+    var onDismiss: () -> Void = {}
+
     @State private var searchText = ""
-    @State private var focused = false
+    @FocusState private var focused: Bool
 
     struct SearchResult: Identifiable {
         let id = UUID()
         let title: String
         let appName: String
         let snippet: String
+        let thumbnail: CGImage?
     }
 
-    private let demoResults: [SearchResult] = [
-        SearchResult(title: "架构评审会议记录", appName: "预览", snippet: "……FTS5 中文分词需要验证召回率……"),
-        SearchResult(title: "CaptureService.swift", appName: "Xcode", snippet: "……捕获完成后优先保存流程……"),
-        SearchResult(title: "产品设计讨论", appName: "微信", snippet: "……玻璃材质只用于悬浮层……"),
-    ]
-
-    private var filtered: [SearchResult] {
-        searchText.isEmpty ? [] : demoResults.filter {
-            $0.title.localizedCaseInsensitiveContains(searchText) || $0.snippet.localizedCaseInsensitiveContains(searchText)
-        }
-    }
+    @State private var results: [SearchResult] = []
 
     var body: some View {
-        VStack(spacing: LensoSpacing.s) {
+        VStack(spacing: 10) {
+            // 搜索胶囊
             LensoMaterials.glassContainer {
-                HStack(spacing: LensoSpacing.m) {
+                HStack(spacing: 12) {
                     Image(systemName: "magnifyingglass")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(size: 17, weight: .medium))
                         .foregroundStyle(.secondary)
-                    TextField("搜索截图内容、应用、标签…", text: $searchText)
+
+                    TextField("搜索截图、图片或关键词…", text: $searchText)
                         .textFieldStyle(.plain)
-                        .font(LensoTypography.title)
-                        .onSubmit { }
-                    if !searchText.isEmpty {
-                        Button {
-                            searchText = ""
-                        } label: {
-                            Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
-                        }
-                        .buttonStyle(.plain)
+                        .font(.system(size: 15))
+                        .focused($focused)
+
+                    if let first = results.first, let thumb = first.thumbnail {
+                        Image(decorative: thumb, scale: 2)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 38, height: 28)
+                            .clipShape(RoundedRectangle(cornerRadius: 5))
                     }
+
+                    Image(systemName: "return")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 26, height: 26)
+                        .background(Circle().fill(.primary.opacity(0.06)))
                 }
-                .padding(.horizontal, LensoSpacing.l)
-                .frame(height: 56)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: LensoRadius.panel))
+                .padding(.horizontal, 18)
+                .frame(height: 60)
+                .glassEffect(.regular, in: Capsule())
             }
 
-            if !filtered.isEmpty {
+            // 结果
+            if !results.isEmpty {
                 VStack(spacing: 0) {
-                    ForEach(filtered) { result in
-                        HStack(spacing: LensoSpacing.m) {
-                            RoundedRectangle(cornerRadius: LensoRadius.control)
-                                .fill(LensoColors.accent.opacity(0.25))
-                                .frame(width: 56, height: 36)
+                    ForEach(results) { result in
+                        HStack(spacing: 12) {
+                            if let thumb = result.thumbnail {
+                                Image(decorative: thumb, scale: 2)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 64, height: 42)
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                            }
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(result.title).font(LensoTypography.callout)
-                                Text(result.snippet).font(LensoTypography.caption).foregroundStyle(.secondary)
+                                Text(result.title).font(.system(size: 13, weight: .medium))
+                                Text(result.snippet)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
                             }
                             Spacer()
-                            Text(result.appName).font(LensoTypography.caption).foregroundStyle(.tertiary)
+                            Text(result.appName)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.tertiary)
                         }
-                        .padding(LensoSpacing.m)
-                        .background {
-                            RoundedRectangle(cornerRadius: LensoRadius.control)
-                                .fill(.clear)
-                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
                         .contentShape(Rectangle())
                     }
-                    if filtered.count > 1 { Divider().padding(.horizontal, LensoSpacing.m) }
                 }
-                .frame(width: 620)
+                .padding(.vertical, 6)
                 .background {
-                    RoundedRectangle(cornerRadius: LensoRadius.panel)
-                        .fill(.bar.opacity(0.85))
-                        .shadow(color: .black.opacity(0.15), radius: 20, y: 8)
+                    if #available(macOS 26.0, *) {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(.clear)
+                            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    } else {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                    }
                 }
-                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .animation(LensoAnimations.panel, value: filtered.map(\.id))
-        .padding(.horizontal, LensoSpacing.xxl)
+        .padding(.horizontal, 20)
+        .onAppear {
+            focused = true
+            updateResults()
+        }
+        .onChange(of: searchText) { _ in updateResults() }
+        .onExitCommand { onDismiss() }
+        .environment(\.colorScheme, .light)
+    }
+
+    private func updateResults() {
+        let store = ScreenshotStore.shared
+        let records = (try? store.list()) ?? []
+        let keyword = searchText.trimmingCharacters(in: .whitespaces)
+        let matched = keyword.isEmpty ? records.prefix(4) : records.filter {
+            $0.filename.localizedCaseInsensitiveContains(keyword)
+        }.prefix(8)
+        results = matched.map { record in
+            SearchResult(
+                title: record.filename,
+                appName: "LENSO",
+                snippet: "\(record.width) × \(record.height) · \(byteString(record.fileSize))",
+                thumbnail: store.loadThumbnail(record)
+            )
+        }
+    }
+
+    private func byteString(_ bytes: Int) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
 }

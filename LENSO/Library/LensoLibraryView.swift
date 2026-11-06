@@ -7,9 +7,10 @@ struct LensoLibraryView: View {
     @State private var selectedIDs: Set<UUID> = []
     @State private var searchText = ""
     var onOpenPreview: ((UUID) -> Void)? = nil
+    @Environment(\.openWindow) private var openWindow
 
     private let columns = [
-        GridItem(.adaptive(minimum: 145), spacing: 12)
+        GridItem(.adaptive(minimum: 175, maximum: 260), spacing: 12)
     ]
 
     var body: some View {
@@ -40,6 +41,8 @@ struct LensoLibraryView: View {
             cornerRadius: 20,
             style: .continuous
         ))
+        // 参考图为浅色玻璃，固定浅色外观（否则深色模式下文字变白、对比度丢失）
+        .environment(\.colorScheme, .light)
     }
 
     /// 蓝紫氛围背景（参考图 4）
@@ -63,11 +66,14 @@ struct LensoLibraryView: View {
     private var sidebarGradient: some View {
         LinearGradient(
             colors: [
-                Color.white.opacity(0.42),
-                Color.white.opacity(0.28),
+                Color(red: 0.985, green: 0.99, blue: 1.0),
+                Color(red: 0.95, green: 0.96, blue: 1.0),
             ],
             startPoint: .top, endPoint: .bottom
         )
+        .overlay(alignment: .trailing) {
+            Rectangle().fill(.black.opacity(0.06)).frame(width: 1)
+        }
         .ignoresSafeArea()
     }
 
@@ -100,8 +106,14 @@ struct LensoLibraryView: View {
             Spacer()
 
             navigationItem("设置", icon: "gearshape")
+                .onTapGesture {
+                    openWindow(id: "settings")
+                    NSApp.activate(ignoringOtherApps: true)
+                }
         }
-        .padding(12)
+        .padding(.horizontal, 12)
+        .padding(.top, 44)   // 让开交通灯
+        .padding(.bottom, 12)
         .frame(width: LensoStyle.sidebarWidth)
     }
 
@@ -161,77 +173,85 @@ struct LensoLibraryView: View {
             // 网格/列表分段
             HStack(spacing: 2) {
                 Image(systemName: "square.grid.2x2")
+                    .foregroundStyle(.primary.opacity(0.8))
                     .frame(width: 30, height: 26)
-                    .background(Capsule().fill(.white.opacity(0.75)))
+                    .background(Capsule().fill(.white.opacity(0.95)))
+                    .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
                 Image(systemName: "list.bullet")
+                    .foregroundStyle(.primary.opacity(0.5))
                     .frame(width: 30, height: 26)
             }
 
             // 全部时间 ▾
             HStack(spacing: 4) {
                 Text("全部时间").font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.primary.opacity(0.85))
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.primary.opacity(0.6))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 5)
-            .background(Capsule().fill(.white.opacity(0.55)))
+            .background(Capsule().fill(.white.opacity(0.9)))
+            .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
             .contentShape(Rectangle())
 
             Spacer()
 
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 14))
-                .foregroundStyle(.primary.opacity(0.55))
+                .foregroundStyle(.primary.opacity(0.65))
+                .onTapGesture { SearchPanelController.shared.show() }
             Image(systemName: "ellipsis")
                 .font(.system(size: 14))
-                .foregroundStyle(.primary.opacity(0.55))
+                .foregroundStyle(.primary.opacity(0.65))
         }
         .padding(6)
-        .background(Capsule().fill(.white.opacity(0.42)))
-        .overlay(Capsule().stroke(.white.opacity(0.5), lineWidth: 1))
+        .background(Capsule().fill(.white.opacity(0.55)))
+        .overlay(Capsule().stroke(.white.opacity(0.7), lineWidth: 1))
     }
 
     // MARK: - 图片单元（选中蓝框 + 勾角标）
 
     private func imageCell(_ item: LibraryImage) -> some View {
         let isSelected = selectedIDs.contains(item.id)
-        return Button {
-            if isSelected {
-                selectedIDs.remove(item.id)
-            } else {
-                selectedIDs.insert(item.id)
+        return Color.clear
+            .aspectRatio(16 / 10, contentMode: .fit)
+            .overlay {
+                Image(nsImage: item.thumbnail)
+                    .resizable()
+                    .scaledToFill()
             }
-        } label: {
-            Image(nsImage: item.thumbnail)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(maxWidth: .infinity)
-                .frame(height: 100) // 统一卡片高度（参考图整齐网格）
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay {
-                    if isSelected {
-                        ZStack(alignment: .topTrailing) {
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .strokeBorder(Color.blue, lineWidth: 2.5)
-                                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.blue.opacity(0.08)))
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 18))
-                                .foregroundStyle(.white, Color.blue)
-                                .padding(7)
-                        }
-                    } else {
-                        // 白色细描边（浅底上区分图片边界）
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                if isSelected {
+                    ZStack(alignment: .topTrailing) {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(.white.opacity(0.6), lineWidth: 1)
+                            .strokeBorder(Color.blue, lineWidth: 2.5)
+                            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.blue.opacity(0.08)))
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundStyle(.white, Color.blue)
+                            .padding(7)
                     }
+                } else {
+                    // 白色细描边（浅底上区分图片边界）
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(.white.opacity(0.6), lineWidth: 1)
                 }
-                .shadow(color: .black.opacity(0.08), radius: 5, y: 2)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onTapGesture(count: 2) {
-            onOpenPreview?(item.id)
-        }
+            }
+            .shadow(color: .black.opacity(0.08), radius: 5, y: 2)
+            .contentShape(Rectangle())
+            .gesture(
+                TapGesture(count: 2)
+                    .onEnded { onOpenPreview?(item.id) }
+                    .exclusively(before: TapGesture().onEnded {
+                        if isSelected {
+                            selectedIDs.remove(item.id)
+                        } else {
+                            selectedIDs.insert(item.id)
+                        }
+                    })
+            )
     }
 
     // MARK: - 底部（合计 + 操作）
@@ -241,11 +261,11 @@ struct LensoLibraryView: View {
             if selectedIDs.isEmpty {
                 Text("\(images.count) 张截图")
                     .font(.system(size: 11))
-                    .foregroundStyle(.primary.opacity(0.55))
+                    .foregroundStyle(.primary.opacity(0.7))
             } else {
                 Text("已选择 \(selectedIDs.count) 张 · \(totalSelectedSize)")
                     .font(.system(size: 11))
-                    .foregroundStyle(.primary.opacity(0.55))
+                    .foregroundStyle(.primary.opacity(0.7))
             }
 
             Spacer()

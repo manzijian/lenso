@@ -1,29 +1,58 @@
 import SwiftUI
 
-/// 菜单栏快捷面板 — 四个入口，图标上文字下，玻璃材质
+/// 菜单栏快捷面板（参考图 4 右上方）：
+/// 四个入口：截图 / 图库 / 搜索 / 设置 — 图标在上、文字在下，玻璃材质，悬停反馈
 struct MenuBarPanelView: View {
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismiss) private var dismiss
     @State private var hoverID: String?
 
-    private let entries: [(id: String, icon: String, label: String)] = [
-        ("region", "rectangle.dashed", "区域截图"),
-        ("window", "macwindow.on.rectangle", "窗口截图"),
-        ("library", "photo.on.rectangle.angled", "图库"),
-        ("settings", "gearshape", "设置"),
+    private let entries: [Entry] = [
+        Entry(id: "capture", icon: "viewfinder", label: "截图"),
+        Entry(id: "library", icon: "photo.on.rectangle.angled", label: "图库"),
+        Entry(id: "search", icon: "magnifyingglass", label: "搜索"),
+        Entry(id: "settings", icon: "gearshape", label: "设置"),
     ]
+
+    struct Entry: Identifiable {
+        let id: String
+        let icon: String
+        let label: String
+    }
 
     var body: some View {
         LensoMaterials.glassContainer {
-            HStack(spacing: LensoSpacing.m) {
-                ForEach(entries, id: \.id) { entry in
-                    MenuEntry(icon: entry.icon, label: entry.label, id: entry.id, hoverID: $hoverID)
+            HStack(spacing: 10) {
+                ForEach(entries) { entry in
+                    MenuEntry(icon: entry.icon, label: entry.label, id: entry.id, hoverID: $hoverID) {
+                        handle(entry.id)
+                    }
                 }
             }
-            .padding(LensoSpacing.l)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: LensoRadius.panel))
+            .padding(12)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
-        .padding(LensoSpacing.m)
-        .frame(width: 320)
-        .background(LensoAmbientBackground())
+        .padding(6)
+        .frame(width: 312)
+        .environment(\.colorScheme, .light)
+    }
+
+    private func handle(_ id: String) {
+        switch id {
+        case "capture":
+            CaptureCoordinator.shared.startRegionCapture()
+        case "library":
+            openWindow(id: "library")
+            NSApp.activate(ignoringOtherApps: true)
+        case "search":
+            SearchPanelController.shared.show()
+        case "settings":
+            openWindow(id: "settings")
+            NSApp.activate(ignoringOtherApps: true)
+        default:
+            break
+        }
+        dismiss()
     }
 }
 
@@ -32,24 +61,28 @@ private struct MenuEntry: View {
     let label: String
     let id: String
     @Binding var hoverID: String?
+    let action: () -> Void
 
     var body: some View {
-        VStack(spacing: LensoSpacing.xs) {
-            Image(systemName: icon)
-                .font(.system(size: 22, weight: .light))
-                .foregroundStyle(hoverID == id ? LensoColors.accent : .primary)
+        VStack(spacing: 6) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(hoverID == id ? Color(nsColor: .controlAccentColor).opacity(0.85) : Color.primary.opacity(0.06))
+                    .frame(width: 52, height: 52)
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: .regular))
+                    .foregroundStyle(hoverID == id ? .white : .primary)
+            }
             Text(label)
-                .font(LensoTypography.caption)
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
         }
-        .frame(width: 64, height: 64)
-        .background {
-            RoundedRectangle(cornerRadius: LensoRadius.control)
-                .fill(LensoColors.accent.opacity(hoverID == id ? 0.14 : 0))
-        }
+        .frame(width: 64, height: 82)
+        .contentShape(Rectangle())
         .onHover { hovering in
             hoverID = hovering ? id : nil
         }
+        .onTapGesture { action() }
         .animation(LensoAnimations.hover, value: hoverID)
     }
 }

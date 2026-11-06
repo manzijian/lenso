@@ -97,9 +97,18 @@ struct CaptureEditorView: View {
 
     private var bottomToolbar: some View {
         HStack(spacing: 4) {
-            ToolIcon(icon: "arrow.up.left.and.sel", kind: nil, state: state) {
-                state.activeKind = nil
+            // 选择工具（默认激活，蓝色圆底）
+            ZStack {
+                Circle()
+                    .fill(state.activeKind == nil ? Color(nsColor: .controlAccentColor) : .clear)
+                    .frame(width: 30, height: 30)
+                Image(systemName: "arrow.up.left")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(state.activeKind == nil ? .white : .secondary)
             }
+            .frame(width: 34, height: 34)
+            .contentShape(Rectangle())
+            .onTapGesture { state.activeKind = nil }
 
             ForEach([AnnotationKind.rect, .ellipse, .arrow, .brush, .text, .mosaic, .highlight], id: \.self) { kind in
                 ToolIcon(icon: kind.icon, kind: kind, state: state) {

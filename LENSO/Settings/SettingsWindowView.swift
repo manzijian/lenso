@@ -1,175 +1,161 @@
 import SwiftUI
 
-/// 设置窗口 — 左侧分类 + 右侧分组设置项，原生开关，无复杂装饰
+/// 设置窗口（参考图 4 左下）：左侧分类 + 右侧分组开关，浅色玻璃
 struct SettingsWindowView: View {
-    @State private var category: Category = .capture
+    @State private var category: Category = .general
 
     enum Category: String, CaseIterable, Identifiable {
-        case capture = "截图"
-        case classification = "智能分类"
-        case permissions = "权限"
         case general = "通用"
+        case capture = "截图"
+        case shortcuts = "快捷键"
+        case appearance = "外观"
+        case about = "关于"
         var id: String { rawValue }
 
         var icon: String {
             switch self {
-            case .capture: "camera.viewfinder"
-            case .classification: "tag"
-            case .permissions: "lock.shield"
-            case .general: "switch.2"
+            case .general: "gearshape"
+            case .capture: "viewfinder"
+            case .shortcuts: "keyboard"
+            case .appearance: "paintpalette"
+            case .about: "info.circle"
             }
         }
     }
 
     var body: some View {
         HStack(spacing: 0) {
-            List(selection: $category) {
-                ForEach(Category.allCases) { c in
-                    Label(c.rawValue, systemImage: c.icon).tag(c)
+            sidebar
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(category.rawValue)
+                        .font(.system(size: 17, weight: .semibold))
+                        .padding(.top, 24)
+                    content
                 }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .listStyle(.sidebar)
-            .frame(width: 180)
-
-            Group {
-                switch category {
-                case .capture: CaptureSettings()
-                case .classification: ClassificationSettings()
-                case .permissions: PermissionSettings()
-                case .general: GeneralSettings()
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .background(LensoAmbientBackground())
+        .background(
+            LinearGradient(
+                colors: [Color(red: 0.95, green: 0.96, blue: 1.0), Color(red: 0.89, green: 0.91, blue: 0.99)],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            )
+        )
+        .environment(\.colorScheme, .light)
     }
-}
 
-private struct SettingGroup<Content: View>: View {
-    let title: String
-    @ViewBuilder let content: Content
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(Category.allCases) { c in
+                HStack(spacing: 8) {
+                    Image(systemName: c.icon)
+                        .font(.system(size: 13))
+                        .frame(width: 18)
+                    Text(c.rawValue).font(.system(size: 13, weight: .medium))
+                    Spacer()
+                }
+                .foregroundStyle(category == c ? Color.blue : .primary.opacity(0.8))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background {
+                    if category == c {
+                        RoundedRectangle(cornerRadius: 9)
+                            .fill(.white.opacity(0.6))
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture { category = c }
+            }
+            Spacer()
+        }
+        .padding(12)
+        .padding(.top, 12)
+        .frame(width: 150)
+        .background(Color.white.opacity(0.25))
+    }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(title)
-                .font(LensoTypography.callout)
-                .foregroundStyle(.secondary)
-                .padding(.bottom, LensoSpacing.s)
+    @ViewBuilder
+    private var content: some View {
+        switch category {
+        case .general:
             VStack(spacing: 0) {
-                content
+                SettingToggleRow(label: "开机启动 LENSO", isOn: .constant(true))
+                Divider().padding(.leading, 14)
+                SettingToggleRow(label: "在菜单栏显示图标", isOn: .constant(true))
+                Divider().padding(.leading, 14)
+                SettingToggleRow(label: "截图后显示预览", isOn: .constant(false))
             }
-            .background(
-                RoundedRectangle(cornerRadius: LensoRadius.control)
-                    .fill(.background.opacity(0.6))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: LensoRadius.control)
-                    .strokeBorder(.separator.opacity(0.4), lineWidth: 1)
-            )
+            .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.55)))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.6), lineWidth: 1))
+        case .capture:
+            VStack(spacing: 0) {
+                SettingToggleRow(label: "截图后自动复制到剪贴板", isOn: .constant(true))
+                Divider().padding(.leading, 14)
+                SettingToggleRow(label: "显示浮动预览", isOn: .constant(true))
+            }
+            .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.55)))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.6), lineWidth: 1))
+        case .shortcuts:
+            VStack(spacing: 0) {
+                SettingInfoRow(label: "区域截图", value: "⇧⌘1")
+                Divider().padding(.leading, 14)
+                SettingInfoRow(label: "全局搜索", value: "⌘K")
+            }
+            .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.55)))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.6), lineWidth: 1))
+        case .appearance:
+            VStack(spacing: 0) {
+                SettingToggleRow(label: "跟随系统外观", isOn: .constant(true))
+                Divider().padding(.leading, 14)
+                SettingToggleRow(label: "玻璃材质效果", isOn: .constant(true))
+            }
+            .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.55)))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.6), lineWidth: 1))
+        case .about:
+            VStack(alignment: .leading, spacing: 6) {
+                Text("LENSO").font(.system(size: 20, weight: .bold))
+                Text("版本 1.0 · macOS 26").font(.system(size: 12)).foregroundStyle(.secondary)
+                Text("原生截图与图片管理工具").font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.55)))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.6), lineWidth: 1))
         }
-        .padding(LensoSpacing.xl)
-        .frame(maxWidth: 560, alignment: .leading)
     }
+
 }
 
-private struct SettingRow: View {
+private struct SettingToggleRow: View {
     let label: String
-    var description: String? = nil
-    @ViewBuilder let trailing: () -> any View
+    @Binding var isOn: Bool
 
     var body: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label).font(LensoTypography.body)
-                if let description {
-                    Text(description).font(LensoTypography.caption).foregroundStyle(.secondary)
-                }
-            }
+            Text(label).font(.system(size: 13))
             Spacer()
-            AnyView(trailing())
+            Toggle("", isOn: $isOn).labelsHidden().toggleStyle(.switch).controlSize(.small)
         }
-        .padding(.horizontal, LensoSpacing.l)
-        .padding(.vertical, LensoSpacing.m)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
     }
 }
 
-private struct ToggleRow: View {
+private struct SettingInfoRow: View {
     let label: String
-    var description: String? = nil
-    var initiallyOn = false
-    @State private var isOn = false
+    let value: String
 
     var body: some View {
-        SettingRow(label: label, description: description) {
-            Toggle("", isOn: $isOn).labelsHidden().toggleStyle(.switch)
+        HStack {
+            Text(label).font(.system(size: 13))
+            Spacer()
+            Text(value).font(.system(size: 13)).foregroundStyle(.secondary)
         }
-        Divider().padding(.leading, LensoSpacing.l)
-        .onAppear { isOn = initiallyOn }
-    }
-}
-
-private struct CaptureSettings: View {
-    @State private var format = "PNG"
-
-    var body: some View {
-        ScrollView {
-            SettingGroup(title: "截图") {
-                ToggleRow(label: "截图后自动复制到剪贴板", initiallyOn: true)
-                SettingRow(label: "默认保存格式") {
-                    Picker("", selection: $format) {
-                        Text("PNG").tag("PNG"); Text("HEIF").tag("HEIF"); Text("JPEG").tag("JPEG")
-                    }
-                    .labelsHidden()
-                    .frame(width: 100)
-                }
-                Divider().padding(.leading, LensoSpacing.l)
-                ToggleRow(label: "浮动预览", description: "截图完成后显示预览窗口")
-            }
-        }
-    }
-}
-
-private struct ClassificationSettings: View {
-    var body: some View {
-        ScrollView {
-            SettingGroup(title: "智能分类") {
-                ToggleRow(label: "自动标签（基于来源应用）", description: "根据截图来源应用推荐标签", initiallyOn: true)
-                ToggleRow(label: "自动标签（基于 OCR 内容）", description: "识别截图文字后推荐标签")
-            }
-        }
-    }
-}
-
-private struct PermissionSettings: View {
-    var body: some View {
-        ScrollView {
-            SettingGroup(title: "权限") {
-                SettingRow(label: "屏幕录制", description: "截图功能必需") {
-                    Label("已授权", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .font(LensoTypography.callout)
-                }
-                Divider().padding(.leading, LensoSpacing.l)
-                SettingRow(label: "通知") {
-                    Button("去开启") { }
-                        .controlSize(.small)
-                }
-            }
-        }
-    }
-}
-
-private struct GeneralSettings: View {
-    @State private var launchAtLogin = false
-
-    var body: some View {
-        ScrollView {
-            SettingGroup(title: "通用") {
-                ToggleRow(label: "登录时启动")
-                SettingRow(label: "检查更新") {
-                    Text("V1.0").font(LensoTypography.callout).foregroundStyle(.secondary)
-                }
-            }
-        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
     }
 }

@@ -5,6 +5,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         false // 关闭所有窗口后仍常驻菜单栏
     }
 
-    // 不再强制 .accessory：使用 .regular 策略（默认），LENSO 有 Dock 图标、
-    // 参与台前调度（Stage Manager）和 App 切换器。菜单栏入口由 MenuBarExtra 独立提供。
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // 参考设计为浅色玻璃风格：固定浅色外观，避免系统深色模式下文字/材质反转
+        NSApp.appearance = NSAppearance(named: .aqua)
+    }
 }
