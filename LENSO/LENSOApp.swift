@@ -7,7 +7,7 @@ struct LENSOApp: App {
 
     var body: some Scene {
         // 菜单栏入口（MVP：区域截图 + 打开窗口）
-        MenuBarExtra("LENSO", systemImage: "camera.viewfinder") {
+        MenuBarExtra {
             Button("区域截图") {
                 CaptureCoordinator.shared.startRegionCapture()
             }
@@ -26,6 +26,9 @@ struct LENSOApp: App {
                 NSApp.terminate(nil)
             }
             .keyboardShortcut("q")
+        } label: {
+            LensoMark()
+                .frame(width: 18, height: 18)
         }
 
         WindowGroup("图库", id: "library") {
