@@ -83,31 +83,20 @@ struct SearchPanelView: View {
                             }
                             Spacer()
 
-                            // 悬停时显示操作：查看 / 复制
-                            if hoveredID == result.id {
-                                HStack(spacing: 6) {
-                                    ResultAction(icon: "eye", label: "查看") {
-                                        openWindow(id: "preview", value: result.id)
-                                        onDismiss()
-                                    }
-                                    ResultAction(icon: "doc.on.doc", label: "复制") {
-                                        copy(result)
-                                    }
+                            // 操作：查看 / 复制（常驻）
+                            HStack(spacing: 6) {
+                                ResultAction(icon: "eye", label: "查看") {
+                                    openWindow(id: "preview", value: result.id)
+                                    onDismiss()
                                 }
-                                .transition(.opacity)
-                            } else {
-                                Text(result.appName)
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.tertiary)
+                                ResultAction(icon: "doc.on.doc", label: "复制") {
+                                    copy(result)
+                                }
                             }
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                         .contentShape(Rectangle())
-                        .onHover { hovering in
-                            hoveredID = hovering ? result.id : (hoveredID == result.id ? nil : hoveredID)
-                        }
-                        .animation(.easeOut(duration: 0.12), value: hoveredID)
                         .onTapGesture(count: 2) {
                             openWindow(id: "preview", value: result.id)
                             onDismiss()
