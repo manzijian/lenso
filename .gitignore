@@ -4,3 +4,4 @@ DerivedData/
 *.xcodeproj/project.xcworkspace/xcuserdata/
 xcuserdata/
 .swiftpm/
+.claude/
