@@ -14,6 +14,7 @@ struct TextNotesView: View {
             content
         }
         .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sheet(item: $editing) { note in
             EditNoteSheet(
                 text: $draft,

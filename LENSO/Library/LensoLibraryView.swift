@@ -41,11 +41,9 @@ struct LensoLibraryView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(12)
             .background(mainGradient)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .frame(minWidth: 760, minHeight: 520)
         .clipShape(RoundedRectangle(
             cornerRadius: 20,
