@@ -29,14 +29,17 @@ final class CaptureCoordinator: NSObject {
     }
 
     private func startRegionCaptureAsync() async {
-        // 渐进式权限：首次截图时申请
-        if CapturePermissionService.currentStatus() != .authorized {
-            log.info("permission not authorized, requesting")
+        // 以真实能力为准（preflight 对 ad-hoc 调试构建不可靠）
+        var allowed = await CapturePermissionService.probeAccess()
+        if !allowed {
+            log.info("probe failed, requesting permission")
             let status = await CapturePermissionService.requestAccess()
-            guard status == .authorized else {
-                log.error("permission still denied after request")
-                return
-            }
+            allowed = status == .authorized
+        }
+        guard allowed else {
+            log.error("screen capture not permitted")
+            NSSound.beep()
+            return
         }
         log.info("permission ok, showing selector")
 

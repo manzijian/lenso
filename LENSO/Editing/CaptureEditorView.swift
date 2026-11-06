@@ -68,7 +68,7 @@ struct CaptureEditorView: View {
             width: selection.width, height: selection.height
         )
         // 工具栏位置：选区下方 12pt，横向居中于选区（越界时往屏内收）
-        let toolbarSize = CGSize(width: 560, height: 52)
+        let toolbarSize = CGSize(width: 720, height: 52)
         let toolbarX = min(
             max(toolbarSize.width / 2 + 8, localSel.midX),
             screenFrame.width - toolbarSize.width / 2 - 8

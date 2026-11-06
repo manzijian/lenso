@@ -7,17 +7,30 @@ enum CapturePermissionStatus {
     case notDetermined
 }
 
-/// 屏幕录制权限检查（规范 11.2：渐进式权限，首次截图时申请）
+/// 屏幕录制权限（macOS TCC）
+///
+/// 注意：`CGPreflightScreenCaptureAccess()` 在 macOS 26 上对 ad-hoc 签名的调试构建
+/// 可能持续返回 false（即使系统设置里开关已打开），而 ScreenCaptureKit 实际可用。
+/// 因此以「能否真正枚举可共享内容」为准，preflight 仅作参考。
 enum CapturePermissionService {
     static func currentStatus() -> CapturePermissionStatus {
-        CGPreflightScreenCaptureAccess() ? .authorized : .denied
+        CGPreflightScreenCaptureAccess() ? .authorized : .notDetermined
     }
 
-    /// 触发系统授权弹窗，并返回最新状态（需要用户在系统设置中授权后重试）
+    /// 真实能力探测：能枚举屏幕内容即视为已授权
+    static func probeAccess() async -> Bool {
+        do {
+            _ = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// 请求授权（触发系统弹窗）并等待首次探测
     static func requestAccess() async -> CapturePermissionStatus {
         _ = CGRequestScreenCaptureAccess()
-        // 弹窗是异步的：等一小段时间后再查
         try? await Task.sleep(for: .seconds(1))
-        return currentStatus()
+        return await probeAccess() ? .authorized : .denied
     }
 }
