@@ -362,6 +362,276 @@ button { font-family: inherit; border: none; background: none; cursor: pointer; 
 .ph-terminal .ph-line:nth-child(2n) { background: rgba(150, 160, 200, 0.24); margin-left: 32px; }
 .ph-music { background: linear-gradient(160deg, #fa5c74 0%, #c73a5e 55%, #7a2450 100%); }
 .ph-music .ph-note { position: absolute; right: 10px; bottom: 8px; color: rgba(255,255,255,0.85); font-size: 20px; }
+
+/* ============ 搜索视图（Task 4） ============ */
+#view-search.active { display: block; }
+.search-wrap { max-width: 760px; margin: 0 auto; padding: var(--sp-5) var(--sp-5) var(--sp-6); }
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 9px var(--sp-3);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border-hairline);
+  background: var(--bg-surface);
+  color: var(--text-tertiary);
+  font-size: var(--fs-body);
+}
+.search-bar input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  color: var(--text-primary);
+}
+.search-bar input::placeholder { color: var(--text-tertiary); }
+.search-scope {
+  flex: none;
+  font-size: var(--fs-caption);
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+.search-filters {
+  display: flex;
+  gap: var(--sp-2);
+  margin: var(--sp-3) 0 var(--sp-2);
+}
+.filter-chip.active {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent);
+  font-weight: 500;
+}
+.search-results { margin-top: var(--sp-3); }
+.result-row {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-1);
+  border-bottom: 1px solid var(--border-hairline);
+  align-items: flex-start;
+}
+.result-row:last-child { border-bottom: none; }
+.result-thumb {
+  flex: none;
+  width: 96px;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--radius-thumb);
+  position: relative;
+  overflow: hidden;
+}
+.result-info { min-width: 0; flex: 1; }
+.result-title {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+.result-snippet {
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.result-snippet mark {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.result-meta {
+  font-size: var(--fs-caption);
+  color: var(--text-tertiary);
+}
+
+/* ============ OCR 工作区视图（Task 4） ============ */
+#view-ocr.active { display: grid; grid-template-columns: 55fr 45fr; overflow: hidden; }
+.ocr-image-pane {
+  display: grid;
+  place-items: center;
+  padding: var(--sp-5);
+  background:
+    repeating-conic-gradient(rgba(0,0,0,0.03) 0% 25%, transparent 0% 50%) 0 0 / 16px 16px;
+}
+@media (prefers-color-scheme: dark) {
+  .ocr-image-pane { background: repeating-conic-gradient(rgba(255,255,255,0.03) 0% 25%, transparent 0% 50%) 0 0 / 16px 16px; }
+}
+.ocr-image {
+  position: relative;
+  width: min(520px, 100%);
+  aspect-ratio: 4 / 5;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-popover);
+  overflow: hidden;
+}
+.ocr-box {
+  position: absolute;
+  border: 1.5px solid var(--accent);
+  background: rgba(10, 132, 255, 0.06);
+  border-radius: 3px;
+  cursor: default;
+  transition: background 0.12s ease;
+}
+.ocr-box:hover, .ocr-box.hl { background: rgba(10, 132, 255, 0.18); }
+.ocr-text-pane {
+  border-left: 1px solid var(--border-hairline);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ocr-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border-hairline);
+}
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 6px;
+}
+.btn-primary:hover { filter: brightness(1.06); }
+.btn-secondary {
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--fs-caption);
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-hairline);
+}
+.btn-secondary:hover { background: rgba(0,0,0,0.03); color: var(--text-primary); }
+@media (prefers-color-scheme: dark) {
+  .btn-secondary:hover { background: rgba(255,255,255,0.06); }
+}
+.ocr-lang {
+  margin-left: auto;
+  font-size: var(--fs-caption);
+  color: var(--text-tertiary);
+}
+.ocr-blocks { flex: 1; overflow-y: auto; padding: var(--sp-4); }
+.ocr-block {
+  font-size: var(--fs-body);
+  line-height: 1.7;
+  color: var(--text-primary);
+  padding: var(--sp-2);
+  border-radius: var(--radius-card);
+  cursor: default;
+  transition: background 0.12s ease;
+}
+.ocr-block:hover, .ocr-block.hl { background: var(--accent-soft); }
+.ocr-block + .ocr-block { margin-top: var(--sp-1); }
+.ocr-translate {
+  flex: none;
+  border-top: 1px solid var(--border-hairline);
+  padding: var(--sp-4);
+}
+.ocr-translate-head {
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-2);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.ocr-translate-head .ocr-lang {
+  margin-left: 0;
+  font-weight: 400;
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+.translation-text {
+  font-size: var(--fs-body);
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+/* ============ 设置视图（Task 4） ============ */
+#view-settings.active { display: block; overflow-y: auto; }
+.settings-wrap { max-width: 560px; margin: 0 auto; padding: var(--sp-6) var(--sp-5); }
+.settings-title {
+  font-size: var(--fs-large-title);
+  font-weight: 700;
+  margin-bottom: var(--sp-5);
+}
+.settings-group {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  margin-bottom: var(--sp-4);
+  overflow: hidden;
+}
+.settings-group-title {
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--text-tertiary);
+  padding: var(--sp-3) var(--sp-4) var(--sp-1);
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--fs-body);
+  color: var(--text-primary);
+  cursor: default;
+}
+.setting-row + .setting-row { border-top: 1px solid var(--border-hairline); }
+.setting-value { color: var(--text-secondary); }
+.perm-status {
+  font-size: var(--fs-caption);
+  padding: 3px 10px;
+  border-radius: 12px;
+}
+.perm-status.ok {
+  color: #1d8a3a;
+  background: rgba(52, 199, 89, 0.15);
+}
+.perm-status.warn {
+  color: #b25000;
+  background: rgba(255, 149, 0, 0.15);
+}
+@media (prefers-color-scheme: dark) {
+  .perm-status.ok { color: #4cd964; }
+  .perm-status.warn { color: #ffab2e; }
+}
+
+/* 开关 — 纯 CSS toggle */
+.switch {
+  flex: none;
+  width: 38px;
+  height: 22px;
+  border-radius: 11px;
+  background: rgba(120, 120, 128, 0.28);
+  position: relative;
+  transition: background 0.18s ease;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.18s ease;
+}
+.switch.on { background: #34c759; }
+.switch.on::after { transform: translateX(16px); }
 </style>
 </head>
 <body>
@@ -522,9 +792,149 @@ button { font-family: inherit; border: none; background: none; cursor: pointer; 
             </div>
           </div>
         </section>
-        <section id="view-search" class="view"><!-- Task 4 --></section>
-        <section id="view-ocr" class="view"><!-- Task 4 --></section>
-        <section id="view-settings" class="view"><!-- Task 4 --></section>
+        <section id="view-search" class="view">
+          <div class="search-wrap">
+            <div class="search-bar">⌕
+              <input placeholder="搜索截图内容、应用、标签…">
+              <span class="search-scope">全文 · 结构化</span>
+            </div>
+            <div class="search-filters">
+              <span class="filter-chip active">全部</span>
+              <span class="filter-chip">来源应用</span>
+              <span class="filter-chip">OCR 文字</span>
+              <span class="filter-chip">标签</span>
+              <span class="filter-chip">时间</span>
+            </div>
+            <div class="search-results">
+              <div class="result-row">
+                <div class="result-thumb ph-editor"><div class="ph-line" style="width:60%"></div><div class="ph-line" style="width:44%"></div><div class="ph-line" style="width:66%"></div><div class="ph-line" style="width:52%"></div></div>
+                <div class="result-info">
+                  <div class="result-title">Xcode — CaptureService.swift</div>
+                  <div class="result-snippet">… FT S5 分词器需要针对<mark>中文</mark>验证召回率，先用 jieba 基准…</div>
+                  <div class="result-meta">11 月 5 日 16:20 · Xcode · 标签：报错日志</div>
+                </div>
+              </div>
+              <div class="result-row">
+                <div class="result-thumb ph-doc"><div class="ph-para head" style="width:42%"></div><div class="ph-para"></div><div class="ph-para" style="width:78%"></div><div class="ph-para" style="width:60%"></div></div>
+                <div class="result-info">
+                  <div class="result-title">预览 — Lenso 架构规范.pdf</div>
+                  <div class="result-snippet">… 第十五章 界面设计：遵循 <mark>中文</mark> 排版习惯，字号不小于 13pt…</div>
+                  <div class="result-meta">11 月 4 日 20:41 · 预览 · 标签：接口文档</div>
+                </div>
+              </div>
+              <div class="result-row">
+                <div class="result-thumb ph-web"><div class="ph-hero"></div><div class="ph-text"></div><div class="ph-text short"></div></div>
+                <div class="result-info">
+                  <div class="result-title">Safari — 开发者文档 · String Protocol</div>
+                  <div class="result-snippet">… localizedStandardCompare 支持<mark>中文</mark>拼音排序，适用于图库按标题…</div>
+                  <div class="result-meta">11 月 4 日 14:12 · Safari · 标签：UI 灵感</div>
+                </div>
+              </div>
+              <div class="result-row">
+                <div class="result-thumb ph-chat"><div class="ph-bubble them" style="width:50%"></div><div class="ph-bubble me" style="width:40%"></div><div class="ph-bubble them" style="width:36%"></div></div>
+                <div class="result-info">
+                  <div class="result-title">微信 — 产品设计讨论群</div>
+                  <div class="result-snippet">… @子建 这版 <mark>中文</mark> 文案定稿了，明天同步给设计走查…</div>
+                  <div class="result-meta">11 月 3 日 21:05 · 微信 · 标签：会议记录</div>
+                </div>
+              </div>
+              <div class="result-row">
+                <div class="result-thumb ph-slides"><div class="ph-title" style="width:52%"></div><div class="ph-body" style="width:38%"></div></div>
+                <div class="result-info">
+                  <div class="result-title">Keynote — LENSO 发布会初稿</div>
+                  <div class="result-snippet">… 首发支持简体<mark>中文</mark>与英文界面，OCR 识别语言跟随系统…</div>
+                  <div class="result-meta">11 月 2 日 10:26 · Keynote · 标签：会议记录</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section id="view-ocr" class="view">
+          <div class="ocr-split" style="display:contents">
+            <div class="ocr-image-pane">
+              <div class="ocr-image ph-doc">
+                <div class="ph-para head" style="position:absolute;top:10%;left:8%;width:52%;height:12px;margin:0;background:rgba(0,0,0,0.24)"></div>
+                <div class="ph-para" style="position:absolute;top:17%;left:8%;width:84%;height:6px;margin:0"></div>
+                <div class="ph-para" style="position:absolute;top:22%;left:8%;width:70%;height:6px;margin:0"></div>
+                <div class="ph-para" style="position:absolute;top:34%;left:8%;width:60%;height:12px;margin:0;background:rgba(0,0,0,0.24)"></div>
+                <div class="ph-para" style="position:absolute;top:41%;left:8%;width:84%;height:6px;margin:0"></div>
+                <div class="ph-para" style="position:absolute;top:46%;left:8%;width:76%;height:6px;margin:0"></div>
+                <div class="ocr-box" data-box="0" style="top:9%;left:6%;width:60%;height:6%"></div>
+                <div class="ocr-box" data-box="1" style="top:16%;left:6%;width:88%;height:4%"></div>
+                <div class="ocr-box" data-box="2" style="top:21%;left:6%;width:74%;height:4%"></div>
+                <div class="ocr-box" data-box="3" style="top:33%;left:6%;width:66%;height:6%"></div>
+                <div class="ocr-box" data-box="4" style="top:40%;left:6%;width:88%;height:4%"></div>
+                <div class="ocr-box" data-box="5" style="top:45%;left:6%;width:80%;height:4%"></div>
+              </div>
+            </div>
+            <div class="ocr-text-pane">
+              <div class="ocr-toolbar">
+                <button class="btn-primary">重新识别</button>
+                <button class="btn-secondary">复制全文</button>
+                <span class="ocr-lang">简体中文 · 置信度 96%</span>
+              </div>
+              <div class="ocr-blocks">
+                <p class="ocr-block" data-box="0">项目技术目标：LENSO 是一款 macOS 原生智能截图工具，</p>
+                <p class="ocr-block" data-box="1">以「截得快、找得到」为核心体验。系统级快捷键触发截屏，</p>
+                <p class="ocr-block" data-box="2">截图自动进入时间轴图库，并通过 OCR 建立全文索引。</p>
+                <p class="ocr-block" data-box="3">核心能力：毫秒级区域截屏；OCR 文字识别支持简体中文、</p>
+                <p class="ocr-block" data-box="4">英文与混排内容；按来源应用自动归类，支持自定义标签；</p>
+                <p class="ocr-block" data-box="5">本地全文检索可在 200ms 内返回结果，全程数据不出设备。</p>
+              </div>
+              <div class="ocr-translate">
+                <div class="ocr-translate-head">翻译 <span class="ocr-lang">英 → 中</span></div>
+                <p class="translation-text">Project goals: LENSO is a native macOS smart screenshot tool built around "capture fast, find fast". System-wide hotkeys trigger captures, which flow into a timeline library with full-text OCR indexing.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section id="view-settings" class="view">
+          <div class="settings-wrap">
+            <h2 class="settings-title">设置</h2>
+            <div class="settings-group">
+              <div class="settings-group-title">截图</div>
+              <label class="setting-row">
+                <span>截图后自动复制到剪贴板</span>
+                <span class="switch on"></span>
+              </label>
+              <label class="setting-row">
+                <span>默认保存格式</span>
+                <span class="setting-value">PNG ▾</span>
+              </label>
+              <label class="setting-row">
+                <span>截图快捷键</span>
+                <span class="setting-value">⇧⌘5</span>
+              </label>
+            </div>
+            <div class="settings-group">
+              <div class="settings-group-title">智能分类</div>
+              <label class="setting-row">
+                <span>自动标签（基于来源应用）</span>
+                <span class="switch on"></span>
+              </label>
+              <label class="setting-row">
+                <span>自动标签（基于 OCR 内容）</span>
+                <span class="switch off"></span>
+              </label>
+            </div>
+            <div class="settings-group">
+              <div class="settings-group-title">权限</div>
+              <div class="setting-row permission-row">
+                <span>屏幕录制</span>
+                <span class="perm-status ok">已授权</span>
+              </div>
+              <div class="setting-row permission-row">
+                <span>通知</span>
+                <button class="btn-secondary">去开启</button>
+              </div>
+            </div>
+            <div class="settings-group">
+              <div class="settings-group-title">关于</div>
+              <label class="setting-row"><span>检查更新</span><span class="setting-value">V1.0</span></label>
+              <label class="setting-row"><span>开源许可</span><span class="setting-value">鸣谢名单 ▾</span></label>
+            </div>
+          </div>
+        </section>
       </main>
       <footer class="statusbar">
         共 128 张截图 · 上次备份：未启用云备份
@@ -532,6 +942,26 @@ button { font-family: inherit; border: none; background: none; cursor: pointer; 
     </div>
     <p class="demo-note">LENSO UI 视觉 Demo — 静态演示，代表未来 SwiftUI 界面的视觉方向</p>
   </div>
-<script>/* Task 5 填充 */</script>
+<script>
+/* OCR 左右联动：hover 文字块 ⇄ 定位框（Task 4） */
+document.querySelectorAll('.ocr-block, .ocr-box').forEach(el => {
+  el.addEventListener('mouseenter', () => setOcrPair(el, true));
+  el.addEventListener('mouseleave', () => setOcrPair(el, false));
+});
+function setOcrPair(el, on) {
+  const key = el.dataset.box;
+  document.querySelectorAll(`.ocr-box[data-box="${key}"], .ocr-block[data-box="${key}"]`)
+    .forEach(p => p.classList.toggle('hl', on));
+}
+
+/* Tab 切换（Task 5）：事件委托 */
+document.querySelector('.view-tabs').addEventListener('click', (e) => {
+  const tab = e.target.closest('.tab');
+  if (!tab) return;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === tab));
+  document.querySelectorAll('.view').forEach(v =>
+    v.classList.toggle('active', v.id === `view-${tab.dataset.view}`));
+});
+</script>
 </body>
 </html>
