@@ -17,10 +17,31 @@ final class ClipboardMonitor {
     func start() {
         guard timer == nil else { return }
         lastChangeCount = NSPasteboard.general.changeCount
+        backfillNotesFromHistory()
         timer = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.poll() }
         }
         log.info("clipboard monitor started")
+    }
+
+    /// 把历史里已有的剪贴板文字补录进「文字收纳」（去重，最多 20 条）
+    private func backfillNotesFromHistory() {
+        let store = ScreenshotStore.shared
+        let notes = (try? store.listTextNotes()) ?? []
+        let existing = Set(notes.map(\.content))
+        let texts = ((try? store.listClipboard(limit: 40)) ?? [])
+            .filter { $0.kind == .text }
+            .prefix(20)
+        var added = 0
+        for item in texts {
+            guard let text = item.text, !existing.contains(text) else { continue }
+            _ = try? store.createTextNote(content: text, sourceApp: item.sourceApp)
+            added += 1
+        }
+        if added > 0 {
+            NotificationCenter.default.post(name: .textNotesChanged, object: nil)
+            log.info("backfilled \(added) notes from clipboard history")
+        }
     }
 
     func stop() {
