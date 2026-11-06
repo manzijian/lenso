@@ -160,6 +160,7 @@ struct SearchPanelView: View {
         if let tiff = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height)).tiffRepresentation {
             pasteboard.setData(tiff, forType: .tiff)
         }
+        SaveToastController.shared.show(title: "已复制", subtitle: "到剪贴板", thumbnail: image)
         copiedID = result.id
         Task {
             try? await Task.sleep(for: .seconds(1.2))

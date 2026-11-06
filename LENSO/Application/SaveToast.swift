@@ -7,12 +7,12 @@ final class SaveToastController {
     private var panel: NSPanel?
     private var hideTask: Task<Void, Never>?
 
-    func show(thumbnail: CGImage?) {
+    func show(title: String = "截图已保存", subtitle: String = "到图片库", thumbnail: CGImage?) {
         hideTask?.cancel()
         panel?.orderOut(nil)
         panel?.close()
 
-        let toastView = SaveToastView(thumbnail: thumbnail)
+        let toastView = SaveToastView(title: title, subtitle: subtitle, thumbnail: thumbnail)
         let hosting = NSHostingView(rootView: toastView)
         let size = hosting.fittingSize
 
@@ -66,6 +66,8 @@ final class SaveToastController {
 }
 
 struct SaveToastView: View {
+    var title: String = "截图已保存"
+    var subtitle: String = "到图片库"
     let thumbnail: CGImage?
 
     var body: some View {
@@ -74,8 +76,8 @@ struct SaveToastView: View {
                 .font(.system(size: 20))
                 .foregroundStyle(.green)
             VStack(alignment: .leading, spacing: 1) {
-                Text("截图已保存").font(.system(size: 13, weight: .semibold))
-                Text("到图片库").font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(title).font(.system(size: 13, weight: .semibold))
+                Text(subtitle).font(.system(size: 11)).foregroundStyle(.secondary)
             }
             if let thumbnail {
                 Image(decorative: thumbnail, scale: 2)
