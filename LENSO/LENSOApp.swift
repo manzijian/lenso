@@ -74,6 +74,10 @@ struct LENSOApp: App {
                     SearchPanelController.shared.show()
                 }
                 .keyboardShortcut("k", modifiers: [.command])
+                Button("剪贴板历史") {
+                    ClipboardPanelController.shared.show()
+                }
+                .keyboardShortcut("v", modifiers: [.command, .shift])
             }
             CommandMenu("设置") {
                 Button("打开设置") {

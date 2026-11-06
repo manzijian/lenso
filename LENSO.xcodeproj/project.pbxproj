@@ -24,6 +24,7 @@
 		6F1AD5DBC077F820272B7CCC /* LibraryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEC28A398581D301F8477089 /* LibraryViewModel.swift */; };
 		8A053A317CB5D595422AA5CF /* LibraryWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE319A913EF71A6473D9DA2 /* LibraryWindowView.swift */; };
 		8BE7DED61C9EC55C98155854 /* CaptureEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51F18440E25048F21350866B /* CaptureEditorView.swift */; };
+		949F2379957DF484D0042FC9 /* ClipboardPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE3FCF1084A3CEA10F815351 /* ClipboardPanelController.swift */; };
 		96AC4AAB68AEB4F0EE3EDC30 /* LensoMaterials.swift in Sources */ = {isa = PBXBuildFile; fileRef = B774C35C380B7D917F97F431 /* LensoMaterials.swift */; };
 		A0A0C969EDE1C8AE41F7FA07 /* ScreenshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D3AF7C7AB4090B43A75631B /* ScreenshotStore.swift */; };
 		B5584BCC1216AF24B332E40D /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AB003CD37209DD64C011EA3 /* AppDelegate.swift */; };
@@ -32,12 +33,15 @@
 		C9F8421873724F37DEE74863 /* LensoSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61EDF15A8E03284FE7451DBE /* LensoSpacing.swift */; };
 		D153AE7F6D916F17FAB9F757 /* LensoTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B7699807F95B1D64ECCC681 /* LensoTypography.swift */; };
 		D4592AF8F65F6735302F596D /* LENSOApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B044ADEB2AF234FFA798A8B5 /* LENSOApp.swift */; };
+		DE568699012109BCB32B82B4 /* ClipboardMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BDA7F5691661D2318B5AB81 /* ClipboardMonitor.swift */; };
 		E8A1E10D92154E1F0DDD271E /* PreviewWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD209F1E73612BFE09EF7A77 /* PreviewWindowView.swift */; };
 		F1661F941BC19A8D5898962D /* WindowConfigurator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D93797B089581C688C44523A /* WindowConfigurator.swift */; };
 		F8E7C96B92F1BEE9E504D74C /* CapturePermissionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3326A48E064867C956689606 /* CapturePermissionService.swift */; };
+		F95E22C0B2CC82BD6181E284 /* ClipboardPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF014BA807177AA4AC07780B /* ClipboardPanelView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0BDA7F5691661D2318B5AB81 /* ClipboardMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardMonitor.swift; sourceTree = "<group>"; };
 		23AB2FC879FA87DFEC9E48FD /* SettingsWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowView.swift; sourceTree = "<group>"; };
 		253AE39E10F62B39843EA8E1 /* MenuBarPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPanelView.swift; sourceTree = "<group>"; };
 		27A12E562F3E75E7654448B1 /* LibraryImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryImage.swift; sourceTree = "<group>"; };
@@ -63,8 +67,10 @@
 		A82C877CAA54F5A72BB7A2C4 /* LensoColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoColors.swift; sourceTree = "<group>"; };
 		B044ADEB2AF234FFA798A8B5 /* LENSOApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LENSOApp.swift; sourceTree = "<group>"; };
 		B774C35C380B7D917F97F431 /* LensoMaterials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoMaterials.swift; sourceTree = "<group>"; };
+		BF014BA807177AA4AC07780B /* ClipboardPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPanelView.swift; sourceTree = "<group>"; };
 		CD209F1E73612BFE09EF7A77 /* PreviewWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewWindowView.swift; sourceTree = "<group>"; };
 		D93797B089581C688C44523A /* WindowConfigurator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowConfigurator.swift; sourceTree = "<group>"; };
+		FE3FCF1084A3CEA10F815351 /* ClipboardPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPanelController.swift; sourceTree = "<group>"; };
 		FEA52E5DA6BB4A0D1D863A96 /* AnnotationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationModel.swift; sourceTree = "<group>"; };
 		FEC28A398581D301F8477089 /* LibraryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -136,6 +142,16 @@
 			);
 			sourceTree = "<group>";
 		};
+		909CAE93F16B1A7709E4C64C /* Clipboard */ = {
+			isa = PBXGroup;
+			children = (
+				0BDA7F5691661D2318B5AB81 /* ClipboardMonitor.swift */,
+				FE3FCF1084A3CEA10F815351 /* ClipboardPanelController.swift */,
+				BF014BA807177AA4AC07780B /* ClipboardPanelView.swift */,
+			);
+			path = Clipboard;
+			sourceTree = "<group>";
+		};
 		9A5269AC9E596D9FFD5123B2 /* MenuBar */ = {
 			isa = PBXGroup;
 			children = (
@@ -178,6 +194,7 @@
 				B044ADEB2AF234FFA798A8B5 /* LENSOApp.swift */,
 				39CAAAE2E6CBAFBD67492A6A /* App */,
 				2023093531D932817FFFDB0E /* Application */,
+				909CAE93F16B1A7709E4C64C /* Clipboard */,
 				3739C779A97D70DE8BB7093F /* DesignSystem */,
 				1F05F9E8917C007E8A2EC680 /* Editing */,
 				B8BF6D83DE4CB322129DCC29 /* Infrastructure */,
@@ -265,6 +282,9 @@
 				21B69121FFF44550CD4586A0 /* CaptureCoordinator.swift in Sources */,
 				8BE7DED61C9EC55C98155854 /* CaptureEditorView.swift in Sources */,
 				F8E7C96B92F1BEE9E504D74C /* CapturePermissionService.swift in Sources */,
+				DE568699012109BCB32B82B4 /* ClipboardMonitor.swift in Sources */,
+				949F2379957DF484D0042FC9 /* ClipboardPanelController.swift in Sources */,
+				F95E22C0B2CC82BD6181E284 /* ClipboardPanelView.swift in Sources */,
 				D4592AF8F65F6735302F596D /* LENSOApp.swift in Sources */,
 				B6AC8948238E399699455EF3 /* LensoAnimations.swift in Sources */,
 				BEF7EBE7C225F23EF8AA22C4 /* LensoColors.swift in Sources */,

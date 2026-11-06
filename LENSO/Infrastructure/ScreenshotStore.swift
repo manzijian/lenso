@@ -13,6 +13,17 @@ struct ScreenshotRecord: Identifiable, Hashable {
     let capturedAt: Date
 }
 
+/// 剪贴板历史条目（图片或文字），记录来源应用
+struct ClipboardItem: Identifiable {
+    enum Kind: String { case image, text }
+    let id: UUID
+    let kind: Kind
+    let filename: String?
+    let text: String?
+    let sourceApp: String?
+    let createdAt: Date
+}
+
 /// MVP 持久层：原图/缩略图文件存储 + SQLite 索引（规范第九章简化版）
 /// 目录结构：~/Library/Application Support/LENSO/{Original,Thumbnails,lenso.sqlite}
 final class ScreenshotStore: @unchecked Sendable {
@@ -26,7 +37,7 @@ final class ScreenshotStore: @unchecked Sendable {
         baseDir = baseDirectory
             ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
                 .appendingPathComponent("LENSO", isDirectory: true)
-        for sub in ["Original", "Thumbnails"] {
+        for sub in ["Original", "Thumbnails", "Clipboard"] {
             try? FileManager.default.createDirectory(at: baseDir.appendingPathComponent(sub), withIntermediateDirectories: true)
         }
         db = Self.openDB(at: baseDir.appendingPathComponent("lenso.sqlite"))
@@ -58,8 +69,19 @@ final class ScreenshotStore: @unchecked Sendable {
             captured_at REAL NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_captured_at ON screenshots(captured_at DESC);
+        CREATE TABLE IF NOT EXISTS clipboard_items (
+            id TEXT PRIMARY KEY NOT NULL,
+            kind TEXT NOT NULL,
+            filename TEXT,
+            text TEXT,
+            source_app TEXT,
+            created_at REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_clip_created ON clipboard_items(created_at DESC);
         """
         sqlite3_exec(db, sql, nil, nil, nil)
+        // 旧表升级：补充 source_app 列（已存在则忽略错误）
+        sqlite3_exec(db, "ALTER TABLE clipboard_items ADD COLUMN source_app TEXT;", nil, nil, nil)
     }
 
     private static let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
@@ -186,6 +208,95 @@ final class ScreenshotStore: @unchecked Sendable {
             for sub in ["Original", "Thumbnails"] {
                 let url = baseDir.appendingPathComponent(sub).appendingPathComponent(record.filename)
                 try? FileManager.default.removeItem(at: url)
+            }
+        }
+    }
+
+    // MARK: - Clipboard history
+
+    @discardableResult
+    func saveClipboardImage(_ image: CGImage, sourceApp: String?) throws -> ClipboardItem {
+        let id = UUID()
+        let filename = "\(id.uuidString).png"
+        let url = baseDir.appendingPathComponent("Clipboard").appendingPathComponent(filename)
+        guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
+            throw StoreError.imageEncodeFailed
+        }
+        CGImageDestinationAddImage(dest, image, nil)
+        guard CGImageDestinationFinalize(dest) else { throw StoreError.imageEncodeFailed }
+
+        let createdAt = Date()
+        try insertClipboard(id: id, kind: .image, filename: filename, text: nil, sourceApp: sourceApp, createdAt: createdAt)
+        return ClipboardItem(id: id, kind: .image, filename: filename, text: nil, sourceApp: sourceApp, createdAt: createdAt)
+    }
+
+    @discardableResult
+    func saveClipboardText(_ text: String, sourceApp: String?) throws -> ClipboardItem {
+        let id = UUID()
+        let createdAt = Date()
+        try insertClipboard(id: id, kind: .text, filename: nil, text: text, sourceApp: sourceApp, createdAt: createdAt)
+        return ClipboardItem(id: id, kind: .text, filename: nil, text: text, sourceApp: sourceApp, createdAt: createdAt)
+    }
+
+    private func insertClipboard(id: UUID, kind: ClipboardItem.Kind, filename: String?, text: String?, sourceApp: String?, createdAt: Date) throws {
+        try queue.sync {
+            let sql = "INSERT INTO clipboard_items (id, kind, filename, text, source_app, created_at) VALUES (?,?,?,?,?,?);"
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
+            defer { sqlite3_finalize(stmt) }
+            Self.bind(stmt, 1, id.uuidString)
+            Self.bind(stmt, 2, kind.rawValue)
+            if let filename { Self.bind(stmt, 3, filename) } else { sqlite3_bind_null(stmt, 3) }
+            if let text { Self.bind(stmt, 4, text) } else { sqlite3_bind_null(stmt, 4) }
+            if let sourceApp { Self.bind(stmt, 5, sourceApp) } else { sqlite3_bind_null(stmt, 5) }
+            sqlite3_bind_double(stmt, 6, createdAt.timeIntervalSince1970)
+            guard sqlite3_step(stmt) == SQLITE_DONE else { throw StoreError.dbFailed }
+
+            // 保留最近 200 条，超出的删除并清理文件
+            sqlite3_exec(db, """
+                DELETE FROM clipboard_items WHERE id NOT IN (
+                    SELECT id FROM clipboard_items ORDER BY created_at DESC LIMIT 200
+                );
+                """, nil, nil, nil)
+        }
+    }
+
+    func listClipboard(limit: Int = 60) throws -> [ClipboardItem] {
+        try queue.sync {
+            let sql = "SELECT id, kind, filename, text, source_app, created_at FROM clipboard_items ORDER BY created_at DESC LIMIT ?;"
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
+            defer { sqlite3_finalize(stmt) }
+            sqlite3_bind_int(stmt, 1, Int32(limit))
+
+            var items: [ClipboardItem] = []
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                guard let idText = sqlite3_column_text(stmt, 0),
+                      let id = UUID(uuidString: String(cString: idText)),
+                      let kindText = sqlite3_column_text(stmt, 1),
+                      let kind = ClipboardItem.Kind(rawValue: String(cString: kindText))
+                else { continue }
+                let filename = sqlite3_column_text(stmt, 2).map { String(cString: $0) }
+                let text = sqlite3_column_text(stmt, 3).map { String(cString: $0) }
+                let sourceApp = sqlite3_column_text(stmt, 4).map { String(cString: $0) }
+                let createdAt = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 5))
+                items.append(ClipboardItem(id: id, kind: kind, filename: filename, text: text, sourceApp: sourceApp, createdAt: createdAt))
+            }
+            return items
+        }
+    }
+
+    func loadClipboardImage(_ item: ClipboardItem) -> CGImage? {
+        guard let filename = item.filename else { return nil }
+        return Self.loadImage(at: baseDir.appendingPathComponent("Clipboard").appendingPathComponent(filename))
+    }
+
+    func clearClipboardHistory() throws {
+        try queue.sync {
+            sqlite3_exec(db, "DELETE FROM clipboard_items;", nil, nil, nil)
+            let dir = baseDir.appendingPathComponent("Clipboard")
+            if let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) {
+                for file in files { try? FileManager.default.removeItem(at: file) }
             }
         }
     }
