@@ -120,6 +120,16 @@ struct ClipboardPanelView: View {
                     } else {
                         Text(item.createdAt, style: .time)
                     }
+                    if item.kind == .text {
+                        Button {
+                            saveAsNote(item)
+                        } label: {
+                            Image(systemName: "bookmark")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("收藏到文字收纳")
+                    }
                 }
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
@@ -152,6 +162,14 @@ struct ClipboardPanelView: View {
                 createdAt: record.createdAt
             )
         }
+    }
+
+    /// 把文字条目收藏到「文字收纳」
+    private func saveAsNote(_ item: Item) {
+        guard let text = item.text else { return }
+        _ = try? ScreenshotStore.shared.createTextNote(content: text, sourceApp: item.sourceApp)
+        NotificationCenter.default.post(name: .textNotesChanged, object: nil)
+        SaveToastController.shared.show(title: "已收藏", subtitle: "到文字收纳", thumbnail: nil)
     }
 
     private func copyBack(_ item: Item) {

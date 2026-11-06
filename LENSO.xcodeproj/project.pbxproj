@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0AF1DFAA4D092400748BC9E4 /* SearchPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F27A5A1C366022DF7397C5F /* SearchPanelController.swift */; };
+		1A9A8DE9E043C4E325009F7C /* TextNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3C18A26380F00F9ED01AAC3 /* TextNotesView.swift */; };
 		1B2FFD351AFE7E489453D2C4 /* AnnotationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA52E5DA6BB4A0D1D863A96 /* AnnotationModel.swift */; };
 		20F723F27026817794C9859C /* RegionSelectorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86C78002C2F37CAB9153ED45 /* RegionSelectorWindow.swift */; };
 		21B69121FFF44550CD4586A0 /* CaptureCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D784B50D6B7F67CC9AB3338 /* CaptureCoordinator.swift */; };
@@ -63,6 +64,7 @@
 		8D784B50D6B7F67CC9AB3338 /* CaptureCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureCoordinator.swift; sourceTree = "<group>"; };
 		8F27A5A1C366022DF7397C5F /* SearchPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchPanelController.swift; sourceTree = "<group>"; };
 		A26280DFFE85B83D0B9A05D2 /* LensoAnimations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoAnimations.swift; sourceTree = "<group>"; };
+		A3C18A26380F00F9ED01AAC3 /* TextNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextNotesView.swift; sourceTree = "<group>"; };
 		A5CFCAC958BAEF1C9CDC1C42 /* SearchPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchPanelView.swift; sourceTree = "<group>"; };
 		A82C877CAA54F5A72BB7A2C4 /* LensoColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoColors.swift; sourceTree = "<group>"; };
 		B044ADEB2AF234FFA798A8B5 /* LENSOApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LENSOApp.swift; sourceTree = "<group>"; };
@@ -203,8 +205,17 @@
 				A66FD8BEA0E6DD6D02F54AF4 /* Preview */,
 				83DD2974D1BFFE7EC5BDEE58 /* Search */,
 				65D8D841CCD853F3FE4311CB /* Settings */,
+				EA841154533610581E3CD243 /* TextNotes */,
 			);
 			path = LENSO;
+			sourceTree = "<group>";
+		};
+		EA841154533610581E3CD243 /* TextNotes */ = {
+			isa = PBXGroup;
+			children = (
+				A3C18A26380F00F9ED01AAC3 /* TextNotesView.swift */,
+			);
+			path = TextNotes;
 			sourceTree = "<group>";
 		};
 		F5587BD6D3768DDBF795C053 /* Library */ = {
@@ -307,6 +318,7 @@
 				0AF1DFAA4D092400748BC9E4 /* SearchPanelController.swift in Sources */,
 				3F8B2F39F47F8C1AC0BBF278 /* SearchPanelView.swift in Sources */,
 				6C52F17E00DF4F32CDE7BD4F /* SettingsWindowView.swift in Sources */,
+				1A9A8DE9E043C4E325009F7C /* TextNotesView.swift in Sources */,
 				F1661F941BC19A8D5898962D /* WindowConfigurator.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

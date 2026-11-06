@@ -6,8 +6,11 @@ struct LensoLibraryView: View {
     let images: [LibraryImage]
     @State private var selectedIDs: Set<UUID> = []
     @State private var searchText = ""
+    @State private var section: Section = .screenshots
     var onOpenPreview: ((UUID) -> Void)? = nil
     @Environment(\.openWindow) private var openWindow
+
+    enum Section { case screenshots, text }
 
     private let columns = [
         GridItem(.adaptive(minimum: 175, maximum: 260), spacing: 12)
@@ -19,19 +22,23 @@ struct LensoLibraryView: View {
                 .background(sidebarGradient)
 
             VStack(spacing: 12) {
-                toolbar
+                if section == .screenshots {
+                    toolbar
 
-                ScrollView {
-                    LazyVGrid(columns: columns, spacing: 14) {
-                        ForEach(images) { item in
-                            imageCell(item)
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 14) {
+                            ForEach(images) { item in
+                                imageCell(item)
+                            }
                         }
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 16)
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 16)
-                }
 
-                footer
+                    footer
+                } else {
+                    TextNotesView()
+                }
             }
             .padding(12)
             .background(mainGradient)
@@ -86,7 +93,15 @@ struct LensoLibraryView: View {
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 6) {
-            navigationItem("全部截图", icon: "folder.fill", count: images.count, isPrimary: true)
+            navigationItem("全部截图", icon: "folder.fill", count: images.count,
+                           isPrimary: section == .screenshots)
+                .onTapGesture { section = .screenshots }
+
+            navigationItem("文字", icon: "text.alignleft",
+                           count: ScreenshotStore.shared.textNoteCount(),
+                           isPrimary: section == .text)
+                .onTapGesture { section = .text }
+
             navigationItem("最近", icon: "clock")
             navigationItem("收藏", icon: "star")
             navigationItem("回收站", icon: "trash")
