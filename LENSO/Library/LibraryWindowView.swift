@@ -3,25 +3,32 @@ import SwiftUI
 /// 主图库窗口 — 窄侧栏 + 轻量工具栏 + 自适应网格 + 底部玻璃操作条
 struct LibraryWindowView: View {
     @State private var viewModel = LibraryViewModel()
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         HStack(spacing: 0) {
             LibrarySidebar()
             VStack(spacing: 0) {
                 LibraryToolbar(selectedCount: viewModel.selectedCount)
-                ScreenshotGrid(viewModel: viewModel)
+                ScreenshotGrid(viewModel: viewModel) { record in
+                    openWindow(id: "preview", value: record.id)
+                }
             }
         }
         .background(LensoAmbientBackground())
         .overlay(alignment: .bottom) {
             if viewModel.selectedCount > 0 {
-                SelectionActionBar(count: viewModel.selectedCount) {
-                    viewModel.selectedIDs.removeAll()
-                }
+                SelectionActionBar(
+                    count: viewModel.selectedCount,
+                    onCopy: { viewModel.copySelected() },
+                    onDelete: { viewModel.deleteSelected() },
+                    onClear: { viewModel.selectedIDs.removeAll() }
+                )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .animation(LensoAnimations.panel, value: viewModel.selectedCount)
+        .onAppear { viewModel.load() }
     }
 }
 
@@ -45,12 +52,15 @@ struct LensoAmbientBackground: View {
 /// 左侧窄图标导航栏
 struct LibrarySidebar: View {
     @State private var hoverID: String?
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(spacing: LensoSpacing.xs) {
             SideIcon(systemName: "photo.on.rectangle.angled", label: "图库", id: "library", isActive: true, hoverID: $hoverID)
             SideIcon(systemName: "magnifyingglass", label: "搜索", id: "search", isActive: false, hoverID: $hoverID)
-            SideIcon(systemName: "gearshape", label: "设置", id: "settings", isActive: false, hoverID: $hoverID)
+            SideIcon(systemName: "gearshape", label: "设置", id: "settings", isActive: false, hoverID: $hoverID) {
+                openWindow(id: "settings")
+            }
             Spacer()
         }
         .padding(.top, LensoSpacing.xl)
@@ -64,6 +74,7 @@ private struct SideIcon: View {
     let id: String
     let isActive: Bool
     @Binding var hoverID: String?
+    var action: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 2) {
@@ -82,9 +93,11 @@ private struct SideIcon: View {
                     .fill(.primary.opacity(0.05))
             }
         }
+        .contentShape(Rectangle())
         .onHover { hovering in
             hoverID = hovering ? id : nil
         }
+        .onTapGesture { action?() }
         .animation(LensoAnimations.hover, value: hoverID)
     }
 }
@@ -97,6 +110,9 @@ struct LibraryToolbar: View {
     var body: some View {
         HStack(spacing: LensoSpacing.m) {
             Text("图库").font(LensoTypography.title)
+            if selectedCount > 0 {
+                Text("已选 \(selectedCount) 张").font(LensoTypography.caption).foregroundStyle(.secondary)
+            }
             Spacer()
             Picker("排序", selection: $sortOrder) {
                 Text("按时间").tag(0)
@@ -104,58 +120,76 @@ struct LibraryToolbar: View {
             }
             .pickerStyle(.menu)
             .frame(width: 120)
-            Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 15))
-                .foregroundStyle(.secondary)
         }
         .padding(.horizontal, LensoSpacing.xl)
         .frame(height: LensoSpacing.toolbarHeight)
     }
 }
 
-/// 图片网格 — 自适应列数，保持原始比例，统一圆角
+/// 图片网格 — 自适应列数，真实缩略图
 struct ScreenshotGrid: View {
     let viewModel: LibraryViewModel
+    let onOpen: (ScreenshotRecord) -> Void
 
     var body: some View {
         ScrollView {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 220, maximum: 320), spacing: LensoSpacing.l)], spacing: LensoSpacing.l) {
-                ForEach(viewModel.screenshots) { item in
+                ForEach(viewModel.records) { record in
                     ThumbnailCell(
-                        item: item,
-                        isSelected: viewModel.selectedIDs.contains(item.id)
+                        record: record,
+                        isSelected: viewModel.selectedIDs.contains(record.id)
                     ) { id in
-                        viewModel.selectedIDs.formSymmetricDifference([id])
+                        viewModel.toggle(id)
+                    } onDoubleTap: {
+                        onOpen(record)
                     }
                 }
             }
             .padding(LensoSpacing.xl)
             .padding(.bottom, LensoSpacing.actionBarHeight + LensoSpacing.xl)
         }
+        .overlay {
+            if viewModel.records.isEmpty {
+                ContentUnavailableView(
+                    "还没有截图",
+                    systemImage: "camera.viewfinder",
+                    description: Text("点击菜单栏图标开始第一次截图")
+                )
+            }
+        }
     }
 }
 
 /// 缩略图单元 — 图片是主体：无卡片边框，选中蓝描边 + 计数角标
 struct ThumbnailCell: View {
-    let item: ScreenshotItem
+    let record: ScreenshotRecord
     let isSelected: Bool
     let onToggle: (UUID) -> Void
+    let onDoubleTap: () -> Void
 
     @State private var hovering = false
+    @State private var thumbnail: CGImage?
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            RoundedRectangle(cornerRadius: LensoRadius.thumbnail)
-                .fill(item.gradient)
-                .aspectRatio(16 / 10, contentMode: .fit)
+            Group {
+                if let thumbnail {
+                    Image(decorative: thumbnail, scale: 2)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                } else {
+                    RoundedRectangle(cornerRadius: LensoRadius.thumbnail)
+                        .fill(.quaternary.opacity(0.4))
+                        .aspectRatio(16 / 10, contentMode: .fit)
+                }
+            }
 
-            // 元信息条
             VStack {
                 Spacer()
                 HStack {
-                    Text(item.appName).font(LensoTypography.caption)
+                    Text("LENSO").font(LensoTypography.caption)
                     Spacer()
-                    Text(item.capturedAt, style: .time).font(LensoTypography.caption)
+                    Text(record.capturedAt, style: .time).font(LensoTypography.caption)
                 }
                 .foregroundStyle(.white)
                 .padding(LensoSpacing.s)
@@ -167,7 +201,7 @@ struct ThumbnailCell: View {
             .clipShape(RoundedRectangle(cornerRadius: LensoRadius.thumbnail))
 
             if isSelected {
-                Text("\(selectionIndex)")
+                Image(systemName: "checkmark")
                     .font(LensoTypography.badge)
                     .foregroundStyle(.white)
                     .frame(width: 20, height: 20)
@@ -188,20 +222,23 @@ struct ThumbnailCell: View {
         }
         .opacity(isSelected ? 0.85 : 1)
         .scaleEffect(hovering ? 1.015 : 1)
+        .clipShape(RoundedRectangle(cornerRadius: LensoRadius.thumbnail))
         .onHover { hovering = $0 }
-        .onTapGesture { onToggle(item.id) }
+        .onTapGesture(count: 2) { onDoubleTap() }
+        .onTapGesture { onToggle(record.id) }
         .animation(LensoAnimations.hover, value: hovering)
         .animation(LensoAnimations.hover, value: isSelected)
-    }
-
-    private var selectionIndex: Int {
-        1 // 批量选中序号；真实实现由 viewModel 传入
+        .task(id: record.id) {
+            thumbnail = ScreenshotStore.shared.loadThumbnail(record)
+        }
     }
 }
 
 /// 底部玻璃操作条 — 选中数量与操作
 struct SelectionActionBar: View {
     let count: Int
+    let onCopy: () -> Void
+    let onDelete: () -> Void
     let onClear: () -> Void
 
     var body: some View {
@@ -210,27 +247,18 @@ struct SelectionActionBar: View {
                 Text("已选 \(count) 张")
                     .font(LensoTypography.callout)
                 Divider().frame(height: 18)
-                Button {
-                } label: {
-                    Label("置顶", systemImage: "pin")
+                Button(action: onCopy) {
+                    Label("复制", systemImage: "doc.on.doc")
                 }
-                Button {
-                } label: {
-                    Label("导出", systemImage: "square.and.arrow.up")
-                }
-                Button(role: .destructive) {
-                } label: {
+                Button(role: .destructive, action: onDelete) {
                     Label("删除", systemImage: "trash")
                 }
                 Spacer()
-                Button {
-                    onClear()
-                } label: {
+                Button(action: onClear) {
                     Label("取消", systemImage: "xmark")
                 }
             }
             .font(LensoTypography.body)
-            .buttonStyle(.glassProminent)
             .tint(LensoColors.accent)
             .padding(.horizontal, LensoSpacing.l)
             .padding(.vertical, LensoSpacing.s)
