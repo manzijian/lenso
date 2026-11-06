@@ -18,6 +18,7 @@ struct SearchPanelView: View {
 
     @State private var results: [SearchResult] = []
     @State private var hoveredID: UUID?
+    @State private var copiedID: UUID?
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -83,24 +84,24 @@ struct SearchPanelView: View {
                             }
                             Spacer()
 
-                            // 操作：查看 / 复制（常驻）
-                            HStack(spacing: 6) {
+                            // 复制反馈 / 查看按钮
+                            if copiedID == result.id {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 15))
+                                    .foregroundStyle(.green)
+                                    .frame(width: 28, height: 24)
+                            } else {
                                 ResultAction(icon: "eye", label: "查看") {
                                     openWindow(id: "preview", value: result.id)
                                     onDismiss()
-                                }
-                                ResultAction(icon: "doc.on.doc", label: "复制") {
-                                    copy(result)
                                 }
                             }
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                         .contentShape(Rectangle())
-                        .onTapGesture(count: 2) {
-                            openWindow(id: "preview", value: result.id)
-                            onDismiss()
-                        }
+                        // 默认单击 = 复制
+                        .onTapGesture { copy(result) }
                     }
                 }
                 .padding(.vertical, 6)
@@ -148,7 +149,7 @@ struct SearchPanelView: View {
         ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
 
-    /// 复制原图到剪贴板
+    /// 复制原图到剪贴板（单击结果的默认行为）
     private func copy(_ result: SearchResult) {
         let store = ScreenshotStore.shared
         let records = (try? store.list()) ?? []
@@ -158,6 +159,13 @@ struct SearchPanelView: View {
         pasteboard.clearContents()
         if let tiff = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height)).tiffRepresentation {
             pasteboard.setData(tiff, forType: .tiff)
+        }
+        copiedID = result.id
+        Task {
+            try? await Task.sleep(for: .seconds(1.2))
+            await MainActor.run {
+                if copiedID == result.id { copiedID = nil }
+            }
         }
     }
 }
