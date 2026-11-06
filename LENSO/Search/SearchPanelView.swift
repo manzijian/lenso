@@ -9,7 +9,7 @@ struct SearchPanelView: View {
     @FocusState private var focused: Bool
 
     struct SearchResult: Identifiable {
-        let id = UUID()
+        let id: UUID          // 对应截图记录 ID
         let title: String
         let appName: String
         let snippet: String
@@ -17,6 +17,8 @@ struct SearchPanelView: View {
     }
 
     @State private var results: [SearchResult] = []
+    @State private var hoveredID: UUID?
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(spacing: 10) {
@@ -80,13 +82,36 @@ struct SearchPanelView: View {
                                     .lineLimit(1)
                             }
                             Spacer()
-                            Text(result.appName)
-                                .font(.system(size: 11))
-                                .foregroundStyle(.tertiary)
+
+                            // 悬停时显示操作：查看 / 复制
+                            if hoveredID == result.id {
+                                HStack(spacing: 6) {
+                                    ResultAction(icon: "eye", label: "查看") {
+                                        openWindow(id: "preview", value: result.id)
+                                        onDismiss()
+                                    }
+                                    ResultAction(icon: "doc.on.doc", label: "复制") {
+                                        copy(result)
+                                    }
+                                }
+                                .transition(.opacity)
+                            } else {
+                                Text(result.appName)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.tertiary)
+                            }
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                         .contentShape(Rectangle())
+                        .onHover { hovering in
+                            hoveredID = hovering ? result.id : (hoveredID == result.id ? nil : hoveredID)
+                        }
+                        .animation(.easeOut(duration: 0.12), value: hoveredID)
+                        .onTapGesture(count: 2) {
+                            openWindow(id: "preview", value: result.id)
+                            onDismiss()
+                        }
                     }
                 }
                 .padding(.vertical, 6)
@@ -121,6 +146,7 @@ struct SearchPanelView: View {
         }.prefix(8)
         results = matched.map { record in
             SearchResult(
+                id: record.id,
                 title: record.filename,
                 appName: "LENSO",
                 snippet: "\(record.width) × \(record.height) · \(byteString(record.fileSize))",
@@ -131,5 +157,38 @@ struct SearchPanelView: View {
 
     private func byteString(_ bytes: Int) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+    }
+
+    /// 复制原图到剪贴板
+    private func copy(_ result: SearchResult) {
+        let store = ScreenshotStore.shared
+        let records = (try? store.list()) ?? []
+        guard let record = records.first(where: { $0.id == result.id }),
+              let image = store.loadImage(record) else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        if let tiff = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height)).tiffRepresentation {
+            pasteboard.setData(tiff, forType: .tiff)
+        }
+    }
+}
+
+/// 搜索结果行内的操作按钮
+private struct ResultAction: View {
+    let icon: String
+    let label: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Image(systemName: icon)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(hovering ? Color(nsColor: .controlAccentColor) : .secondary)
+            .frame(width: 28, height: 24)
+            .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? Color(nsColor: .controlAccentColor).opacity(0.12) : .clear))
+            .contentShape(Rectangle())
+            .onHover { hovering = $0 }
+            .onTapGesture { action() }
+            .help(label)
     }
 }
