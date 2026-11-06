@@ -57,6 +57,12 @@ struct CaptureEditorView: View {
         }
         .frame(width: screenFrame.width, height: screenFrame.height)
         .background(Color.black.opacity(0.001)) // 接管点击
+        .onExitCommand { discard() }           // Esc 取消
+    }
+
+    /// 丢弃本次截图
+    private func discard() {
+        onComplete(nil)
     }
 
     /// 工具栏挂在选区下边缘中点；属性面板挂在选区右侧垂直居中
@@ -130,6 +136,16 @@ struct CaptureEditorView: View {
                 .padding(.vertical, 8)
                 .background(Capsule().fill(Color(nsColor: .controlAccentColor)))
                 .onTapGesture { finishEditing() }
+
+            // 丢弃本次截图（不保存）
+            Image(systemName: "xmark")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(.primary.opacity(0.07)))
+                .contentShape(Rectangle())
+                .onTapGesture { discard() }
+                .help("取消截图（Esc）")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
