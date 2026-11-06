@@ -45,6 +45,15 @@ struct SearchPanelView: View {
                         .foregroundStyle(.secondary)
                         .frame(width: 26, height: 26)
                         .background(Circle().fill(.primary.opacity(0.06)))
+
+                    // 关闭
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 17))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("关闭搜索（Esc）")
                 }
                 .padding(.horizontal, 18)
                 .frame(height: 60)

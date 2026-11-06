@@ -117,7 +117,7 @@ final class CaptureCoordinator: NSObject {
         hosting.appearance = NSAppearance(named: .aqua) // 编辑器浅色玻璃
         editorHost = hosting
 
-        let panel = NSPanel(
+        let panel = EditorPanel(
             contentRect: screenFrame,
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -129,6 +129,9 @@ final class CaptureCoordinator: NSObject {
         panel.hasShadow = false
         panel.contentView = hosting
         panel.setFrame(screenFrame, display: true)
+        panel.onCancel = { [weak self] in
+            self?.closeEditor()
+        }
         panel.orderFrontRegardless()
         panel.makeKey()
         editorPanel = panel
@@ -203,6 +206,13 @@ final class CaptureCoordinator: NSObject {
             pasteboard.setData(tiff, forType: .tiff)
         }
     }
+}
+
+/// 编辑器覆盖面板：Esc 取消
+final class EditorPanel: NSPanel {
+    var onCancel: (() -> Void)?
+    override var canBecomeKey: Bool { true }
+    override func cancelOperation(_ sender: Any?) { onCancel?() }
 }
 
 /// 钉图视图：可拖动；悬停右上角出现关闭按钮；双击关闭
