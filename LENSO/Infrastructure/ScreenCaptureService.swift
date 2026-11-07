@@ -23,37 +23,36 @@ enum CaptureError: LocalizedError {
     }
 }
 
-/// 区域截图引擎（对应规范 POC-01/02：SCScreenshotManager 全屏抓取 + 按选区裁剪）
+/// 区域截图引擎（丝滑修复后：只做纯裁剪，不再抓全屏）。
+///
+/// 冻结图由 CaptureCoordinator 在选区开始前一次性抓好（每显示器一张，
+/// 物理像素），选区、裁剪、编辑器背景全程复用同一张图。旧版每次截图要做
+/// 3 次全屏 captureImage + 4 次 SCShareableContent 枚举，是卡顿的主因。
 final class ScreenCaptureService: Sendable {
-    func captureRegion(_ rect: CGRect, displayID: CGDirectDisplayID) async throws -> RegionCaptureResult {
+    /// 从已冻结的全屏图里裁出选区（同步、无 IPC、无抓图）。
+    ///
+    /// 像素坐标换算沿用旧版 captureRegion 的同一套数学（`cropping(to:)` 的
+    /// y 与 AppKit 全局坐标同向，不翻转），不要“修正”它。
+    func cropRegion(
+        _ rect: CGRect,
+        displayID: CGDirectDisplayID,
+        displayFrame: CGRect,
+        frozenImage: CGImage
+    ) throws -> RegionCaptureResult {
         guard rect.width >= 1, rect.height >= 1 else { throw CaptureError.emptyRegion }
-
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
-            throw CaptureError.displayNotFound(displayID)
-        }
-
-        let filter = SCContentFilter(display: display, excludingWindows: [])
-        let config = SCStreamConfiguration()
-        config.width = display.width
-        config.height = display.height
-        config.showsCursor = false
-        config.captureResolution = .best
-
-        let fullImage = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
 
         // 像素坐标 = (逻辑坐标 - 显示器原点) × 像素密度
         // 截图实际尺寸 vs 显示器点尺寸 推断 scale（SCDisplay 无 scale 属性）
-        let scaleX = CGFloat(fullImage.width) / CGFloat(display.width)
-        let scaleY = CGFloat(fullImage.height) / CGFloat(display.height)
+        let scaleX = CGFloat(frozenImage.width) / displayFrame.width
+        let scaleY = CGFloat(frozenImage.height) / displayFrame.height
         let pxRect = CGRect(
-            x: (rect.origin.x - display.frame.origin.x) * scaleX,
-            y: (rect.origin.y - display.frame.origin.y) * scaleY,
+            x: (rect.origin.x - displayFrame.origin.x) * scaleX,
+            y: (rect.origin.y - displayFrame.origin.y) * scaleY,
             width: rect.width * scaleX,
             height: rect.height * scaleY
         ).integral
 
-        guard let cropped = fullImage.cropping(to: pxRect), cropped.width > 0, cropped.height > 0 else {
+        guard let cropped = frozenImage.cropping(to: pxRect), cropped.width > 0, cropped.height > 0 else {
             throw CaptureError.cropFailed
         }
         return RegionCaptureResult(image: cropped, rect: rect, displayID: displayID)

@@ -22,6 +22,8 @@ final class CaptureCoordinator: NSObject {
     private var editorHost: NSHostingView<CaptureEditorView>?
     /// 钉图窗口集合（持有引用防止释放）
     private var pinnedPanels: [NSPanel] = []
+    /// 屏幕录制权限已验证通过（TCC 状态会话内几乎不变，通过一次后不再重复探测）
+    private var permissionKnownGood = false
 
     func startRegionCapture() {
         log.info("startRegionCapture triggered")
@@ -30,37 +32,112 @@ final class CaptureCoordinator: NSObject {
 
     private func startRegionCaptureAsync() async {
         // 以真实能力为准（preflight 对 ad-hoc 调试构建不可靠）
-        var allowed = await CapturePermissionService.probeAccess()
-        if !allowed {
+        // 权限通过后会话内缓存，不再每次截图都枚举 SCShareableContent
+        var allowed = permissionKnownGood ? true : await CapturePermissionService.probeAccess()
+        if allowed {
+            permissionKnownGood = true
+        } else {
             log.info("probe failed, requesting permission")
             let status = await CapturePermissionService.requestAccess()
             allowed = status == .authorized
+            if allowed { permissionKnownGood = true }
         }
         guard allowed else {
             log.error("screen capture not permitted")
             NSSound.beep()
             return
         }
-        log.info("permission ok, showing selector")
+
+        // 丝滑关键：先抓图、后上屏。冻结图一次性抓好（每显示器一张），
+        // 选区面板出现时图已就位；选区裁剪和编辑器背景全程复用同一张图，
+        // 不再每步现抓（旧版一次截图要做 3 次全屏 captureImage）。
+        let frozenFrames: [CGDirectDisplayID: CGImage]
+        do {
+            frozenFrames = try await captureFrozenFrames()
+        } catch {
+            log.error("freeze failed: \(error.localizedDescription, privacy: .public)")
+            NSSound.beep()
+            return
+        }
+        log.info("frozen \(frozenFrames.count) display(s), showing selector")
 
         let selector = RegionSelectorController()
         self.selector = selector
         let captureService = capture
-        selector.begin { [weak self] rect, displayID in
-            self?.selector = nil
+        selector.begin(frozenFrames: frozenFrames) { [weak self, weak selector] rect, displayID in
             Task { @MainActor in
-                await self?.beginEdit(rect: rect, displayID: displayID, service: captureService)
+                guard let self, let selector, !selector.isDismissed else { return }
+                // 编辑器先上、选区面板后关，中间不露桌面（零闪烁切换）
+                self.beginEdit(
+                    rect: rect,
+                    displayID: displayID,
+                    frozenImage: frozenFrames[displayID],
+                    service: captureService
+                )
+                selector.dismiss()
+                self.selector = nil
             }
         }
     }
 
-    /// 选区完成 → 抓帧 → 显示完整编辑器（冻结全屏 + 标注工具）
-    private func beginEdit(rect: CGRect, displayID: CGDirectDisplayID, service: ScreenCaptureService) async {
-        do {
-            log.info("capturing region \(NSStringFromRect(rect), privacy: .public) on display \(displayID)")
-            let result = try await service.captureRegion(rect, displayID: displayID)
+    /// 一次抓一张全屏冻结图（每显示器，物理像素），供选区、裁剪、编辑器复用。
+    /// 只枚举一次内容、只抓一次图；`showsCursor = false`，冻结图里不留假光标。
+    private func captureFrozenFrames() async throws -> [CGDirectDisplayID: CGImage] {
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+        // WWDC22 建议：按应用排除自身（本 app 所有窗口），防止 overlay/主窗口入镜
+        let ownApp = content.applications.first { $0.bundleIdentifier == Bundle.main.bundleIdentifier }
+        var frames: [CGDirectDisplayID: CGImage] = [:]
+        for display in content.displays {
+            let filter: SCContentFilter
+            if let ownApp {
+                filter = SCContentFilter(display: display, excludingApplications: [ownApp], exceptingWindows: [])
+            } else {
+                filter = SCContentFilter(display: display, excludingWindows: [])
+            }
+            let config = SCStreamConfiguration()
+            // Retina：用物理像素，否则输出 1x 图像显示时拉伸模糊
+            config.width = Int(CGDisplayPixelsWide(display.displayID))
+            config.height = Int(CGDisplayPixelsHigh(display.displayID))
+            config.showsCursor = false
+            config.captureResolution = .best
+            frames[display.displayID] = try await SCScreenshotManager.captureImage(
+                contentFilter: filter, configuration: config
+            )
+        }
+        return frames
+    }
 
-            // 冻结整屏（选区外也要展示，供用户调整选区）
+    /// 选区完成 → 从缓存冻结图裁剪 → 显示完整编辑器（同步，无抓图、无闪烁）
+    private func beginEdit(
+        rect: CGRect,
+        displayID: CGDirectDisplayID,
+        frozenImage: CGImage?,
+        service: ScreenCaptureService
+    ) {
+        // 极少数情况缓存里没有该显示器的帧（显示器中途插拔）：回退到旧版现抓路径
+        guard let frozenImage else {
+            Task { await self.beginEditLegacy(rect: rect, displayID: displayID, service: service) }
+            return
+        }
+        let screenFrame = NSScreen.screens
+            .first(where: {
+                $0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! CGDirectDisplayID == displayID
+            })?
+            .frame ?? rect
+        do {
+            // 只做裁剪校验（矩形越界、显示器变化时快速失败），不抓图
+            _ = try service.cropRegion(rect, displayID: displayID, displayFrame: screenFrame, frozenImage: frozenImage)
+            showFullEditor(frozen: frozenImage, screenFrame: screenFrame, initialSelection: rect)
+        } catch {
+            NSSound.beep()
+            log.error("capture failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// 回退路径：缓存未命中时按旧版流程现抓一张全屏图当编辑器背景
+    private func beginEditLegacy(rect: CGRect, displayID: CGDirectDisplayID, service: ScreenCaptureService) async {
+        do {
+            log.info("legacy capture for region \(NSStringFromRect(rect), privacy: .public) on display \(displayID)")
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
             guard let display = content.displays.first(where: { $0.displayID == displayID }) else { return }
             let ownApp = content.applications.first { $0.bundleIdentifier == Bundle.main.bundleIdentifier }
@@ -72,12 +149,9 @@ final class CaptureCoordinator: NSObject {
             }
             let config = SCStreamConfiguration()
             // Retina：用物理像素，否则输出 1x 图像显示时拉伸模糊
-            let displayID = display.displayID
-            let pixelWidth = CGDisplayPixelsWide(displayID)
-            let pixelHeight = CGDisplayPixelsHigh(displayID)
-            config.width = pixelWidth
-            config.height = pixelHeight
-            config.showsCursor = true
+            config.width = Int(CGDisplayPixelsWide(display.displayID))
+            config.height = Int(CGDisplayPixelsHigh(display.displayID))
+            config.showsCursor = false
             config.captureResolution = .best
             let frozen = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
 
