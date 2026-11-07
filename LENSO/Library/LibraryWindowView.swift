@@ -36,7 +36,7 @@ struct LibraryWindowView: View {
             return LibraryImage(
                 id: record.id,
                 thumbnail: nsImage,
-                sourceName: "LENSO",
+                sourceName: "lenso",
                 isFavorite: record.isFavorite
             )
         }

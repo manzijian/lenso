@@ -7,9 +7,12 @@ struct LENSOApp: App {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
-        // 菜单栏图标 → 玻璃快捷面板（参考图 4 右上）
-        MenuBarExtra("LENSO", systemImage: "viewfinder") {
+        // 菜单栏图标 → 玻璃快捷面板（参考图 4 右上），使用品牌光圈图标
+        MenuBarExtra {
             MenuBarPanelView()
+        } label: {
+            LensoMark()
+                .frame(width: 18, height: 18)
         }
         .menuBarExtraStyle(.window)
 
