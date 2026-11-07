@@ -1,17 +1,16 @@
 import SwiftUI
 
-/// 图库视图 — 严格按参考图 4：
-/// 侧栏（带计数徽章）+ 胶囊工具栏（全部时间 ▾）+ 网格（选中蓝框+勾角标）+ 底部合计与分享/删除
+/// 图库视图 — 侧栏分区（全部截图 / 文字 / 最近 / 收藏）+ 胶囊工具栏 + 网格 / 混排列表
 struct LensoLibraryView: View {
     let images: [LibraryImage]
+    let records: [ScreenshotRecord]
+    let notes: [TextNote]
     @State private var selectedIDs: Set<UUID> = []
-    @State private var searchText = ""
     @State private var section: Section = .screenshots
-    @State private var noteCount = 0
     var onOpenPreview: ((UUID) -> Void)? = nil
     @Environment(\.openWindow) private var openWindow
 
-    enum Section { case screenshots, text }
+    enum Section { case screenshots, text, recent, favorites }
 
     private let columns = [
         GridItem(.adaptive(minimum: 175, maximum: 260), spacing: 12)
@@ -23,23 +22,34 @@ struct LensoLibraryView: View {
                 .background(sidebarGradient)
 
             VStack(spacing: 12) {
-                if section == .screenshots {
+                switch section {
+                case .screenshots:
                     toolbar
-
-                    ScrollView {
-                        LazyVGrid(columns: columns, spacing: 14) {
-                            ForEach(images) { item in
-                                imageCell(item)
-                            }
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.bottom, 16)
-                    }
-
+                    screenshotGrid
                     footer
-                } else {
+                case .text:
                     TextNotesView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .recent:
+                    feedHeader(title: "最近", subtitle: "过去 7 天")
+                    LibraryFeedView(
+                        entries: recentEntries,
+                        emptyTitle: "最近 7 天还没有内容",
+                        emptyMessage: "截图和文字收纳条目会按时间出现在这里",
+                        emptyIcon: "clock"
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    feedFooter(summary: recentSummary)
+                case .favorites:
+                    feedHeader(title: "收藏", subtitle: "截图与文字")
+                    LibraryFeedView(
+                        entries: favoriteEntries,
+                        emptyTitle: "还没有收藏",
+                        emptyMessage: "点卡片上的星标即可收藏截图或文字",
+                        emptyIcon: "star"
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    feedFooter(summary: favoriteSummary)
                 }
             }
             .padding(12)
@@ -52,10 +62,6 @@ struct LensoLibraryView: View {
         ))
         // 参考图为浅色玻璃，固定浅色外观（否则深色模式下文字变白、对比度丢失）
         .environment(\.colorScheme, .light)
-        .onAppear { noteCount = ScreenshotStore.shared.textNoteCount() }
-        .onReceive(NotificationCenter.default.publisher(for: .textNotesChanged)) { _ in
-            noteCount = ScreenshotStore.shared.textNoteCount()
-        }
     }
 
     /// 蓝紫氛围背景（参考图 4）
@@ -92,8 +98,7 @@ struct LensoLibraryView: View {
 
     // MARK: - 侧栏（带计数）
 
-    private let navCounts: [String: Int] = [
-        "最近": 24, "收藏": 18, "回收站": 12,
+    private let tagCounts: [String: Int] = [
         "工作": 32, "生活": 28, "设计": 24, "其他": 44,
     ]
 
@@ -104,15 +109,20 @@ struct LensoLibraryView: View {
                 .onTapGesture { section = .screenshots }
 
             navigationItem("文字", icon: "text.alignleft",
-                           count: noteCount,
+                           count: notes.count,
                            isPrimary: section == .text)
-                .onTapGesture {
-                    section = .text
-                    noteCount = ScreenshotStore.shared.textNoteCount()
-                }
+                .onTapGesture { section = .text }
 
-            navigationItem("最近", icon: "clock")
-            navigationItem("收藏", icon: "star")
+            navigationItem("最近", icon: "clock",
+                           count: recentEntries.count,
+                           isPrimary: section == .recent)
+                .onTapGesture { section = .recent }
+
+            navigationItem("收藏", icon: "star",
+                           count: favoriteEntries.count,
+                           isPrimary: section == .favorites)
+                .onTapGesture { section = .favorites }
+
             navigationItem("回收站", icon: "trash")
 
             Divider().padding(.vertical, 8)
@@ -179,7 +189,7 @@ struct LensoLibraryView: View {
             Circle().fill(color).frame(width: 9, height: 9)
             Text(title).font(.system(size: 13, weight: .medium))
             Spacer()
-            if let count = navCounts[title] {
+            if let count = tagCounts[title] {
                 Text("\(count)")
                     .font(.system(size: 11, design: .rounded))
                     .foregroundStyle(.secondary)
@@ -234,48 +244,120 @@ struct LensoLibraryView: View {
         .overlay(Capsule().stroke(.white.opacity(0.7), lineWidth: 1))
     }
 
-    // MARK: - 图片单元（选中蓝框 + 勾角标）
+    // MARK: - 全部截图网格
 
-    private func imageCell(_ item: LibraryImage) -> some View {
-        let isSelected = selectedIDs.contains(item.id)
-        return Color.clear
-            .aspectRatio(16 / 10, contentMode: .fit)
-            .overlay {
-                Image(nsImage: item.thumbnail)
-                    .resizable()
-                    .scaledToFill()
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay {
-                if isSelected {
-                    ZStack(alignment: .topTrailing) {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(Color.blue, lineWidth: 2.5)
-                            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.blue.opacity(0.08)))
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 18))
-                            .foregroundStyle(.white, Color.blue)
-                            .padding(7)
-                    }
-                } else {
-                    // 白色细描边（浅底上区分图片边界）
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(.white.opacity(0.6), lineWidth: 1)
+    private var screenshotGrid: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 14) {
+                ForEach(images) { item in
+                    LibraryImageCell(
+                        item: item,
+                        isSelected: selectedIDs.contains(item.id),
+                        onOpen: { onOpenPreview?(item.id) },
+                        onToggleSelection: { toggleSelection(item.id) },
+                        onToggleFavorite: { toggleFavorite(item) }
+                    )
                 }
             }
-            .shadow(color: .black.opacity(0.08), radius: 5, y: 2)
-            .contentShape(Rectangle())
-            .gesture(
-                TapGesture(count: 2)
-                    .onEnded { onOpenPreview?(item.id) }
-                    .exclusively(before: TapGesture().onEnded {
-                        if isSelected {
-                            selectedIDs.remove(item.id)
-                        } else {
-                            selectedIDs.insert(item.id)
-                        }
-                    })
-            )
+            .padding(.horizontal, 14)
+            .padding(.bottom, 16)
+        }
+    }
+
+    private func toggleSelection(_ id: UUID) {
+        if selectedIDs.contains(id) {
+            selectedIDs.remove(id)
+        } else {
+            selectedIDs.insert(id)
+        }
+    }
+
+    private func toggleFavorite(_ item: LibraryImage) {
+        try? ScreenshotStore.shared.setScreenshotFavorite(!item.isFavorite, id: item.id)
+        NotificationCenter.default.post(name: .libraryChanged, object: nil)
+    }
+
+    // MARK: - 最近 / 收藏
+
+    private var recentCutoff: Date {
+        Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? .distantPast
+    }
+
+    private var thumbnailByID: [UUID: NSImage] {
+        Dictionary(uniqueKeysWithValues: images.map { ($0.id, $0.thumbnail) })
+    }
+
+    private var recentEntries: [LibraryEntry] {
+        let cutoff = recentCutoff
+        let screenshotEntries = records
+            .filter { $0.capturedAt >= cutoff }
+            .map { LibraryEntry.screenshot($0, thumbnail: thumbnailByID[$0.id]) }
+        let noteEntries = notes
+            .filter { $0.updatedAt >= cutoff }
+            .map { LibraryEntry.note($0) }
+        return (screenshotEntries + noteEntries).sorted { $0.date > $1.date }
+    }
+
+    private var favoriteEntries: [LibraryEntry] {
+        let screenshotEntries = records
+            .filter(\.isFavorite)
+            .map { LibraryEntry.screenshot($0, thumbnail: thumbnailByID[$0.id]) }
+        let noteEntries = notes
+            .filter(\.isFavorite)
+            .map { LibraryEntry.note($0) }
+        return (screenshotEntries + noteEntries).sorted {
+            ($0.favoriteDate ?? $0.date) > ($1.favoriteDate ?? $1.date)
+        }
+    }
+
+    private var recentScreenshotCount: Int {
+        recentEntries.filter { $0.kind == .screenshot }.count
+    }
+
+    private var recentNoteCount: Int {
+        recentEntries.filter { $0.kind == .note }.count
+    }
+
+    private var favoriteScreenshotCount: Int {
+        favoriteEntries.filter { $0.kind == .screenshot }.count
+    }
+
+    private var favoriteNoteCount: Int {
+        favoriteEntries.filter { $0.kind == .note }.count
+    }
+
+    private var recentSummary: String {
+        "近 7 天 · \(recentScreenshotCount) 张截图 · \(recentNoteCount) 条文字"
+    }
+
+    private var favoriteSummary: String {
+        "已收藏 \(favoriteScreenshotCount) 张截图 · \(favoriteNoteCount) 条文字"
+    }
+
+    private func feedHeader(title: String, subtitle: String) -> some View {
+        HStack(spacing: 8) {
+            Text(title).font(.system(size: 15, weight: .semibold))
+            Text(subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
+            Spacer()
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14))
+                .foregroundStyle(.primary.opacity(0.65))
+                .onTapGesture { SearchPanelController.shared.show() }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Capsule().fill(.white.opacity(0.55)))
+        .overlay(Capsule().stroke(.white.opacity(0.7), lineWidth: 1))
+    }
+
+    private func feedFooter(summary: String) -> some View {
+        HStack {
+            Text(summary)
+                .font(.system(size: 11))
+                .foregroundStyle(.primary.opacity(0.7))
+            Spacer()
+        }
+        .padding(.horizontal, 8)
     }
 
     // MARK: - 底部（合计 + 操作）
@@ -311,5 +393,65 @@ struct LensoLibraryView: View {
         // MVP：按选中数估算（真实大小接入后替换）
         let mb = Double(selectedIDs.count) * 2.3
         return String(format: "%.1f MB", mb)
+    }
+}
+
+/// 网格单元：缩略图 + 选中框 + 悬停星标
+private struct LibraryImageCell: View {
+    let item: LibraryImage
+    let isSelected: Bool
+    let onOpen: () -> Void
+    let onToggleSelection: () -> Void
+    let onToggleFavorite: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Color.clear
+            .aspectRatio(16 / 10, contentMode: .fit)
+            .overlay {
+                Image(nsImage: item.thumbnail)
+                    .resizable()
+                    .scaledToFill()
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                if isSelected {
+                    ZStack(alignment: .topTrailing) {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(Color.blue, lineWidth: 2.5)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(Color.blue.opacity(0.08))
+                            )
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundStyle(.white, Color.blue)
+                            .padding(7)
+                    }
+                } else {
+                    // 白色细描边（浅底上区分图片边界）
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(.white.opacity(0.6), lineWidth: 1)
+                }
+            }
+            .overlay(alignment: .topLeading) {
+                FavoriteStarButton(isFavorite: item.isFavorite, action: onToggleFavorite)
+                    .opacity(hovering || item.isFavorite ? 1 : 0)
+                    .allowsHitTesting(hovering || item.isFavorite)
+                    .padding(6)
+            }
+            .shadow(color: .black.opacity(0.08), radius: 5, y: 2)
+            .contentShape(Rectangle())
+            .onHover { hovering = $0 }
+            .contextMenu {
+                Button(item.isFavorite ? "取消收藏" : "收藏", action: onToggleFavorite)
+            }
+            .gesture(
+                TapGesture(count: 2)
+                    .onEnded(onOpen)
+                    .exclusively(before: TapGesture().onEnded(onToggleSelection))
+            )
+            .help(item.isFavorite ? "已收藏 · 双击预览，单击选择" : "双击预览，单击选择")
     }
 }

@@ -11,6 +11,8 @@ struct ScreenshotRecord: Identifiable, Hashable {
     let height: Int
     let fileSize: Int
     let capturedAt: Date
+    let isFavorite: Bool
+    let favoritedAt: Date?
 }
 
 /// 文字收纳条目
@@ -20,6 +22,8 @@ struct TextNote: Identifiable {
     let sourceApp: String?
     let createdAt: Date
     var updatedAt: Date
+    var isFavorite: Bool
+    var favoritedAt: Date?
 }
 
 /// 剪贴板历史条目（图片或文字），记录来源应用
@@ -75,7 +79,9 @@ final class ScreenshotStore: @unchecked Sendable {
             width INTEGER NOT NULL,
             height INTEGER NOT NULL,
             file_size INTEGER NOT NULL,
-            captured_at REAL NOT NULL
+            captured_at REAL NOT NULL,
+            is_favorite INTEGER NOT NULL DEFAULT 0,
+            favorited_at REAL
         );
         CREATE INDEX IF NOT EXISTS idx_captured_at ON screenshots(captured_at DESC);
         CREATE TABLE IF NOT EXISTS clipboard_items (
@@ -92,13 +98,20 @@ final class ScreenshotStore: @unchecked Sendable {
             content TEXT NOT NULL,
             source_app TEXT,
             created_at REAL NOT NULL,
-            updated_at REAL NOT NULL
+            updated_at REAL NOT NULL,
+            is_favorite INTEGER NOT NULL DEFAULT 0,
+            favorited_at REAL
         );
         CREATE INDEX IF NOT EXISTS idx_note_created ON text_notes(created_at DESC);
         """
         sqlite3_exec(db, sql, nil, nil, nil)
         // 旧表升级：补充 source_app 列（已存在则忽略错误）
         sqlite3_exec(db, "ALTER TABLE clipboard_items ADD COLUMN source_app TEXT;", nil, nil, nil)
+        // 旧表升级：收藏列
+        sqlite3_exec(db, "ALTER TABLE screenshots ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0;", nil, nil, nil)
+        sqlite3_exec(db, "ALTER TABLE screenshots ADD COLUMN favorited_at REAL;", nil, nil, nil)
+        sqlite3_exec(db, "ALTER TABLE text_notes ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0;", nil, nil, nil)
+        sqlite3_exec(db, "ALTER TABLE text_notes ADD COLUMN favorited_at REAL;", nil, nil, nil)
     }
 
     private static let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
@@ -159,7 +172,8 @@ final class ScreenshotStore: @unchecked Sendable {
         return ScreenshotRecord(
             id: id, filename: filename,
             width: image.width, height: image.height,
-            fileSize: fileSize, capturedAt: capturedAt
+            fileSize: fileSize, capturedAt: capturedAt,
+            isFavorite: false, favoritedAt: nil
         )
     }
 
@@ -176,7 +190,7 @@ final class ScreenshotStore: @unchecked Sendable {
     }
 
     private func listUnlocked() throws -> [ScreenshotRecord] {
-        let sql = "SELECT id, filename, width, height, file_size, captured_at FROM screenshots ORDER BY captured_at DESC;"
+        let sql = "SELECT id, filename, width, height, file_size, captured_at, is_favorite, favorited_at FROM screenshots ORDER BY captured_at DESC;"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
         defer { sqlite3_finalize(stmt) }
@@ -189,8 +203,16 @@ final class ScreenshotStore: @unchecked Sendable {
             let height = Int(sqlite3_column_int(stmt, 3))
             let fileSize = Int(sqlite3_column_int64(stmt, 4))
             let capturedAt = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 5))
+            let isFavorite = sqlite3_column_int(stmt, 6) != 0
+            let favoritedAt: Date? = sqlite3_column_type(stmt, 7) == SQLITE_NULL
+                ? nil
+                : Date(timeIntervalSince1970: sqlite3_column_double(stmt, 7))
             if let id = UUID(uuidString: idString) {
-                records.append(ScreenshotRecord(id: id, filename: filename, width: width, height: height, fileSize: fileSize, capturedAt: capturedAt))
+                records.append(ScreenshotRecord(
+                    id: id, filename: filename, width: width, height: height,
+                    fileSize: fileSize, capturedAt: capturedAt,
+                    isFavorite: isFavorite, favoritedAt: favoritedAt
+                ))
             }
         }
         return records
@@ -229,6 +251,42 @@ final class ScreenshotStore: @unchecked Sendable {
         }
     }
 
+    // MARK: - Favorites
+
+    func setScreenshotFavorite(_ favorite: Bool, id: UUID) throws {
+        try queue.sync {
+            let sql = "UPDATE screenshots SET is_favorite = ?, favorited_at = ? WHERE id = ?;"
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
+            defer { sqlite3_finalize(stmt) }
+            sqlite3_bind_int(stmt, 1, favorite ? 1 : 0)
+            if favorite {
+                sqlite3_bind_double(stmt, 2, Date().timeIntervalSince1970)
+            } else {
+                sqlite3_bind_null(stmt, 2)
+            }
+            Self.bind(stmt, 3, id.uuidString)
+            guard sqlite3_step(stmt) == SQLITE_DONE else { throw StoreError.dbFailed }
+        }
+    }
+
+    func setTextNoteFavorite(_ favorite: Bool, id: UUID) throws {
+        try queue.sync {
+            let sql = "UPDATE text_notes SET is_favorite = ?, favorited_at = ? WHERE id = ?;"
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
+            defer { sqlite3_finalize(stmt) }
+            sqlite3_bind_int(stmt, 1, favorite ? 1 : 0)
+            if favorite {
+                sqlite3_bind_double(stmt, 2, Date().timeIntervalSince1970)
+            } else {
+                sqlite3_bind_null(stmt, 2)
+            }
+            Self.bind(stmt, 3, id.uuidString)
+            guard sqlite3_step(stmt) == SQLITE_DONE else { throw StoreError.dbFailed }
+        }
+    }
+
     // MARK: - Text notes（文字收纳）
 
     @discardableResult
@@ -247,12 +305,14 @@ final class ScreenshotStore: @unchecked Sendable {
             sqlite3_bind_double(stmt, 5, now.timeIntervalSince1970)
             guard sqlite3_step(stmt) == SQLITE_DONE else { throw StoreError.dbFailed }
         }
-        return TextNote(id: id, content: content, sourceApp: sourceApp, createdAt: now, updatedAt: now)
+        return TextNote(id: id, content: content, sourceApp: sourceApp,
+                        createdAt: now, updatedAt: now,
+                        isFavorite: false, favoritedAt: nil)
     }
 
     func listTextNotes() throws -> [TextNote] {
         try queue.sync {
-            let sql = "SELECT id, content, source_app, created_at, updated_at FROM text_notes ORDER BY updated_at DESC;"
+            let sql = "SELECT id, content, source_app, created_at, updated_at, is_favorite, favorited_at FROM text_notes ORDER BY updated_at DESC;"
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
             defer { sqlite3_finalize(stmt) }
@@ -265,8 +325,13 @@ final class ScreenshotStore: @unchecked Sendable {
                 let sourceApp = sqlite3_column_text(stmt, 2).map { String(cString: $0) }
                 let createdAt = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 3))
                 let updatedAt = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 4))
+                let isFavorite = sqlite3_column_int(stmt, 5) != 0
+                let favoritedAt: Date? = sqlite3_column_type(stmt, 6) == SQLITE_NULL
+                    ? nil
+                    : Date(timeIntervalSince1970: sqlite3_column_double(stmt, 6))
                 notes.append(TextNote(id: id, content: String(cString: contentText),
-                                      sourceApp: sourceApp, createdAt: createdAt, updatedAt: updatedAt))
+                                      sourceApp: sourceApp, createdAt: createdAt, updatedAt: updatedAt,
+                                      isFavorite: isFavorite, favoritedAt: favoritedAt))
             }
             return notes
         }

@@ -16,7 +16,7 @@ struct TextNotesView: View {
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sheet(item: $editing) { note in
-            EditNoteSheet(
+            NoteEditorSheet(
                 text: $draft,
                 onCancel: { editing = nil },
                 onSave: {
@@ -29,6 +29,7 @@ struct TextNotesView: View {
         }
         .onAppear(perform: reload)
         .onReceive(NotificationCenter.default.publisher(for: .textNotesChanged)) { _ in reload() }
+        .onReceive(NotificationCenter.default.publisher(for: .libraryChanged)) { _ in reload() }
     }
 
     private var header: some View {
@@ -96,6 +97,13 @@ struct TextNotesView: View {
                 } else {
                     cardAction("doc.on.doc", "复制") { copy(note) }
                 }
+                cardAction(
+                    note.isFavorite ? "star.fill" : "star",
+                    note.isFavorite ? "取消收藏" : "收藏",
+                    tint: note.isFavorite ? .yellow : nil
+                ) {
+                    toggleFavorite(note)
+                }
                 cardAction("pencil", "编辑") {
                     draft = note.content
                     editing = note
@@ -114,11 +122,17 @@ struct TextNotesView: View {
         )
     }
 
-    private func cardAction(_ icon: String, _ label: String, danger: Bool = false, action: @escaping () -> Void) -> some View {
+    private func cardAction(
+        _ icon: String,
+        _ label: String,
+        danger: Bool = false,
+        tint: Color? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 12))
-                .foregroundStyle(danger ? .red : .secondary)
+                .foregroundStyle(tint ?? (danger ? .red : .secondary))
                 .frame(width: 22, height: 20)
                 .contentShape(Rectangle())
         }
@@ -159,36 +173,14 @@ struct TextNotesView: View {
         reload()
         NotificationCenter.default.post(name: .textNotesChanged, object: nil)
     }
+
+    private func toggleFavorite(_ note: TextNote) {
+        try? ScreenshotStore.shared.setTextNoteFavorite(!note.isFavorite, id: note.id)
+        NotificationCenter.default.post(name: .libraryChanged, object: nil)
+        reload()
+    }
 }
 
 extension Notification.Name {
     static let textNotesChanged = Notification.Name("com.lenso.textNotesChanged")
-}
-
-/// 编辑文字片段
-private struct EditNoteSheet: View {
-    @Binding var text: String
-    let onCancel: () -> Void
-    let onSave: () -> Void
-
-    var body: some View {
-        VStack(spacing: 12) {
-            Text("编辑文字").font(.system(size: 15, weight: .semibold))
-            TextEditor(text: $text)
-                .font(.system(size: 13))
-                .frame(minWidth: 420, minHeight: 220)
-                .padding(6)
-                .background(RoundedRectangle(cornerRadius: 8).fill(.white))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.black.opacity(0.08)))
-            HStack {
-                Spacer()
-                Button("取消", action: onCancel)
-                Button("保存", action: onSave)
-                    .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(20)
-        .frame(width: 480)
-        .environment(\.colorScheme, .light)
-    }
 }

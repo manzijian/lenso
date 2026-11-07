@@ -13,11 +13,15 @@
 		20F723F27026817794C9859C /* RegionSelectorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86C78002C2F37CAB9153ED45 /* RegionSelectorWindow.swift */; };
 		21B69121FFF44550CD4586A0 /* CaptureCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D784B50D6B7F67CC9AB3338 /* CaptureCoordinator.swift */; };
 		2509AA1345F0E0D358BF382B /* LensoGlassPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61C53C1056E410CBBE9267DC /* LensoGlassPanel.swift */; };
+		296D82716BB78111AC67F889 /* NoteEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFB662904840CB9F5885D0C1 /* NoteEditorSheet.swift */; };
 		2D5A9F058D3292FB5411D7F4 /* LensoLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C9500803224317D40B6EF66 /* LensoLibraryView.swift */; };
 		300D741CE9EEC54FF811A750 /* LibraryImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27A12E562F3E75E7654448B1 /* LibraryImage.swift */; };
 		322C57EFEFC8BCAA7849DD5F /* MenuBarPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 253AE39E10F62B39843EA8E1 /* MenuBarPanelView.swift */; };
+		33B9821A235E4C1B0897995C /* LibraryFeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8304FC770F4B7FB0BA1EFC7 /* LibraryFeedView.swift */; };
+		38908F3A26EEC219937ED342 /* FavoriteStarButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 884BB61BBEFEE7928E2EC72B /* FavoriteStarButton.swift */; };
 		3B725BFD879E49FFCC8DA38C /* SaveToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61852D60891BBD9485F0A630 /* SaveToast.swift */; };
 		3F8B2F39F47F8C1AC0BBF278 /* SearchPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5CFCAC958BAEF1C9CDC1C42 /* SearchPanelView.swift */; };
+		47FBC1D203B3D0110A0445B0 /* LibraryEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A7B338A56587241624CF4F /* LibraryEntry.swift */; };
 		4E2F158CBC40B7142F348F10 /* ScreenCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9EB971207FEF63A60AE956 /* ScreenCaptureService.swift */; };
 		63B8E27F17695B0D58261964 /* LensoRadius.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6629E0A218BB4F749B26F653 /* LensoRadius.swift */; };
 		6B8314C2C8C065865B3DA229 /* LensoShadows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F74640FE4B2B2190F58163E /* LensoShadows.swift */; };
@@ -60,6 +64,7 @@
 		6629E0A218BB4F749B26F653 /* LensoRadius.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoRadius.swift; sourceTree = "<group>"; };
 		6D3AF7C7AB4090B43A75631B /* ScreenshotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotStore.swift; sourceTree = "<group>"; };
 		86C78002C2F37CAB9153ED45 /* RegionSelectorWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionSelectorWindow.swift; sourceTree = "<group>"; };
+		884BB61BBEFEE7928E2EC72B /* FavoriteStarButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteStarButton.swift; sourceTree = "<group>"; };
 		8B7699807F95B1D64ECCC681 /* LensoTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoTypography.swift; sourceTree = "<group>"; };
 		8D784B50D6B7F67CC9AB3338 /* CaptureCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureCoordinator.swift; sourceTree = "<group>"; };
 		8F27A5A1C366022DF7397C5F /* SearchPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchPanelController.swift; sourceTree = "<group>"; };
@@ -69,7 +74,10 @@
 		A82C877CAA54F5A72BB7A2C4 /* LensoColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoColors.swift; sourceTree = "<group>"; };
 		B044ADEB2AF234FFA798A8B5 /* LENSOApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LENSOApp.swift; sourceTree = "<group>"; };
 		B774C35C380B7D917F97F431 /* LensoMaterials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoMaterials.swift; sourceTree = "<group>"; };
+		B8304FC770F4B7FB0BA1EFC7 /* LibraryFeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryFeedView.swift; sourceTree = "<group>"; };
 		BF014BA807177AA4AC07780B /* ClipboardPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPanelView.swift; sourceTree = "<group>"; };
+		BFB662904840CB9F5885D0C1 /* NoteEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteEditorSheet.swift; sourceTree = "<group>"; };
+		C5A7B338A56587241624CF4F /* LibraryEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryEntry.swift; sourceTree = "<group>"; };
 		CD209F1E73612BFE09EF7A77 /* PreviewWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewWindowView.swift; sourceTree = "<group>"; };
 		D93797B089581C688C44523A /* WindowConfigurator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowConfigurator.swift; sourceTree = "<group>"; };
 		FE3FCF1084A3CEA10F815351 /* ClipboardPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPanelController.swift; sourceTree = "<group>"; };
@@ -213,6 +221,7 @@
 		EA841154533610581E3CD243 /* TextNotes */ = {
 			isa = PBXGroup;
 			children = (
+				BFB662904840CB9F5885D0C1 /* NoteEditorSheet.swift */,
 				A3C18A26380F00F9ED01AAC3 /* TextNotesView.swift */,
 			);
 			path = TextNotes;
@@ -221,7 +230,10 @@
 		F5587BD6D3768DDBF795C053 /* Library */ = {
 			isa = PBXGroup;
 			children = (
+				884BB61BBEFEE7928E2EC72B /* FavoriteStarButton.swift */,
 				4C9500803224317D40B6EF66 /* LensoLibraryView.swift */,
+				C5A7B338A56587241624CF4F /* LibraryEntry.swift */,
+				B8304FC770F4B7FB0BA1EFC7 /* LibraryFeedView.swift */,
 				27A12E562F3E75E7654448B1 /* LibraryImage.swift */,
 				FEC28A398581D301F8477089 /* LibraryViewModel.swift */,
 				5DE319A913EF71A6473D9DA2 /* LibraryWindowView.swift */,
@@ -296,6 +308,7 @@
 				DE568699012109BCB32B82B4 /* ClipboardMonitor.swift in Sources */,
 				949F2379957DF484D0042FC9 /* ClipboardPanelController.swift in Sources */,
 				F95E22C0B2CC82BD6181E284 /* ClipboardPanelView.swift in Sources */,
+				38908F3A26EEC219937ED342 /* FavoriteStarButton.swift in Sources */,
 				D4592AF8F65F6735302F596D /* LENSOApp.swift in Sources */,
 				B6AC8948238E399699455EF3 /* LensoAnimations.swift in Sources */,
 				BEF7EBE7C225F23EF8AA22C4 /* LensoColors.swift in Sources */,
@@ -306,10 +319,13 @@
 				6B8314C2C8C065865B3DA229 /* LensoShadows.swift in Sources */,
 				C9F8421873724F37DEE74863 /* LensoSpacing.swift in Sources */,
 				D153AE7F6D916F17FAB9F757 /* LensoTypography.swift in Sources */,
+				47FBC1D203B3D0110A0445B0 /* LibraryEntry.swift in Sources */,
+				33B9821A235E4C1B0897995C /* LibraryFeedView.swift in Sources */,
 				300D741CE9EEC54FF811A750 /* LibraryImage.swift in Sources */,
 				6F1AD5DBC077F820272B7CCC /* LibraryViewModel.swift in Sources */,
 				8A053A317CB5D595422AA5CF /* LibraryWindowView.swift in Sources */,
 				322C57EFEFC8BCAA7849DD5F /* MenuBarPanelView.swift in Sources */,
+				296D82716BB78111AC67F889 /* NoteEditorSheet.swift in Sources */,
 				E8A1E10D92154E1F0DDD271E /* PreviewWindowView.swift in Sources */,
 				20F723F27026817794C9859C /* RegionSelectorWindow.swift in Sources */,
 				3B725BFD879E49FFCC8DA38C /* SaveToast.swift in Sources */,

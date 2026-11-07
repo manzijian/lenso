@@ -5,4 +5,5 @@ struct LibraryImage: Identifiable {
     let id: UUID
     let thumbnail: NSImage
     let sourceName: String
+    let isFavorite: Bool
 }
