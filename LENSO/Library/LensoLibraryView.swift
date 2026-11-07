@@ -61,7 +61,7 @@ struct LensoLibraryView: View {
             style: .continuous
         ))
         // 参考图为浅色玻璃，固定浅色外观（否则深色模式下文字变白、对比度丢失）
-        .environment(\.colorScheme, .light)
+        .lensoColorScheme()
     }
 
     /// 蓝紫氛围背景（参考图 4）

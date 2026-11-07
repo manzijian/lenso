@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsWindowView: View {
     @State private var category: Category = .general
     @State private var shortcutStore = ShortcutStore.shared
+    @State private var settings = AppSettings.shared
 
     enum Category: String, CaseIterable, Identifiable {
         case general = "通用"
@@ -46,7 +47,7 @@ struct SettingsWindowView: View {
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
         )
-        .environment(\.colorScheme, .light)
+        .lensoColorScheme()
     }
 
     private var sidebar: some View {
@@ -84,21 +85,21 @@ struct SettingsWindowView: View {
         switch category {
         case .general:
             VStack(spacing: 0) {
-                SettingToggleRow(label: "开机启动 LENSO", isOn: .constant(true))
+                SettingToggleRow(label: "开机启动 LENSO", isOn: $settings.launchAtLogin)
                 Divider().padding(.leading, 14)
-                SettingToggleRow(label: "在菜单栏显示图标", isOn: .constant(true))
+                SettingToggleRow(label: "在菜单栏显示图标", isOn: $settings.showMenuBarIcon)
                 Divider().padding(.leading, 14)
-                SettingToggleRow(label: "截图后显示预览", isOn: .constant(false))
+                SettingToggleRow(label: "截图后显示预览", isOn: $settings.showPreviewAfterCapture)
             }
-            .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.55)))
+            .background(RoundedRectangle(cornerRadius: 12).fill(settings.glassEffect ? .white.opacity(0.55) : .white.opacity(0.95)))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.6), lineWidth: 1))
         case .capture:
             VStack(spacing: 0) {
-                SettingToggleRow(label: "截图后自动复制到剪贴板", isOn: .constant(true))
+                SettingToggleRow(label: "截图后自动复制到剪贴板", isOn: $settings.autoCopyAfterCapture)
                 Divider().padding(.leading, 14)
-                SettingToggleRow(label: "显示浮动预览", isOn: .constant(true))
+                SettingToggleRow(label: "显示浮动预览", isOn: $settings.showFloatingPreview)
             }
-            .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.55)))
+            .background(RoundedRectangle(cornerRadius: 12).fill(settings.glassEffect ? .white.opacity(0.55) : .white.opacity(0.95)))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.6), lineWidth: 1))
         case .shortcuts:
             VStack(alignment: .leading, spacing: 12) {
@@ -110,7 +111,7 @@ struct SettingsWindowView: View {
                         }
                     }
                 }
-                .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.55)))
+                .background(RoundedRectangle(cornerRadius: 12).fill(settings.glassEffect ? .white.opacity(0.55) : .white.opacity(0.95)))
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.6), lineWidth: 1))
 
                 Button {
@@ -121,18 +122,18 @@ struct SettingsWindowView: View {
                         .foregroundStyle(Color.blue)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 7)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.55)))
+                        .background(RoundedRectangle(cornerRadius: 8).fill(settings.glassEffect ? .white.opacity(0.55) : .white.opacity(0.95)))
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.6), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
             }
         case .appearance:
             VStack(spacing: 0) {
-                SettingToggleRow(label: "跟随系统外观", isOn: .constant(true))
+                SettingToggleRow(label: "跟随系统外观", isOn: $settings.followSystemAppearance)
                 Divider().padding(.leading, 14)
-                SettingToggleRow(label: "玻璃材质效果", isOn: .constant(true))
+                SettingToggleRow(label: "玻璃材质效果", isOn: $settings.glassEffect)
             }
-            .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.55)))
+            .background(RoundedRectangle(cornerRadius: 12).fill(settings.glassEffect ? .white.opacity(0.55) : .white.opacity(0.95)))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.6), lineWidth: 1))
         case .about:
             VStack(alignment: .leading, spacing: 6) {
@@ -142,7 +143,7 @@ struct SettingsWindowView: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.55)))
+            .background(RoundedRectangle(cornerRadius: 12).fill(settings.glassEffect ? .white.opacity(0.55) : .white.opacity(0.95)))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.6), lineWidth: 1))
         }
     }

@@ -5,6 +5,8 @@ import SwiftUI
 
 extension Notification.Name {
     static let screenshotSaved = Notification.Name("com.lenso.screenshotSaved")
+    /// 截图后显示预览：保存完成后发给菜单栏面板，打开预览窗口
+    static let openPreviewForScreenshot = Notification.Name("com.lenso.openPreviewForScreenshot")
 }
 
 private let log = Logger(subsystem: "com.lenso.app", category: "capture")
@@ -88,7 +90,12 @@ final class CaptureCoordinator: NSObject {
             },
             onQuickCopy: { [weak coordinator] image in
                 coordinator?.copyToClipboard(image: image)
-                SaveToastController.shared.show(thumbnail: image)
+                // 只复制不保存：提示必须是“已复制到剪贴板”，不许写“截图已保存”
+                if AppSettings.shared.showFloatingPreview {
+                    SaveToastController.shared.show(
+                        title: "已复制到剪贴板", subtitle: "未保存到图库", thumbnail: image
+                    )
+                }
             },
             onPin: { [weak coordinator] image in
                 coordinator?.closeEditor()
@@ -134,9 +141,16 @@ final class CaptureCoordinator: NSObject {
         }
         do {
             let record = try ScreenshotStore.shared.save(image: image, capturedAt: Date())
-            copyToClipboard(image: image)
+            if AppSettings.shared.autoCopyAfterCapture {
+                copyToClipboard(image: image)
+            }
             NotificationCenter.default.post(name: .screenshotSaved, object: record)
-            SaveToastController.shared.show(thumbnail: try? ScreenshotStore.shared.loadThumbnail(record))
+            if AppSettings.shared.showFloatingPreview {
+                SaveToastController.shared.show(thumbnail: try? ScreenshotStore.shared.loadThumbnail(record))
+            }
+            if AppSettings.shared.showPreviewAfterCapture {
+                NotificationCenter.default.post(name: .openPreviewForScreenshot, object: record.id)
+            }
             NSSound.beep()
             log.info("saved \(record.filename, privacy: .public)")
         } catch {

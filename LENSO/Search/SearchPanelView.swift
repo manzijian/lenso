@@ -124,7 +124,7 @@ struct SearchPanelView: View {
         }
         .onChange(of: searchText) { _ in updateResults() }
         .onExitCommand { onDismiss() }
-        .environment(\.colorScheme, .light)
+        .lensoColorScheme()
     }
 
     private func updateResults() {

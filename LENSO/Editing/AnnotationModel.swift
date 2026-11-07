@@ -63,6 +63,8 @@ final class AnnotationState {
     var mosaicEnabled = false
     var highlightEnabled = false
     var draft: Annotation? = nil   // 正在绘制的
+    /// 正在输入文字的标注落点（归一化坐标）；非 nil 时编辑器显示输入框
+    var textEditingPoint: CGPoint? = nil
 
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
@@ -90,5 +92,6 @@ final class AnnotationState {
         undoStack = []
         redoStack = []
         draft = nil
+        textEditingPoint = nil
     }
 }

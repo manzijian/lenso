@@ -80,6 +80,17 @@ struct CaptureEditorView: View {
 
             // 工具栏：紧贴选区下方（随选区移动），右侧属性面板紧贴选区右侧
             toolbarAndPanel
+
+            // 文字标注输入框（文字工具点按后出现）
+            if let point = state.textEditingPoint {
+                AnnotationTextField(
+                    color: NSColor(AnnotationPalette[state.colorIndex]),
+                    onCommit: { commitTextEditing($0) },
+                    onCancel: { state.textEditingPoint = nil }
+                )
+                .frame(width: 260, height: 30)
+                .position(x: textFieldCenter(for: point).x, y: textFieldCenter(for: point).y)
+            }
         }
         .frame(width: screenFrame.width, height: screenFrame.height)
         .background(Color.black.opacity(0.001)) // 接管点击
@@ -91,6 +102,41 @@ struct CaptureEditorView: View {
         ocrTask?.cancel()
         translationTask?.cancel()
         onComplete(nil)
+    }
+
+    /// 提交文字标注：空文本不建标注；工具保持激活，可连续加下一条
+    private func commitTextEditing(_ text: String) {
+        guard let point = state.textEditingPoint else { return }
+        state.textEditingPoint = nil
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let font = NSFont.systemFont(ofSize: 16, weight: .semibold)
+        let size = NSAttributedString(string: trimmed, attributes: [.font: font]).size()
+        let end = CGPoint(
+            x: min(1, point.x + size.width / max(1, selection.width)),
+            y: min(1, point.y + size.height / max(1, selection.height))
+        )
+        state.push(Annotation(
+            kind: .text, start: point, end: end,
+            colorIndex: state.colorIndex, strokeWidth: state.strokeWidth, text: trimmed
+        ))
+    }
+
+    /// 输入框中心点：落点 + 半个框宽/高，夹在屏幕内
+    private func textFieldCenter(for point: CGPoint) -> CGPoint {
+        let localSel = CGRect(
+            x: selection.origin.x - screenFrame.origin.x,
+            y: selection.origin.y - screenFrame.origin.y,
+            width: selection.width, height: selection.height
+        )
+        let topLeft = CGPoint(
+            x: localSel.minX + point.x * selection.width,
+            y: localSel.minY + point.y * selection.height
+        )
+        return CGPoint(
+            x: min(max(topLeft.x + 130, 130), screenFrame.width - 130),
+            y: min(max(topLeft.y + 15, 15), screenFrame.height - 15)
+        )
     }
 
     /// 钉图：合成后交给 Coordinator 浮在屏幕上
@@ -193,7 +239,7 @@ struct CaptureEditorView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background {
-            if #available(macOS 26.0, *) {
+            if #available(macOS 26.0, *), AppSettings.shared.glassEffect {
                 Capsule().fill(.clear).glassEffect(.regular, in: Capsule())
             } else {
                 Capsule().fill(.ultraThinMaterial)
@@ -229,7 +275,7 @@ struct CaptureEditorView: View {
         }
         .padding(16)
         .background {
-            if #available(macOS 26.0, *) {
+            if #available(macOS 26.0, *), AppSettings.shared.glassEffect {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(.clear)
                     .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -573,9 +619,25 @@ struct CaptureEditorView: View {
                     width: rect.width, height: rect.height
                 ))
             case .text:
-                // MVP：文字标注画为半透明底色块（正式版接入 NSTextField 输入）
-                ctx.setFillColor(NSColor.systemYellow.withAlphaComponent(0.5).cgColor)
-                ctx.fill(rect)
+                // 文字标注：按所选颜色把真文字画进导出图（翻转坐标系里按左上锚点排版）
+                let fontSize = 16 * imageScale
+                let font = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: font,
+                    .foregroundColor: NSColor(AnnotationPalette[annotation.colorIndex])
+                ]
+                let attr = NSAttributedString(string: annotation.text, attributes: attrs)
+                let topDownRect = CGRect(
+                    x: annotation.start.x * sw,
+                    y: annotation.start.y * sh,
+                    width: max(1, (annotation.end.x - annotation.start.x) * sw),
+                    height: max(fontSize * 1.2, (annotation.end.y - annotation.start.y) * sh)
+                )
+                let nsCtx = NSGraphicsContext(cgContext: ctx, flipped: true)
+                NSGraphicsContext.saveGraphicsState()
+                NSGraphicsContext.current = nsCtx
+                attr.draw(in: topDownRect)
+                NSGraphicsContext.restoreGraphicsState()
             }
         }
         base = ctx.makeImage() ?? base
@@ -723,6 +785,8 @@ private struct SelectionContent: View {
     private var adjustGesture: some Gesture {
         DragGesture(minimumDistance: 1, coordinateSpace: .global)
             .onChanged { value in
+                // 正在输文字时不移动/改选区
+                guard state.textEditingPoint == nil else { return }
                 if dragOrigin == nil {
                     dragOrigin = value.startLocation
                     selectionOrigin = selection
@@ -771,7 +835,14 @@ private struct SelectionContent: View {
     private var annotationGesture: some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .global)
             .onChanged { value in
-                guard let kind = state.activeKind else { return }
+                guard let kind = state.activeKind, state.textEditingPoint == nil else { return }
+                if kind == .text {
+                    // 文字工具：点按即在落点打开输入框，不拖拽画框；点在选区外不响应
+                    guard selection.contains(value.startLocation) else { return }
+                    let norm = normalizedPoint(value.startLocation, current: value.location)
+                    state.textEditingPoint = norm.start
+                    return
+                }
                 let localStart = value.startLocation
                 let norm = normalizedPoint(localStart, current: value.location)
                 if state.draft == nil {
@@ -861,7 +932,11 @@ private struct SelectionInner: View {
                     } else if annotation.kind == .mosaic {
                         context.fill(stroke, with: .color(.gray.opacity(0.5))) // 预览占位；导出时真马赛克
                     } else if annotation.kind == .text {
-                        context.fill(stroke, with: .color(.yellow.opacity(0.5)))
+                        // 文字标注：画真文字（预览与导出一致）
+                        let text = Text(annotation.text)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(color)
+                        context.draw(text, at: p1, anchor: .topLeading)
                     } else {
                         context.stroke(stroke, with: .color(color.opacity(alpha)), lineWidth: annotation.strokeWidth)
                     }
@@ -1041,5 +1116,74 @@ private struct MiniButton: View {
         }
         .buttonStyle(.plain)
         .disabled(disabled)
+    }
+}
+
+// MARK: - 文字标注输入框（NSTextField 包装：回车/失焦提交，Esc 取消）
+
+/// Esc 键不走默认行为，交给 onEscape 处理，避免触发编辑器整体的 Esc 取消。
+private final class CancelableTextField: NSTextField {
+    var onEscape: (() -> Void)?
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 {
+            onEscape?()
+            return
+        }
+        super.keyDown(with: event)
+    }
+}
+
+private struct AnnotationTextField: NSViewRepresentable {
+    var color: NSColor
+    var onCommit: (String) -> Void
+    var onCancel: () -> Void
+
+    func makeNSView(context: Context) -> NSTextField {
+        let field = CancelableTextField()
+        field.font = NSFont.systemFont(ofSize: 16, weight: .semibold)
+        field.textColor = color
+        field.isBordered = false
+        field.drawsBackground = true
+        field.backgroundColor = color.withAlphaComponent(0.12)
+        field.focusRingType = .none
+        field.delegate = context.coordinator
+        field.wantsLayer = true
+        field.layer?.cornerRadius = 6
+        field.layer?.borderColor = color.withAlphaComponent(0.5).cgColor
+        field.layer?.borderWidth = 1
+        let coordinator = context.coordinator
+        field.onEscape = { [weak coordinator] in
+            guard let coordinator, !coordinator.finished else { return }
+            coordinator.finished = true
+            onCancel()
+        }
+        // 入场即聚焦，等一帧让窗口完成布局
+        DispatchQueue.main.async {
+            field.window?.makeFirstResponder(field)
+        }
+        return field
+    }
+
+    func updateNSView(_ nsView: NSTextField, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onCommit: onCommit)
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var onCommit: (String) -> Void
+        var finished = false
+
+        init(onCommit: @escaping (String) -> Void) {
+            self.onCommit = onCommit
+        }
+
+        /// 回车与失焦都会走到这里；Esc 已在 keyDown 拦截，不会重复提交。
+        func controlTextDidEndEditing(_ obj: Notification) {
+            guard !finished, let field = obj.object as? NSTextField else { return }
+            finished = true
+            onCommit(field.stringValue)
+        }
     }
 }

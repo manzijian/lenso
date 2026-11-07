@@ -35,7 +35,7 @@ struct ClipboardPanelView: View {
                 )
         }
         .shadow(color: .black.opacity(0.18), radius: 24, y: 10)
-        .environment(\.colorScheme, .light)
+        .lensoColorScheme()
         .onAppear(perform: reload)
     }
 

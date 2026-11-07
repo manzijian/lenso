@@ -34,7 +34,12 @@ struct MenuBarPanelView: View {
         }
         .padding(6)
         .frame(width: 312)
-        .environment(\.colorScheme, .light)
+        .lensoColorScheme()
+        .onReceive(NotificationCenter.default.publisher(for: .openPreviewForScreenshot)) { note in
+            // “截图后显示预览”开着时，保存完成后自动打开预览窗口
+            guard let id = note.object as? UUID else { return }
+            openWindow(id: "preview", value: id)
+        }
     }
 
     private func handle(_ id: String) {

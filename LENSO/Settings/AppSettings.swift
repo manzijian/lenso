@@ -1,0 +1,142 @@
+import AppKit
+import Foundation
+import Observation
+import ServiceManagement
+import SwiftUI
+
+/// 应用设置：单一数据源，全部持久化到 UserDefaults，改完立即生效。
+/// 原则：设置页里的每个开关都必须真实起作用，不许出现点了没反应的假开关。
+@Observable
+@MainActor
+final class AppSettings {
+    static let shared = AppSettings()
+
+    private static let keyPrefix = "lenso.settings.v1."
+    private let defaults: UserDefaults
+
+    private enum Key: String, CaseIterable {
+        case launchAtLogin
+        case showMenuBarIcon
+        case showPreviewAfterCapture
+        case autoCopyAfterCapture
+        case showFloatingPreview
+        case followSystemAppearance
+        case glassEffect
+    }
+
+    private static func key(_ key: Key) -> String { keyPrefix + key.rawValue }
+
+    // MARK: - 通用
+
+    /// 开机启动（SMAppService 注册登录项；ad-hoc 未签名包注册失败时开关自动回落，不说谎）。
+    var launchAtLogin: Bool {
+        didSet {
+            persist(.launchAtLogin, launchAtLogin)
+            applyLaunchAtLogin(from: oldValue)
+        }
+    }
+    /// 菜单栏显示图标（关掉后菜单栏入口消失，用 Dock 图标点开图库再进设置）。
+    var showMenuBarIcon: Bool {
+        didSet { persist(.showMenuBarIcon, showMenuBarIcon) }
+    }
+    /// 截图后显示预览（保存完成后自动打开预览窗口）。
+    var showPreviewAfterCapture: Bool {
+        didSet { persist(.showPreviewAfterCapture, showPreviewAfterCapture) }
+    }
+
+    // MARK: - 截图
+
+    /// 截图后自动复制到剪贴板。
+    var autoCopyAfterCapture: Bool {
+        didSet { persist(.autoCopyAfterCapture, autoCopyAfterCapture) }
+    }
+    /// 保存/复制后右下角浮出带缩略图的提示。
+    var showFloatingPreview: Bool {
+        didSet { persist(.showFloatingPreview, showFloatingPreview) }
+    }
+
+    // MARK: - 外观
+
+    /// 跟随系统外观（开：不强制配色；关：锁定浅色，即现版行为）。
+    var followSystemAppearance: Bool {
+        didSet {
+            persist(.followSystemAppearance, followSystemAppearance)
+            applyAppearance()
+        }
+    }
+    /// 玻璃材质效果（关：编辑器工具栏/面板与设置卡片改用实色材质）。
+    var glassEffect: Bool {
+        didSet { persist(.glassEffect, glassEffect) }
+    }
+
+    // MARK: - Init
+
+    private init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        launchAtLogin = read(.launchAtLogin, default: false)
+        showMenuBarIcon = read(.showMenuBarIcon, default: true)
+        showPreviewAfterCapture = read(.showPreviewAfterCapture, default: false)
+        autoCopyAfterCapture = read(.autoCopyAfterCapture, default: true)
+        showFloatingPreview = read(.showFloatingPreview, default: true)
+        followSystemAppearance = read(.followSystemAppearance, default: false)
+        glassEffect = read(.glassEffect, default: true)
+        // 开机启动：按存量值静默同步一次（注册是幂等的）。
+        if launchAtLogin { try? SMAppService.mainApp.register() }
+        applyAppearance()
+    }
+
+    // MARK: - Persistence
+
+    private func read(_ key: Key, default defaultValue: Bool) -> Bool {
+        defaults.object(forKey: Self.key(key)) as? Bool ?? defaultValue
+    }
+
+    private func persist(_ key: Key, _ value: Bool) {
+        defaults.set(value, forKey: Self.key(key))
+    }
+
+    // MARK: - Apply
+
+    private var applyingLoginItem = false
+
+    private func applyLaunchAtLogin(from oldValue: Bool) {
+        guard !applyingLoginItem else { return }
+        applyingLoginItem = true
+        defer { applyingLoginItem = false }
+        do {
+            if launchAtLogin {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+        } catch {
+            // 注册失败（如 ad-hoc 调试包未签名）：恢复旧值，开关不说谎。
+            launchAtLogin = oldValue
+        }
+    }
+
+    /// 跟随系统时把 NSApp.appearance 置空（系统决定）；否则锁定浅色。
+    func applyAppearance() {
+        NSApp.appearance = followSystemAppearance ? nil : NSAppearance(named: .aqua)
+    }
+}
+
+// MARK: - 跟随系统外观的配色修饰符
+
+/// 跟随系统外观时不强制配色，否则锁定浅色（现版行为）。
+/// 替代原来各窗口写死的 `.environment(\.colorScheme, .light)`。
+struct FollowSystemColorSchemeModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if AppSettings.shared.followSystemAppearance {
+            content
+        } else {
+            content.environment(\.colorScheme, .light)
+        }
+    }
+}
+
+extension View {
+    func lensoColorScheme() -> some View {
+        modifier(FollowSystemColorSchemeModifier())
+    }
+}

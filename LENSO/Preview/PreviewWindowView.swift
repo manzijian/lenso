@@ -57,7 +57,7 @@ struct PreviewWindowView: View {
             .padding(.top, 10)
             .padding(.trailing, 10)
         }
-        .environment(\.colorScheme, .light)
+        .lensoColorScheme()
         .task(id: screenshotID) { loadRecord() }
     }
 

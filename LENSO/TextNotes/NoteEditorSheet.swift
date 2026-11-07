@@ -24,6 +24,6 @@ struct NoteEditorSheet: View {
         }
         .padding(20)
         .frame(width: 480)
-        .environment(\.colorScheme, .light)
+        .lensoColorScheme()
     }
 }
