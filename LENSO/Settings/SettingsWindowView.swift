@@ -3,6 +3,7 @@ import SwiftUI
 /// 设置窗口（参考图 4 左下）：左侧分类 + 右侧分组开关，浅色玻璃
 struct SettingsWindowView: View {
     @State private var category: Category = .general
+    @State private var shortcutStore = ShortcutStore.shared
 
     enum Category: String, CaseIterable, Identifiable {
         case general = "通用"
@@ -100,13 +101,31 @@ struct SettingsWindowView: View {
             .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.55)))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.6), lineWidth: 1))
         case .shortcuts:
-            VStack(spacing: 0) {
-                SettingInfoRow(label: "区域截图", value: "⇧⌘1")
-                Divider().padding(.leading, 14)
-                SettingInfoRow(label: "全局搜索", value: "⌘K")
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(spacing: 0) {
+                    ForEach(ShortcutAction.allCases) { action in
+                        SettingShortcutRow(action: action, store: shortcutStore)
+                        if action != ShortcutAction.allCases.last {
+                            Divider().padding(.leading, 14)
+                        }
+                    }
+                }
+                .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.55)))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.6), lineWidth: 1))
+
+                Button {
+                    shortcutStore.resetAll()
+                } label: {
+                    Text("恢复默认")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color.blue)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.55)))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.6), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
             }
-            .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.55)))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.6), lineWidth: 1))
         case .appearance:
             VStack(spacing: 0) {
                 SettingToggleRow(label: "跟随系统外观", isOn: .constant(true))
@@ -157,5 +176,24 @@ private struct SettingInfoRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
+    }
+}
+
+private struct SettingShortcutRow: View {
+    let action: ShortcutAction
+    let store: ShortcutStore
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: action.icon)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+            Text(action.title).font(.system(size: 13))
+            Spacer()
+            ShortcutRecorderView(action: action, store: store)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
     }
 }

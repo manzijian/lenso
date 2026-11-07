@@ -98,10 +98,6 @@ struct LensoLibraryView: View {
 
     // MARK: - 侧栏（带计数）
 
-    private let tagCounts: [String: Int] = [
-        "工作": 32, "生活": 28, "设计": 24, "其他": 44,
-    ]
-
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 6) {
             navigationItem("全部截图", icon: "folder.fill", count: images.count,
@@ -124,18 +120,6 @@ struct LensoLibraryView: View {
                 .onTapGesture { section = .favorites }
 
             navigationItem("回收站", icon: "trash")
-
-            Divider().padding(.vertical, 8)
-
-            Text("标签")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 10)
-
-            tagItem("工作", color: .yellow)
-            tagItem("生活", color: .green)
-            tagItem("设计", color: .orange)
-            tagItem("其他", color: .gray)
 
             Spacer()
 
@@ -181,22 +165,6 @@ struct LensoLibraryView: View {
                     .shadow(color: Color.blue.opacity(0.15), radius: 6, y: 2)
             }
         }
-        .contentShape(Rectangle())
-    }
-
-    private func tagItem(_ title: String, color: Color) -> some View {
-        HStack {
-            Circle().fill(color).frame(width: 9, height: 9)
-            Text(title).font(.system(size: 13, weight: .medium))
-            Spacer()
-            if let count = tagCounts[title] {
-                Text("\(count)")
-                    .font(.system(size: 11, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
         .contentShape(Rectangle())
     }
 
