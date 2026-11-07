@@ -2,6 +2,15 @@ import SwiftUI
 import AppKit
 import CoreGraphics
 
+/// 右侧面板页签：标注 / OCR / 翻译
+private enum PanelTab { case annotation, ocr, translate }
+
+/// OCR 运行阶段
+private enum OCRPhase { case idle, running, done, empty, failed }
+
+/// 翻译运行阶段
+private enum TranslationPhase { case idle, running, done, failed }
+
 /// 完整截图编辑器（参考产品图 2）：
 /// 全屏冻结画面 + 选区（8 手柄可调整）+ 底部工具栏 + 右侧属性面板 + 完成保存
 struct CaptureEditorView: View {
@@ -16,6 +25,19 @@ struct CaptureEditorView: View {
     @State private var selection: CGRect
     @State private var draggingHandle: SelectionHandle? = nil
     @State private var drawingAnnotation = false
+
+    /// 右侧面板页签
+    @State private var panelTab: PanelTab = .annotation
+    /// OCR 与翻译的运行状态
+    @State private var ocrLines: [RecognizedText] = []
+    @State private var ocrPhase: OCRPhase = .idle
+    @State private var ocrErrorMessage: String?
+    @State private var translations: [UUID: String] = [:]
+    @State private var translationPhase: TranslationPhase = .idle
+    @State private var translationErrorMessage: String?
+    @State private var ocrTask: Task<Void, Never>?
+    @State private var translationTask: Task<Void, Never>?
+    @State private var justSavedNote = false
 
     /// 冻结图与屏幕的像素比
     private var imageScale: CGFloat {
@@ -66,6 +88,8 @@ struct CaptureEditorView: View {
 
     /// 丢弃本次截图
     private func discard() {
+        ocrTask?.cancel()
+        translationTask?.cancel()
         onComplete(nil)
     }
 
@@ -184,14 +208,44 @@ struct CaptureEditorView: View {
         VStack(spacing: 14) {
             // 顶部工具行：标注 / 翻译 / OCR / 更多（图标圆底）
             HStack(spacing: 20) {
-                SideTool(icon: "highlighter", label: "标注", active: state.activeKind != nil) {
+                SideTool(icon: "highlighter", label: "标注", active: panelTab == .annotation) {
+                    panelTab = .annotation
                     state.activeKind = .brush
                 }
-                SideTool(icon: "character.bubble", label: "翻译", active: false) {}
-                SideTool(icon: "doc.text.viewfinder", label: "OCR", active: false) {}
+                SideTool(icon: "character.bubble", label: "翻译", active: panelTab == .translate) {
+                    runTranslation()
+                }
+                SideTool(icon: "doc.text.viewfinder", label: "OCR", active: panelTab == .ocr) {
+                    if ocrPhase == .idle { runOCR() } else { panelTab = .ocr }
+                }
                 SideTool(icon: "ellipsis", label: "更多", active: false) {}
             }
 
+            switch panelTab {
+            case .annotation: annotationControls
+            case .ocr: ocrResultsView
+            case .translate: translationResultsView
+            }
+        }
+        .padding(16)
+        .background {
+            if #available(macOS 26.0, *) {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(.clear)
+                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            } else {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(.ultraThinMaterial)
+            }
+        }
+        .shadow(color: .black.opacity(0.2), radius: 20, y: 8)
+    }
+
+    // MARK: - 面板页签内容
+
+    /// 标注页：颜色盘 + 粗细 + 形状快捷 + 开关 + 复制（原面板内容，原样搬过来）
+    private var annotationControls: some View {
+        Group {
             // 颜色盘（7 色，选中蓝圈）
             HStack(spacing: 12) {
                 ForEach(0..<AnnotationPalette.count, id: \.self) { i in
@@ -255,23 +309,95 @@ struct CaptureEditorView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(16)
-        .background {
-            if #available(macOS 26.0, *) {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(.clear)
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            } else {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(.ultraThinMaterial)
+    }
+
+    /// OCR 结果页
+    private var ocrResultsView: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("识别结果").font(.system(size: 13, weight: .semibold))
+                Spacer()
+                if ocrPhase == .running { ProgressView().controlSize(.small) }
+            }
+            switch ocrPhase {
+            case .idle:
+                Text("对当前选区做文字识别（本地 Vision，不联网）。")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+            case .running:
+                Text("正在识别…").font(.system(size: 12)).foregroundStyle(.secondary)
+            case .empty:
+                Text("当前选区里没识别到文字。").font(.system(size: 12)).foregroundStyle(.secondary)
+            case .failed:
+                Text(ocrErrorMessage ?? "识别失败").font(.system(size: 12)).foregroundStyle(.red)
+            case .done:
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(ocrLines) { line in
+                            OCRLineRow(line: line) { copyText(line.text) }
+                        }
+                    }
+                }
+                .frame(maxHeight: 250)
+            }
+            HStack(spacing: 8) {
+                MiniButton(label: "重新识别") { runOCR() }
+                MiniButton(label: "全部复制", disabled: ocrLines.isEmpty) {
+                    copyText(ocrLines.map(\.text).joined(separator: "\n"))
+                }
+                MiniButton(label: justSavedNote ? "已存入" : "存入文字收纳", disabled: ocrLines.isEmpty) {
+                    saveOCRToNotes()
+                }
             }
         }
-        .shadow(color: .black.opacity(0.2), radius: 20, y: 8)
+    }
+
+    /// 翻译结果页（原文 / 译文对照）
+    private var translationResultsView: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("翻译结果").font(.system(size: 13, weight: .semibold))
+                Spacer()
+                if translationPhase == .running { ProgressView().controlSize(.small) }
+            }
+            switch translationPhase {
+            case .idle:
+                Text("把识别到的文字翻成另一种语言（本地模型，不联网）。没有识别结果时会先跑 OCR。")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+            case .running:
+                Text("正在翻译…").font(.system(size: 12)).foregroundStyle(.secondary)
+            case .failed:
+                Text(translationErrorMessage ?? "翻译失败").font(.system(size: 12)).foregroundStyle(.red)
+            case .done:
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(ocrLines) { line in
+                            TranslationLineRow(
+                                original: line.text,
+                                translated: translations[line.id] ?? ""
+                            ) {
+                                let translated = translations[line.id] ?? ""
+                                copyText(translated.isEmpty ? line.text : translated)
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 250)
+            }
+            HStack(spacing: 8) {
+                MiniButton(label: "重新翻译") { runTranslation() }
+                MiniButton(label: "全部复制译文", disabled: translations.isEmpty) {
+                    let text = ocrLines.map { translations[$0.id] ?? "" }.joined(separator: "\n")
+                    copyText(text)
+                }
+            }
+        }
     }
 
     // MARK: - Actions
 
     private func finishEditing() {
+        ocrTask?.cancel()
+        translationTask?.cancel()
         let composited = renderFinalImage()
         onComplete(composited)
     }
@@ -280,6 +406,118 @@ struct CaptureEditorView: View {
         let composited = renderFinalImage()
         guard let composited else { return }
         onQuickCopy(composited)
+    }
+
+    // MARK: - OCR 与翻译（本地实现，第三方走 ProviderRegistry 预留口子）
+
+    /// 当前选区的原图裁剪（不带标注，OCR 用）
+    private func selectionCropImage() -> CGImage? {
+        let pxRect = CGRect(
+            x: (selection.origin.x - screenFrame.origin.x) * imageScale,
+            y: (selection.origin.y - screenFrame.origin.y) * imageScale,
+            width: selection.width * imageScale,
+            height: selection.height * imageScale
+        ).integral
+        return frozenImage.cropping(to: pxRect)
+    }
+
+    /// 跑 OCR；thenTranslate 为真时识别完自动接翻译
+    private func runOCR(thenTranslate: Bool = false) {
+        panelTab = .ocr
+        ocrTask?.cancel()
+        ocrPhase = .running
+        ocrErrorMessage = nil
+        ocrLines = []
+        translations = [:]
+        translationPhase = .idle
+        justSavedNote = false
+        guard let image = selectionCropImage() else {
+            ocrPhase = .failed
+            ocrErrorMessage = "选区图片获取失败"
+            return
+        }
+        ocrTask = Task {
+            do {
+                let lines = try await ProviderRegistry.ocr.recognizeText(in: image, languages: ["zh-Hans", "en-US"])
+                guard !Task.isCancelled else { return }
+                ocrLines = lines
+                ocrPhase = lines.isEmpty ? .empty : .done
+                if thenTranslate, !lines.isEmpty {
+                    panelTab = .translate
+                    translateLines()
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                ocrPhase = .failed
+                ocrErrorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    /// 点翻译：有识别结果直接翻，没有先跑 OCR 再翻
+    private func runTranslation() {
+        panelTab = .translate
+        if ocrLines.isEmpty {
+            runOCR(thenTranslate: true)
+            return
+        }
+        translateLines()
+    }
+
+    /// 逐行翻译（保持原文/译文一一对应；单行失败不阻断其他行）
+    private func translateLines() {
+        translationTask?.cancel()
+        translationPhase = .running
+        translationErrorMessage = nil
+        let lines = ocrLines
+        translationTask = Task {
+            var results: [UUID: String] = [:]
+            var firstError: String?
+            for line in lines {
+                guard !Task.isCancelled else { return }
+                do {
+                    let target = ProviderRegistry.translation.defaultTargetLanguage(for: line.text)
+                    let translated = try await ProviderRegistry.translation.translate(line.text, from: nil, to: target)
+                    results[line.id] = translated
+                } catch {
+                    if firstError == nil { firstError = error.localizedDescription }
+                    results[line.id] = ""
+                }
+            }
+            guard !Task.isCancelled else { return }
+            translations = results
+            if let firstError, results.values.allSatisfy({ $0.isEmpty }) {
+                translationPhase = .failed
+                translationErrorMessage = firstError
+            } else {
+                translationPhase = .done
+                translationErrorMessage = nil
+            }
+        }
+    }
+
+    /// 复制文字（写完剪贴板要告诉监听器这是自己写的，别当成新剪贴记录）
+    private func copyText(_ text: String) {
+        guard !text.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        ClipboardMonitor.shared.markSelfWrite()
+    }
+
+    /// 把识别结果存进文字收纳
+    private func saveOCRToNotes() {
+        let content = ocrLines.map(\.text).joined(separator: "\n")
+        guard !content.isEmpty else { return }
+        do {
+            _ = try ScreenshotStore.shared.createTextNote(content: content, sourceApp: "lenso 截图识别")
+            justSavedNote = true
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                justSavedNote = false
+            }
+        } catch {
+            ocrErrorMessage = "存入失败：\(error.localizedDescription)"
+        }
     }
 
     /// 合成：冻结帧裁剪选区 + 标注
@@ -739,5 +977,69 @@ private struct ToggleRow: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(RoundedRectangle(cornerRadius: 12).fill(.primary.opacity(0.04)))
+    }
+}
+
+/// OCR 结果行：文字 + 置信度，点按复制这行
+private struct OCRLineRow: View {
+    let line: RecognizedText
+    let onCopy: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(line.text).font(.system(size: 13)).lineLimit(3)
+            Spacer()
+            Text("\(Int(line.confidence * 100))%")
+                .font(.system(size: 11)).foregroundStyle(.tertiary).monospacedDigit()
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.04)))
+        .contentShape(Rectangle())
+        .onTapGesture { onCopy() }
+        .help("点按复制这行")
+    }
+}
+
+/// 翻译结果行：原文（小灰）+ 译文，点按复制译文
+private struct TranslationLineRow: View {
+    let original: String
+    let translated: String
+    let onCopy: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(original).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(2)
+            if translated.isEmpty {
+                Text("这行翻译失败").font(.system(size: 13)).foregroundStyle(.red)
+            } else {
+                Text(translated).font(.system(size: 13)).lineLimit(3)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.04)))
+        .contentShape(Rectangle())
+        .onTapGesture { onCopy() }
+        .help("点按复制译文")
+    }
+}
+
+/// 面板里的小按钮（OCR / 翻译页签用）
+private struct MiniButton: View {
+    let label: String
+    var disabled = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 8).fill(.primary.opacity(disabled ? 0.03 : 0.07)))
+                .foregroundStyle(disabled ? .tertiary : .primary)
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
     }
 }
