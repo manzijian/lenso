@@ -187,7 +187,7 @@ struct ThumbnailCell: View {
             VStack {
                 Spacer()
                 HStack {
-                    Text("LENSO").font(LensoTypography.caption)
+                    Text("lenso").font(LensoTypography.caption)
                     Spacer()
                     Text(record.capturedAt, style: .time).font(LensoTypography.caption)
                 }

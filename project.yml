@@ -22,9 +22,12 @@ targets:
       - path: LENSO
     settings:
       base:
+        PRODUCT_NAME: lenso
         PRODUCT_BUNDLE_IDENTIFIER: com.lenso.app
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
-        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "LENSO 需要访问图片以管理你的截图。"
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "lenso 需要访问图片以管理你的截图。"
+        INFOPLIST_KEY_CFBundleDisplayName: "lenso"
+        INFOPLIST_KEY_CFBundleName: "lenso"
         GENERATE_INFOPLIST_FILE: true
         SWIFT_EMIT_LOC_STRINGS: true
         ENABLE_PREVIEWS: true

@@ -281,7 +281,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "LENSO 需要访问图片以管理你的截图。";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "lenso 需要访问图片以管理你的截图。";
+				INFOPLIST_KEY_CFBundleDisplayName = lenso;
+				INFOPLIST_KEY_CFBundleName = lenso;
+				PRODUCT_NAME = lenso;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -425,7 +428,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "LENSO 需要访问图片以管理你的截图。";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "lenso 需要访问图片以管理你的截图。";
+				INFOPLIST_KEY_CFBundleDisplayName = lenso;
+				INFOPLIST_KEY_CFBundleName = lenso;
+				PRODUCT_NAME = lenso;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

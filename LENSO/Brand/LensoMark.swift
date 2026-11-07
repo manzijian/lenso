@@ -41,6 +41,6 @@ struct LensoMark: View {
             )
         }
         .aspectRatio(1, contentMode: .fit)
-        .accessibilityLabel("LENSO")
+        .accessibilityLabel("lenso")
     }
 }

@@ -22,7 +22,7 @@ struct LENSOApp: App {
                 NSApp.activate(ignoringOtherApps: true)
             }
             Divider()
-            Button("退出 LENSO") {
+            Button("退出 lenso") {
                 NSApp.terminate(nil)
             }
             .keyboardShortcut("q")
