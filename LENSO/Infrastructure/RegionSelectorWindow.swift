@@ -4,35 +4,162 @@ import OSLog
 
 private let selLog = Logger(subsystem: "com.lenso.app", category: "capture")
 
-/// 跨屏选区覆盖窗口控制器（规范 2.2：窗口精确控制走 AppKit）
+/// 截图丝滑 v2：Snipaste 式实时覆盖层 + 确认后抓图。
 ///
-/// 丝滑修复后的流程：coordinator 先抓一张冻结图、再上屏；选区、裁剪、编辑器
-/// 全程复用同一张图。选区面板出现时图已就位，不再先上屏后异步冻结。
+/// 旧版（v1）是先冻结、后上屏：快捷键按下后要等每显示器一张全屏 captureImage
+/// 抓完，面板才出现，用户感觉到的就是那 0.5~1 秒的死等。
+/// 新版照 Snipaste / Ta 的做法：快捷键一按，透明面板立刻上屏，选区里直接
+/// 透出实时桌面；放大镜按需小范围取活像素；窗口吸附、方向键微调、拖拽
+/// 调整都在选区里做完；确认那一刻才抓一张全屏（把选区面板排除在外）
+/// 当编辑器背景，抓完开编辑器、再关选区，中间不露桌面。
+///
+/// 关键取舍（对照 Ta 的 SelectionOverlayController + ScreenCaptureService）：
+/// - 不预抓冻结图；选区面板是透明 NSPanel，不画假桌面。
+/// - 确认后抓全屏（不是只抓选区），因为编辑器要整屏冻结图当背景。
+/// - 窗口吸附只认当时前台 App 的窗口（Ta 的策略），避免点到别的 App 的旧窗口。
+
+// MARK: - 拖拽状态机与手柄数学（手柄数学照搬 Ta 的 SelectionRectEditor，Ta 是 MIT 协议）
+
+/// 选区拖拽模式
+private enum SelectorDragMode {
+    case creating
+    case moving(original: CGRect)
+    case resizing(handle: SelectorResizeHandle, original: CGRect)
+}
+
+/// 选区 8 手柄
+private enum SelectorResizeHandle: CaseIterable {
+    case topLeft, top, topRight, right, bottomRight, bottom, bottomLeft, left
+
+    func point(in rect: CGRect) -> CGPoint {
+        switch self {
+        case .topLeft: CGPoint(x: rect.minX, y: rect.maxY)
+        case .top: CGPoint(x: rect.midX, y: rect.maxY)
+        case .topRight: CGPoint(x: rect.maxX, y: rect.maxY)
+        case .right: CGPoint(x: rect.maxX, y: rect.midY)
+        case .bottomRight: CGPoint(x: rect.maxX, y: rect.minY)
+        case .bottom: CGPoint(x: rect.midX, y: rect.minY)
+        case .bottomLeft: CGPoint(x: rect.minX, y: rect.minY)
+        case .left: CGPoint(x: rect.minX, y: rect.midY)
+        }
+    }
+
+    func hitRect(in rect: CGRect, tolerance: CGFloat) -> CGRect {
+        let diameter = tolerance * 2
+        switch self {
+        case .topLeft, .topRight, .bottomRight, .bottomLeft:
+            let point = point(in: rect)
+            return CGRect(x: point.x - tolerance, y: point.y - tolerance, width: diameter, height: diameter)
+        case .top:
+            return CGRect(x: rect.minX + tolerance, y: rect.maxY - tolerance, width: max(0, rect.width - diameter), height: diameter)
+        case .right:
+            return CGRect(x: rect.maxX - tolerance, y: rect.minY + tolerance, width: diameter, height: max(0, rect.height - diameter))
+        case .bottom:
+            return CGRect(x: rect.minX + tolerance, y: rect.minY - tolerance, width: max(0, rect.width - diameter), height: diameter)
+        case .left:
+            return CGRect(x: rect.minX - tolerance, y: rect.minY + tolerance, width: diameter, height: max(0, rect.height - diameter))
+        }
+    }
+
+    var cursor: NSCursor {
+        NSCursor.frameResize(position: frameResizePosition, directions: .all)
+    }
+
+    private var frameResizePosition: NSCursor.FrameResizePosition {
+        switch self {
+        case .topLeft: .topLeft
+        case .top: .top
+        case .topRight: .topRight
+        case .right: .right
+        case .bottomRight: .bottomRight
+        case .bottom: .bottom
+        case .bottomLeft: .bottomLeft
+        case .left: .left
+        }
+    }
+}
+
+private enum SelectorRectEditor {
+    static let resizeHitTolerance: CGFloat = 10
+
+    static func resizeHandle(at point: CGPoint, for rect: CGRect, tolerance: CGFloat = resizeHitTolerance) -> SelectorResizeHandle? {
+        let corners: [SelectorResizeHandle] = [.topLeft, .topRight, .bottomRight, .bottomLeft]
+        if let corner = corners.first(where: { $0.hitRect(in: rect, tolerance: tolerance).contains(point) }) {
+            return corner
+        }
+        let edges: [SelectorResizeHandle] = [.top, .right, .bottom, .left]
+        return edges.first(where: { $0.hitRect(in: rect, tolerance: tolerance).contains(point) })
+    }
+
+    static func moved(_ rect: CGRect, by offset: CGPoint, inside bounds: CGRect) -> CGRect {
+        let x = min(max(bounds.minX, rect.minX + offset.x), bounds.maxX - rect.width)
+        let y = min(max(bounds.minY, rect.minY + offset.y), bounds.maxY - rect.height)
+        return CGRect(origin: CGPoint(x: x, y: y), size: rect.size).integral
+    }
+
+    static func resized(_ rect: CGRect, handle: SelectorResizeHandle, to point: CGPoint, inside bounds: CGRect) -> CGRect {
+        let point = CGPoint(
+            x: min(max(point.x, bounds.minX), bounds.maxX),
+            y: min(max(point.y, bounds.minY), bounds.maxY)
+        )
+        let x1: CGFloat
+        let x2: CGFloat
+        let y1: CGFloat
+        let y2: CGFloat
+        switch handle {
+        case .topLeft: (x1, x2, y1, y2) = (point.x, rect.maxX, rect.minY, point.y)
+        case .top: (x1, x2, y1, y2) = (rect.minX, rect.maxX, rect.minY, point.y)
+        case .topRight: (x1, x2, y1, y2) = (rect.minX, point.x, rect.minY, point.y)
+        case .right: (x1, x2, y1, y2) = (rect.minX, point.x, rect.minY, rect.maxY)
+        case .bottomRight: (x1, x2, y1, y2) = (rect.minX, point.x, point.y, rect.maxY)
+        case .bottom: (x1, x2, y1, y2) = (rect.minX, rect.maxX, point.y, rect.maxY)
+        case .bottomLeft: (x1, x2, y1, y2) = (point.x, rect.maxX, point.y, rect.maxY)
+        case .left: (x1, x2, y1, y2) = (point.x, rect.maxX, rect.minY, rect.maxY)
+        }
+        return CGRect(
+            x: min(x1, x2), y: min(y1, y2),
+            width: abs(x2 - x1), height: abs(y2 - y1)
+        ).intersection(bounds).integral
+    }
+}
+
+// MARK: - 选区控制器
+
+/// 跨屏选区覆盖窗口控制器（规范 2.2：窗口精确控制走 AppKit）。
+///
+/// 流程：快捷键 → 透明面板立刻上屏（不抓图）→ 悬停窗口吸附 / 拖拽框选 →
+/// 松手后选区停住（可移动、可拉手柄、方向键 1px 微调、Shift 10px）→
+/// 回车 / 双击 / 点「完成」确认 → coordinator 抓图、开编辑器、关选区。
 @MainActor
 final class RegionSelectorController: NSObject {
     private var panels: [RegionSelectorPanel] = []
-    private var onComplete: ((CGRect, CGDirectDisplayID) -> Void)?
+    private var onComplete: ((CGRect, CGDirectDisplayID, CGWindowID) -> Void)?
     private var origin: CGPoint?
-    /// 记录 mouseDown 所在的 panel，mouseUp 据此确定显示器
     private weak var downPanel: RegionSelectorPanel?
-    /// 可吸附的窗口列表（Z 轴序，layer 0）
+    private var dragMode: SelectorDragMode = .creating
+    private var didDrag = false
+    /// 当前选区（全局 AppKit 坐标）；nil = 还没框出来
+    private var selection: CGRect?
+    /// 拖拽/移动/缩放时把选区夹在这个显示器内（mouseDown 的那个显示器）
+    private var activeDisplayFrame: CGRect?
+    /// 可吸附的窗口列表（Z 轴序）
     private var snappableWindows: [(windowID: CGWindowID, frame: CGRect, title: String)] = []
     /// 当前悬停吸附的窗口
     private var hoverWindowFrame: CGRect?
+    /// 右键取消的本地事件监听
+    private var rightClickMonitor: Any?
     /// 是否已被关闭（供 coordinator 在回调 Task 里判断用户是否已 Esc 取消）
     private(set) var isDismissed = false
 
-    /// 开始选区。冻结图由 coordinator 预抓，面板出现时图已就位（先冻结、后上屏）。
-    func begin(frozenFrames: [CGDirectDisplayID: CGImage], onComplete: @escaping (CGRect, CGDirectDisplayID) -> Void) {
+    /// 开始选区。面板立刻上屏，不抓图、不等权限以外的任何东西。
+    func begin(onComplete: @escaping (CGRect, CGDirectDisplayID, CGWindowID) -> Void) {
         // 关闭可能残留的旧面板（泄漏防护）
         end()
         isDismissed = false
         self.onComplete = onComplete
         self.origin = nil
-        panels = NSScreen.screens.map { screen in
-            let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! CGDirectDisplayID
-            return RegionSelectorPanel(screen: screen, frozenImage: frozenFrames[displayID], controller: self)
-        }
+        self.selection = nil
+        panels = NSScreen.screens.map { RegionSelectorPanel(screen: $0, controller: self) }
         // orderFrontRegardless 绕过 App 激活状态限制，保证 screenSaver 层级面板上屏
         for panel in panels {
             panel.setFrame(panel.screenFrameForDisplay, display: true)
@@ -41,24 +168,34 @@ final class RegionSelectorController: NSObject {
         panels.first?.makeKey()
         NSCursor.crosshair.set()
         snappableWindows = Self.loadSnappableWindows()
-        selLog.info("snappable windows: \(self.snappableWindows.count)")
+        selLog.info("selector shown live, snappable windows: \(self.snappableWindows.count)")
+
+        rightClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown]) { [weak self] event in
+            guard let self, self.panels.contains(where: { event.window === $0 }) else { return event }
+            self.cancel()
+            return nil
+        }
     }
 
-    /// Snapzy 方案：CGWindowList 取 Z 轴序 layer 0 窗口，无权限依赖
+    /// CGWindowList 取窗口：只认当时前台 App 的窗口（Ta 的策略），
+    /// 避免切到别的 App 后仍命中旧窗口；层级 >= 0，太小/透明的不要。
     static func loadSnappableWindows() -> [(windowID: CGWindowID, frame: CGRect, title: String)] {
         let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
         guard let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
             return []
         }
+        let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
         // 屏幕全局最大 Y（CG 坐标左上原点 ↔ AppKit 左下原点转换基准）
         let globalMaxY = NSScreen.screens.map(\.frame).map(\.maxY).max() ?? 0
         var result: [(CGWindowID, CGRect, String)] = []
         for w in list {
-            guard let layer = w[kCGWindowLayer as String] as? Int, layer == 0,
+            guard let layer = w[kCGWindowLayer as String] as? Int, layer >= 0,
+                  let ownerPID = (w[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value,
+                  frontmostPID == nil || ownerPID == frontmostPID,
                   let boundsDict = w[kCGWindowBounds as String] as? [String: CGFloat],
                   let width = boundsDict["Width"], let height = boundsDict["Height"],
-                  width > 32, height > 32,
-                  let alpha = w[kCGWindowAlpha as String] as? CGFloat, alpha > 0,
+                  width >= 24, height >= 16,
+                  let alpha = w[kCGWindowAlpha as String] as? CGFloat, alpha > 0.01,
                   let windowID = w[kCGWindowNumber as String] as? CGWindowID
             else { continue }
             let x = boundsDict["X"] ?? 0
@@ -72,16 +209,14 @@ final class RegionSelectorController: NSObject {
         return result
     }
 
-    /// 命中测试：返回鼠标所在的最顶层可吸附窗口
+    /// 命中测试：返回鼠标所在的最顶层可吸附窗口（列表即 Z 轴序，第一个就是最顶层）
     func hitTestWindow(at globalPoint: CGPoint) -> CGRect? {
-        // CGWindowList 全局坐标（左上原点）；AppKit 全局坐标（左下原点）
-        // loadSnappableWindows 已转换；命中时用全局 AppKit 坐标
         snappableWindows.first(where: { $0.frame.contains(globalPoint) })?.frame
     }
 
     func mouseMovedOrHovered(at globalPoint: CGPoint) {
-        // 悬停吸附高亮（未按下时）
-        guard origin == nil else { return }
+        // 悬停吸附高亮（未按下、还没选区时）
+        guard origin == nil, selection == nil else { return }
         let hit = hitTestWindow(at: globalPoint)
         if hit != hoverWindowFrame {
             hoverWindowFrame = hit
@@ -89,74 +224,152 @@ final class RegionSelectorController: NSObject {
         }
     }
 
+    /// 该点的光标：手柄上是缩放光标，选区内是抓手，其余十字线
+    func cursor(at globalPoint: CGPoint) -> NSCursor {
+        guard let selection else { return .crosshair }
+        if let handle = SelectorRectEditor.resizeHandle(at: globalPoint, for: selection) {
+            return handle.cursor
+        }
+        return selection.contains(globalPoint) ? .openHand : .crosshair
+    }
+
     func mouseDown(at globalPoint: CGPoint, panel: RegionSelectorPanel) {
-        origin = globalPoint
+        panel.makeKey()
         downPanel = panel
+        activeDisplayFrame = panel.screenFrameForDisplay
+        origin = globalPoint
+        didDrag = false
+        hideConfirmBar()
+        if let selection {
+            if let handle = SelectorRectEditor.resizeHandle(at: globalPoint, for: selection) {
+                dragMode = .resizing(handle: handle, original: selection)
+                handle.cursor.set()
+            } else if selection.contains(globalPoint) {
+                dragMode = .moving(original: selection)
+                NSCursor.closedHand.set()
+            } else {
+                // 点在选区外：旧选区立刻清掉，开始新的框选
+                dragMode = .creating
+                self.selection = nil
+                refreshSelectionViews()
+                hoverWindowFrame = hitTestWindow(at: globalPoint)
+                NSCursor.crosshair.set()
+            }
+        } else {
+            dragMode = .creating
+            hoverWindowFrame = hitTestWindow(at: globalPoint)
+            NSCursor.crosshair.set()
+        }
         selLog.info("selector mouseDown at \(NSStringFromPoint(globalPoint), privacy: .public)")
     }
 
-    /// 供 panel 判断单击/拖拽（不暴露 origin 写权限）
-    var currentOriginInternal: CGPoint? { origin }
-
     func mouseDragged(to globalPoint: CGPoint) {
-        guard origin != nil else { return }
-        let rect = snapRect(rectBetween(origin ?? .zero, globalPoint))
-        hoverWindowFrame = nil
-        panels.forEach {
-            $0.drawHoverHighlight(nil)
-            $0.drawSelection(rect)
+        guard let origin, let displayFrame = activeDisplayFrame else { return }
+        guard didDrag || hypot(globalPoint.x - origin.x, globalPoint.y - origin.y) >= 3 else { return }
+        didDrag = true
+        switch dragMode {
+        case .creating:
+            hoverWindowFrame = nil
+            panels.forEach { $0.drawHoverHighlight(nil) }
+            let rect = snapRect(rectBetween(origin, globalPoint)).intersection(displayFrame)
+            selection = rect.width >= 1 && rect.height >= 1 ? rect : nil
+        case .moving(let original):
+            NSCursor.closedHand.set()
+            selection = SelectorRectEditor.moved(original, by: CGPoint(x: globalPoint.x - origin.x, y: globalPoint.y - origin.y), inside: displayFrame)
+        case .resizing(let handle, let original):
+            handle.cursor.set()
+            selection = SelectorRectEditor.resized(original, handle: handle, to: globalPoint, inside: displayFrame)
         }
+        refreshSelectionViews()
     }
 
     func mouseUp(at globalPoint: CGPoint) {
-        guard let origin else { return }
-        let rect = snapRect(rectBetween(origin, globalPoint))
-        self.origin = nil
-        selLog.info("selector mouseUp rect=\(NSStringFromRect(rect), privacy: .public)")
-        // 矩形太小视为误触：直接关闭，不回调
-        guard rect.width >= 8, rect.height >= 8 else {
-            end()
-            return
+        guard origin != nil else { return }
+        origin = nil
+        switch dragMode {
+        case .creating:
+            if didDrag {
+                // 拖出选区：太小算误触，清掉、保持打开（Ta 的做法，不直接关）
+                if let selection, selection.width >= 8, selection.height >= 8 {
+                    enterSelectedState()
+                } else {
+                    selection = nil
+                    refreshSelectionViews()
+                }
+            } else {
+                // 单击：悬停窗口直接确认，没窗口就保持打开
+                clickAt(globalPoint: globalPoint)
+            }
+        case .moving, .resizing:
+            // 移动/缩放完回到可确认状态
+            if didDrag, let selection, selection.width >= 8, selection.height >= 8 {
+                enterSelectedState()
+            } else if let selection {
+                self.selection = selection
+                enterSelectedState()
+            }
         }
-        // 不在这里 end()：编辑器先上、选区面板后关，中间不露桌面。
-        // 关闭由 coordinator 在编辑器上屏后调用 dismiss()。
-        let callback = onComplete
-        let downPanelRef = downPanel
-        guard let callback else { return }
-        // 用 mouseDown 时的 panel 所在显示器；拿不到再按坐标匹配
-        let displayID: CGDirectDisplayID?
-        if let downPanelRef {
-            displayID = downPanelRef.ownDisplayID
-        } else {
-            displayID = NSScreen.screens.first(where: { NSMouseInRect(globalPoint, $0.frame, false) })
-                .map { $0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! CGDirectDisplayID }
-        }
-        if let displayID {
-            selLog.info("onComplete display=\(displayID)")
-            callback(rect, displayID)
-        } else {
-            selLog.error("no display matched for \(NSStringFromPoint(globalPoint), privacy: .public)")
-            end()
+        dragMode = .creating
+        didDrag = false
+    }
+
+    /// 键盘：Esc 取消；回车确认；方向键 1px 微调（Shift 10px）
+    func handleKeyDown(_ event: NSEvent) -> Bool {
+        switch event.keyCode {
+        case 53: // Esc
+            cancel()
+            return true
+        case 36, 76: // Return / keypad Enter
+            if selection != nil { confirmSelection() }
+            return true
+        case 123, 124, 125, 126: // 左 / 右 / 下 / 上
+            guard selection != nil else { return true }
+            let step: CGFloat = event.modifierFlags.contains(.shift) ? 10 : 1
+            switch event.keyCode {
+            case 123: nudge(dx: -step, dy: 0)
+            case 124: nudge(dx: step, dy: 0)
+            case 125: nudge(dx: 0, dy: -step)
+            case 126: nudge(dx: 0, dy: step)
+            default: break
+            }
+            return true
+        default:
+            return false
         }
     }
 
-    /// 窗口吸附：单击（按下和松开几乎同点）时选定悬停窗口
+    /// 方向键微调：整体平移选区，夹在当前显示器内
+    func nudge(dx: CGFloat, dy: CGFloat) {
+        guard let selection, let displayFrame = activeDisplayFrame else { return }
+        let moved = SelectorRectEditor.moved(selection, by: CGPoint(x: dx, y: dy), inside: displayFrame)
+        self.selection = moved
+        refreshSelectionViews()
+        downPanel?.showConfirmBar(for: moved)
+    }
+
+    /// 双击选区内确认（Snipaste 同款）
+    func doubleClick(at globalPoint: CGPoint) {
+        guard let selection, selection.contains(globalPoint) else { return }
+        confirmSelection()
+    }
+
+    /// 确认：回调给 coordinator（抓图、开编辑器、关选区都在那边做）。
+    /// 这里不 end()，编辑器先上、选区后关，中间不露桌面。
+    func confirmSelection() {
+        guard let selection, selection.width >= 8, selection.height >= 8,
+              let downPanel else { return }
+        let displayID = downPanel.ownDisplayID
+        let panelWindowNumber = CGWindowID(downPanel.windowNumber)
+        selLog.info("selector confirmed rect=\(NSStringFromRect(selection), privacy: .public)")
+        onComplete?(selection, displayID, panelWindowNumber)
+    }
+
+    /// 窗口吸附：单击悬停窗口直接确认
     func clickAt(globalPoint: CGPoint) {
-        if let hit = hitTestWindow(at: globalPoint) {
-            selLog.info("window snap click at \(NSStringFromPoint(globalPoint), privacy: .public)")
-            let callback = onComplete
-            let downPanelRef = downPanel
-            guard let callback else { return }
-            let displayID = downPanelRef?.ownDisplayID
-                ?? NSScreen.screens.first(where: { NSMouseInRect(globalPoint, $0.frame, false) })
-                    .map { $0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! CGDirectDisplayID }
-            if let displayID {
-                callback(hit, displayID)
-            } else {
-                end()
-            }
-        }
-        // 悬停处没有窗口：什么都不做，选区保持打开（旧行为）
+        guard let hit = hitTestWindow(at: globalPoint),
+              let downPanel else { return }
+        selLog.info("window snap click at \(NSStringFromPoint(globalPoint), privacy: .public)")
+        onComplete?(hit, downPanel.ownDisplayID, CGWindowID(downPanel.windowNumber))
     }
 
     /// 供 coordinator 在编辑器上屏后调用：关选区面板（不触发回调）
@@ -167,6 +380,23 @@ final class RegionSelectorController: NSObject {
     func cancel() {
         selLog.info("selector cancelled")
         end()
+    }
+
+    /// 进入可确认状态：显示手柄 + 完成/取消条
+    private func enterSelectedState() {
+        refreshSelectionViews()
+        downPanel?.setHandlesVisible(true)
+        if let selection { downPanel?.showConfirmBar(for: selection) }
+        NSCursor.crosshair.set()
+    }
+
+    private func refreshSelectionViews() {
+        panels.forEach { $0.drawSelection(selection) }
+    }
+
+    private func hideConfirmBar() {
+        panels.forEach { $0.hideConfirmBar() }
+        panels.forEach { $0.setHandlesVisible(false) }
     }
 
     /// 拖拽时边缘吸附：选区边贴近窗口边（8pt 内）自动贴合（Snipaste 同款行为）
@@ -201,29 +431,36 @@ final class RegionSelectorController: NSObject {
 
     private func end() {
         isDismissed = true
+        if let rightClickMonitor {
+            NSEvent.removeMonitor(rightClickMonitor)
+            self.rightClickMonitor = nil
+        }
         panels.forEach { $0.orderOut(nil) }
         panels.forEach { $0.close() }
         panels.removeAll()
         downPanel = nil
         hoverWindowFrame = nil
+        selection = nil
         onComplete = nil
         NSCursor.arrow.set()
     }
 }
 
-/// 单显示器覆盖面板：冻结屏幕截图为背景 + 暗幕，选区挖空，Esc 取消
+// MARK: - 单显示器透明覆盖面板
+
+/// 单显示器覆盖面板：透明，选区里直接透出实时桌面 + 暗幕，选区挖空，Esc 取消。
+/// 不画冻结图（v1 的冻结图上屏是卡顿主因，已删）。
 final class RegionSelectorPanel: NSPanel {
     private weak var controller: RegionSelectorController?
-    private var selection: CGRect = .zero // 全局坐标
-    private let screenFrame: CGRect
     private let sizeLabel: NSTextField
-    private let frozenImageView: NSImageView
     private let dimSelectionView: SelectionView
     private let crosshairView: CrosshairView
     private let magnifierView: MagnifierView
+    private let confirmBar: ConfirmBar
+    let screenFrame: CGRect
     let ownDisplayID: CGDirectDisplayID
 
-    init(screen: NSScreen, frozenImage: CGImage?, controller: RegionSelectorController) {
+    init(screen: NSScreen, controller: RegionSelectorController) {
         self.controller = controller
         self.screenFrame = screen.frame
         let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! CGDirectDisplayID
@@ -232,20 +469,14 @@ final class RegionSelectorPanel: NSPanel {
         label.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
         label.textColor = .white
         label.isHidden = true
-        label.tag = Int(displayID)
         self.sizeLabel = label
-        self.frozenImageView = NSImageView(frame: NSRect(origin: .zero, size: screen.frame.size))
-        frozenImageView.autoresizingMask = [.width, .height]
-        // 冻结图已预抓，上屏时直接就位，不再异步抓（旧 freezeScreen 已删）
-        if let frozenImage {
-            frozenImageView.image = NSImage(cgImage: frozenImage, size: screen.frame.size)
-        }
-        // 暗幕+选区绘制层（叠在冻结图上方）
+        // 暗幕+选区绘制层（直接叠在实时桌面上）
         self.dimSelectionView = SelectionView(frame: NSRect(origin: .zero, size: screen.frame.size))
         dimSelectionView.autoresizingMask = [.width, .height]
         self.crosshairView = CrosshairView(frame: NSRect(origin: .zero, size: screen.frame.size))
         crosshairView.autoresizingMask = [.width, .height]
-        self.magnifierView = MagnifierView(frozenImage: frozenImage, displayFrame: screen.frame)
+        self.magnifierView = MagnifierView(displayFrame: screen.frame)
+        self.confirmBar = ConfirmBar()
         super.init(
             contentRect: screen.frame,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -260,14 +491,17 @@ final class RegionSelectorPanel: NSPanel {
         self.acceptsMouseMovedEvents = true
         self.becomesKeyOnlyIfNeeded = false
         self.worksWhenModal = true
+        // 放大镜取活像素时要把本面板排除在外，否则取到的是压暗后的像素
+        magnifierView.excludedWindowID = CGWindowID(self.windowNumber)
+        confirmBar.onConfirm = { [weak controller] in controller?.confirmSelection() }
+        confirmBar.onCancel = { [weak controller] in controller?.cancel() }
 
         let container = NSView(frame: NSRect(origin: .zero, size: screen.frame.size))
         container.autoresizingMask = [.width, .height]
-        container.addSubview(frozenImageView)
-        // 暗幕+选区层必须叠在冻结图之上，否则挖空/边框全被遮住
         container.addSubview(dimSelectionView)
         container.addSubview(crosshairView)
         container.addSubview(magnifierView)
+        container.addSubview(confirmBar)
         container.addSubview(sizeLabel)
         self.contentView = container
         // 显式设置 frame：borderless NSPanel 的 contentRect 初始化有时不生效
@@ -283,9 +517,12 @@ final class RegionSelectorPanel: NSPanel {
         dimSelectionView.hoverFrame = globalRect
     }
 
-    func drawSelection(_ globalRect: CGRect) {
-        selection = globalRect
-        dimSelectionView.selection = globalRect
+    func drawSelection(_ globalRect: CGRect?) {
+        dimSelectionView.selection = globalRect ?? .zero
+        guard let globalRect else {
+            sizeLabel.isHidden = true
+            return
+        }
         // 尺寸提示：左上角坐标（显示器内、左上原点）+ 尺寸
         let x = Int(globalRect.minX - screenFrame.origin.x)
         let yFromTop = Int(screenFrame.maxY - globalRect.maxY)
@@ -295,6 +532,31 @@ final class RegionSelectorPanel: NSPanel {
             y: screenFrame.height - (globalRect.origin.y - screenFrame.origin.y) - 28
         )
         sizeLabel.isHidden = false
+    }
+
+    func setHandlesVisible(_ visible: Bool) {
+        dimSelectionView.showsHandles = visible
+    }
+
+    /// 完成/取消条：优先放选区下方，没地方放上方，横向贴在选区右沿
+    func showConfirmBar(for globalRect: CGRect) {
+        let barSize = ConfirmBar.preferredSize
+        let local = CGRect(
+            x: globalRect.origin.x - screenFrame.origin.x,
+            y: globalRect.origin.y - screenFrame.origin.y,
+            width: globalRect.width, height: globalRect.height
+        )
+        let proposedBelow = local.minY - barSize.height - 10
+        let y = proposedBelow >= 8
+            ? proposedBelow
+            : min(bounds.height - barSize.height - 8, local.maxY + 10)
+        let x = min(max(8, local.maxX - barSize.width), bounds.width - barSize.width - 8)
+        confirmBar.frame = CGRect(origin: CGPoint(x: x, y: y), size: barSize)
+        confirmBar.isHidden = false
+    }
+
+    func hideConfirmBar() {
+        confirmBar.isHidden = true
     }
 
     /// 鼠标移动/拖拽时刷新十字线和放大镜
@@ -311,6 +573,11 @@ final class RegionSelectorPanel: NSPanel {
         controller?.cancel()
     }
 
+    override func keyDown(with event: NSEvent) {
+        if controller?.handleKeyDown(event) == true { return }
+        super.keyDown(with: event)
+    }
+
     override func mouseDown(with event: NSEvent) {
         controller?.mouseDown(at: NSEvent.mouseLocation, panel: self)
     }
@@ -324,29 +591,71 @@ final class RegionSelectorPanel: NSPanel {
     override func mouseMoved(with event: NSEvent) {
         let location = NSEvent.mouseLocation
         controller?.mouseMovedOrHovered(at: location)
+        controller?.cursor(at: location).set()
         updateOverlay(at: location)
     }
 
     override func mouseUp(with event: NSEvent) {
-        let location = NSEvent.mouseLocation
-        // 按下后未拖动（<4pt）→ 视为窗口吸附单击
-        if let origin = controller?.currentOrigin, hypot(origin.x - location.x, origin.y - location.y) < 4 {
-            controller?.clickAt(globalPoint: location)
-        } else {
-            controller?.mouseUp(at: location)
+        if event.clickCount == 2 {
+            controller?.doubleClick(at: NSEvent.mouseLocation)
+            return
         }
+        controller?.mouseUp(at: NSEvent.mouseLocation)
     }
 }
 
-extension RegionSelectorPanel {
-    fileprivate var currentOrigin: CGPoint? {
-        controller?.currentOriginInternal
+// MARK: - 完成/取消条
+
+/// 选区确认条：小胶囊，两个按钮。只在选区停住后出现。
+private final class ConfirmBar: NSView {
+    static let preferredSize = NSSize(width: 168, height: 36)
+
+    var onConfirm: (() -> Void)?
+    var onCancel: (() -> Void)?
+
+    private let effectView = NSVisualEffectView()
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        effectView.material = .hudWindow
+        effectView.blendingMode = .withinWindow
+        effectView.state = .active
+        effectView.wantsLayer = true
+        effectView.layer?.cornerRadius = 10
+        effectView.layer?.masksToBounds = true
+        effectView.frame = bounds
+        effectView.autoresizingMask = [.width, .height]
+        addSubview(effectView)
+
+        let stack = NSStackView()
+        stack.orientation = .horizontal
+        stack.spacing = 6
+        stack.alignment = .centerY
+        stack.frame = bounds.insetBy(dx: 8, dy: 5)
+        stack.autoresizingMask = [.width, .height]
+
+        let confirm = NSButton(title: "完成", target: self, action: #selector(confirmClicked))
+        confirm.bezelStyle = .rounded
+        confirm.controlSize = .small
+        confirm.keyEquivalent = "\r"
+        let cancel = NSButton(title: "取消", target: self, action: #selector(cancelClicked))
+        cancel.bezelStyle = .rounded
+        cancel.controlSize = .small
+        cancel.keyEquivalent = "\u{1b}"
+        stack.addArrangedSubview(confirm)
+        stack.addArrangedSubview(cancel)
+        addSubview(stack)
+        isHidden = true
     }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    @objc private func confirmClicked() { onConfirm?() }
+    @objc private func cancelClicked() { onCancel?() }
 }
 
-extension RegionSelectorController {
-    var currentOrigin: CGPoint? { currentOriginInternal }
-}
+// MARK: - 十字线与放大镜
 
 /// 全屏十字线（Snipaste 式）：两条 1px 白线跟随鼠标
 private final class CrosshairView: NSView {
@@ -373,24 +682,32 @@ private final class CrosshairView: NSView {
 }
 
 /// 跟随鼠标的放大镜（Snipaste 式）：像素网格 + RGB + 坐标。
-/// 数据源是同一张冻结图，零额外抓图；坐标换算与 cropRegion 同一套数学（y 不翻转）。
+///
+/// v2 改成取活像素：每次移动时用 CGWindowListCreateImageFromArray 只抓
+/// 光标周围 12×8 个像素（把本面板排除在外，取到的是真实桌面颜色），
+/// 再按像素逐格填出来——坐标映射全是显式的，不依赖 draw 的翻转语义，
+/// 之前“放大镜上下是否颠倒”的疑问按构造就不会再有。
 private final class MagnifierView: NSView {
     static let columns = 12
     static let rows = 8
     static let pixelSize: CGFloat = 16
     static let infoHeight: CGFloat = 44
 
-    private let frozenImage: CGImage?
+    /// 抓图时要排除的窗口（本面板），否则取到压暗后的像素
+    var excludedWindowID: CGWindowID?
     private let displayFrame: CGRect
-    private let scale: CGFloat
+    private let globalMaxY: CGFloat
     private var cursorPoint: CGPoint = .zero
+    /// 上一次抓到的 12×8 像素（RGBA，每像素 4 字节，行 0 = 屏幕最上方）
+    private var pixels: [UInt8] = []
+    private var cursorCol = 6
+    private var cursorRowFromBottom = 4
     private let rgbLabel = NSTextField(labelWithString: "")
     private let coordLabel = NSTextField(labelWithString: "")
 
-    init(frozenImage: CGImage?, displayFrame: CGRect) {
-        self.frozenImage = frozenImage
+    init(displayFrame: CGRect) {
         self.displayFrame = displayFrame
-        self.scale = frozenImage.map { CGFloat($0.width) / displayFrame.width } ?? 1
+        self.globalMaxY = NSScreen.screens.map(\.frame).map(\.maxY).max() ?? displayFrame.maxY
         let width = CGFloat(Self.columns) * Self.pixelSize + 4
         let height = CGFloat(Self.rows) * Self.pixelSize + Self.infoHeight + 4
         super.init(frame: NSRect(origin: .zero, size: NSSize(width: width, height: height)))
@@ -427,6 +744,11 @@ private final class MagnifierView: NSView {
     func update(cursorPoint globalPoint: CGPoint) {
         cursorPoint = globalPoint
         isHidden = false
+        if let captured = capturePixels(around: globalPoint) {
+            pixels = captured.bytes
+            cursorCol = captured.cursorCol
+            cursorRowFromBottom = captured.cursorRowFromBottom
+        }
         needsDisplay = true
         updateLabels()
         layoutNearCursor()
@@ -456,55 +778,121 @@ private final class MagnifierView: NSView {
         let localX = cursorPoint.x - displayFrame.origin.x
         let localYFromTop = displayFrame.height - (cursorPoint.y - displayFrame.origin.y)
         coordLabel.stringValue = "x \(Int(localX)) · y \(Int(localYFromTop))"
-        if let color = pixelColor(at: cursorPoint) {
+        if let color = cursorPixelColor() {
             rgbLabel.stringValue = "#\(color.hex) · R \(color.r) G \(color.g) B \(color.b)"
         } else {
             rgbLabel.stringValue = ""
         }
     }
 
-    /// 读光标处 1 个像素的颜色（1×1 位图上下文取样，开销可忽略）
-    private func pixelColor(at globalPoint: CGPoint) -> (r: Int, g: Int, b: Int, hex: String)? {
-        guard let frozenImage else { return nil }
-        let px = (globalPoint.x - displayFrame.origin.x) * scale
-        let py = (globalPoint.y - displayFrame.origin.y) * scale
-        let src = CGRect(x: px, y: py, width: 1, height: 1).integral
-        guard src.minX >= 0, src.minY >= 0,
-              src.maxX <= CGFloat(frozenImage.width),
-              src.maxY <= CGFloat(frozenImage.height),
-              let one = frozenImage.cropping(to: src) else { return nil }
-        guard let ctx = CGContext(
-            data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return nil }
-        ctx.draw(one, in: CGRect(x: 0, y: 0, width: 1, height: 1))
-        guard let data = ctx.data else { return nil }
-        let bytes = data.bindMemory(to: UInt8.self, capacity: 4)
-        let r = Int(bytes[0]), g = Int(bytes[1]), b = Int(bytes[2])
+    /// 光标处像素的颜色（从已抓的 12×8 里取中心格）
+    private func cursorPixelColor() -> (r: Int, g: Int, b: Int, hex: String)? {
+        guard pixels.count == Self.columns * Self.rows * 4 else { return nil }
+        let bufferRow = Self.rows - 1 - cursorRowFromBottom
+        let idx = (bufferRow * Self.columns + cursorCol) * 4
+        guard idx >= 0, idx + 2 < pixels.count else { return nil }
+        let r = Int(pixels[idx]), g = Int(pixels[idx + 1]), b = Int(pixels[idx + 2])
         return (r, g, b, String(format: "%02X%02X%02X", r, g, b))
+    }
+
+    /// 抓光标周围 12×8 个活像素（AppKit 坐标算好再转 Quartz 坐标）。
+    /// 返回的字节行 0 = 屏幕最上方；同时算出光标像素在网格里的列和行（行从下往上数）。
+    private func capturePixels(around globalPoint: CGPoint) -> (bytes: [UInt8], cursorCol: Int, cursorRowFromBottom: Int)? {
+        let cols = Self.columns, rows = Self.rows
+        // AppKit 坐标的取图矩形（原点左下），夹在本显示器内
+        var appKitRect = CGRect(
+            x: globalPoint.x - CGFloat(cols) / 2,
+            y: globalPoint.y - CGFloat(rows) / 2,
+            width: CGFloat(cols), height: CGFloat(rows)
+        ).integral
+        appKitRect = appKitRect.intersection(displayFrame)
+        guard appKitRect.width >= 1, appKitRect.height >= 1 else { return nil }
+        // Quartz 坐标（原点左上）：y = 全局最大 Y - AppKit 上沿
+        let quartzRect = CGRect(
+            x: appKitRect.minX,
+            y: globalMaxY - appKitRect.maxY,
+            width: appKitRect.width, height: appKitRect.height
+        )
+        // 排除本面板后的在屏窗口列表
+        let windowIDs: [NSNumber]
+        if let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] {
+            windowIDs = list.compactMap { info in
+                guard let number = info[kCGWindowNumber as String] as? NSNumber,
+                      CGWindowID(number.uint32Value) != excludedWindowID else { return nil }
+                return number
+            }
+        } else {
+            windowIDs = []
+        }
+        let image: CGImage?
+        if windowIDs.isEmpty {
+            image = CGWindowListCreateImage(quartzRect, .optionOnScreenOnly, kCGNullWindowID)
+        } else {
+            image = CGWindowListCreateImageFromArray(quartzRect, windowIDs as CFArray, [])
+                ?? CGWindowListCreateImage(quartzRect, .optionOnScreenOnly, kCGNullWindowID)
+        }
+        guard let image,
+              let ctx = CGContext(
+                data: nil, width: image.width, height: image.height,
+                bitsPerComponent: 8, bytesPerRow: image.width * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ),
+              let data = ctx.data
+        else { return nil }
+        ctx.interpolationQuality = .none
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        let w = image.width, h = image.height
+        let count = w * h * 4
+        let bytes = [UInt8](UnsafeBufferPointer(start: data.bindMemory(to: UInt8.self, capacity: count), count: count))
+        // 贴边时抓到的图比 12×8 小：按边缘像素延展补满 12×8（字节行 0 = 屏幕最上方）。
+        // 抓图在左/下贴边时从网格左/下角起排，在右/上贴边时从右/上角起排。
+        let colOffset = (appKitRect.width < CGFloat(cols) && appKitRect.maxX >= displayFrame.maxX - 0.5) ? cols - w : 0
+        let rowOffset = (appKitRect.height < CGFloat(rows) && appKitRect.maxY >= displayFrame.maxY - 0.5) ? rows - h : 0
+        var padded = [UInt8](repeating: 0, count: cols * rows * 4)
+        for col in 0..<cols {
+            for rowFromBottom in 0..<rows {
+                let srcCol = min(max(col - colOffset, 0), w - 1)
+                let srcRowFromBottom = min(max(rowFromBottom - rowOffset, 0), h - 1)
+                let srcBufferRow = h - 1 - srcRowFromBottom
+                let srcIdx = (srcBufferRow * w + srcCol) * 4
+                let dstBufferRow = rows - 1 - rowFromBottom
+                let dstIdx = (dstBufferRow * cols + col) * 4
+                for k in 0..<4 { padded[dstIdx + k] = bytes[srcIdx + k] }
+            }
+        }
+        // 光标像素在网格里的位置（行从下往上数）
+        let cursorCol = colOffset + min(max(Int(globalPoint.x - appKitRect.minX), 0), w - 1)
+        let cursorRowFromBottom = rowOffset + min(max(Int(globalPoint.y - appKitRect.minY), 0), h - 1)
+        return (padded, cursorCol, cursorRowFromBottom)
     }
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        guard let frozenImage, let ctx = NSGraphicsContext.current?.cgContext else { return }
-        // 光标像素（与 cropRegion 同一套数学：y 不翻转）
-        let px = (cursorPoint.x - displayFrame.origin.x) * scale
-        let py = (cursorPoint.y - displayFrame.origin.y) * scale
+        guard pixels.count == Self.columns * Self.rows * 4,
+              let ctx = NSGraphicsContext.current?.cgContext else { return }
         let cols = Self.columns, rows = Self.rows
-        let cx = min(max(px, CGFloat(cols) / 2), CGFloat(frozenImage.width) - CGFloat(cols) / 2)
-        let cy = min(max(py, CGFloat(rows) / 2), CGFloat(frozenImage.height) - CGFloat(rows) / 2)
-        let src = CGRect(
-            x: cx - CGFloat(cols) / 2, y: cy - CGFloat(rows) / 2,
-            width: CGFloat(cols), height: CGFloat(rows)
-        ).integral
-        guard let crop = frozenImage.cropping(to: src) else { return }
         let gridRect = CGRect(
             x: 2, y: Self.infoHeight + 2,
             width: bounds.width - 4, height: CGFloat(rows) * Self.pixelSize
         )
-        ctx.interpolationQuality = .none
-        ctx.draw(crop, in: gridRect)
+        // 逐格填色：字节行 0 是屏幕最上方，所以网格行（从下往上数 b）对应字节行 rows-1-b
+        for col in 0..<cols {
+            for rowFromBottom in 0..<rows {
+                let bufferRow = rows - 1 - rowFromBottom
+                let idx = (bufferRow * cols + col) * 4
+                guard idx + 2 < pixels.count else { continue }
+                let r = CGFloat(pixels[idx]) / 255
+                let g = CGFloat(pixels[idx + 1]) / 255
+                let b = CGFloat(pixels[idx + 2]) / 255
+                ctx.setFillColor(red: r, green: g, blue: b, alpha: 1)
+                ctx.fill(CGRect(
+                    x: gridRect.minX + CGFloat(col) * Self.pixelSize,
+                    y: gridRect.minY + CGFloat(rowFromBottom) * Self.pixelSize,
+                    width: Self.pixelSize, height: Self.pixelSize
+                ))
+            }
+        }
         // 网格线
         ctx.setStrokeColor(NSColor.black.withAlphaComponent(0.08).cgColor)
         ctx.setLineWidth(1)
@@ -519,10 +907,10 @@ private final class MagnifierView: NSView {
             ctx.addLine(to: CGPoint(x: gridRect.maxX, y: y))
         }
         ctx.strokePath()
-        // 中心像素红框（第 6 列、第 4 行，左下原点）
+        // 光标像素红框
         let centerCell = CGRect(
-            x: gridRect.minX + CGFloat(cols / 2) * Self.pixelSize,
-            y: gridRect.minY + CGFloat(rows / 2) * Self.pixelSize,
+            x: gridRect.minX + CGFloat(cursorCol) * Self.pixelSize,
+            y: gridRect.minY + CGFloat(cursorRowFromBottom) * Self.pixelSize,
             width: Self.pixelSize, height: Self.pixelSize
         )
         ctx.setStrokeColor(NSColor.systemRed.cgColor)
@@ -531,19 +919,25 @@ private final class MagnifierView: NSView {
     }
 }
 
-/// 暗幕视图：选区外半透明黑，选区边框白色 1px，悬停窗口高亮
+// MARK: - 暗幕与选区
+
+/// 暗幕视图：选区外半透明黑，选区边框白色 1px，悬停窗口高亮，选区 8 手柄。
 ///
 /// 图层化绘制（旧版是 draw(_:) 全屏 CPU 重绘，拖拽掉帧）：暗幕用 even-odd
-/// CAShapeLayer 挖空，边框各用一个 CAShapeLayer；拖拽时只改 layer，不重画整屏。
+/// CAShapeLayer 挖空，边框、手柄各用一个 CAShapeLayer；拖拽时只改 layer，不重画整屏。
 private final class SelectionView: NSView {
     private let dimLayer = CAShapeLayer()
     private let borderLayer = CAShapeLayer()
     private let hoverBorderLayer = CAShapeLayer()
+    private let handlesLayer = CAShapeLayer()
 
     var selection: CGRect = .zero {
         didSet { layoutLayers() }
     }
     var hoverFrame: CGRect? = nil {
+        didSet { layoutLayers() }
+    }
+    var showsHandles = false {
         didSet { layoutLayers() }
     }
 
@@ -560,9 +954,13 @@ private final class SelectionView: NSView {
         hoverBorderLayer.fillColor = NSColor.clear.cgColor
         hoverBorderLayer.strokeColor = NSColor.systemBlue.withAlphaComponent(0.9).cgColor
         hoverBorderLayer.lineWidth = 2
+        handlesLayer.fillColor = NSColor.white.cgColor
+        handlesLayer.strokeColor = NSColor.controlAccentColor.cgColor
+        handlesLayer.lineWidth = 1.5
         layer?.addSublayer(dimLayer)
         layer?.addSublayer(borderLayer)
         layer?.addSublayer(hoverBorderLayer)
+        layer?.addSublayer(handlesLayer)
     }
 
     override func layout() {
@@ -610,6 +1008,20 @@ private final class SelectionView: NSView {
             }
         } else {
             hoverBorderLayer.isHidden = true
+        }
+
+        if showsHandles, selection.width > 0 {
+            let local = convert(selection, from: nil)
+            let handlePath = CGMutablePath()
+            for handle in SelectorResizeHandle.allCases {
+                let point = handle.point(in: local)
+                handlePath.addRect(CGRect(x: point.x - 4, y: point.y - 4, width: 8, height: 8))
+            }
+            handlesLayer.path = handlePath
+            handlesLayer.frame = bounds
+            handlesLayer.isHidden = false
+        } else {
+            handlesLayer.isHidden = true
         }
     }
 }
