@@ -6,7 +6,6 @@ import Translation
 /// 语种模型按需下载：首次译某个语种对时，系统会走一次下载流程。
 /// 注意：TranslationSession 的生命周期不许跨越模型存活，
 //       每次翻译新建一个 session，用完即丢。
-@MainActor
 struct LocalTranslationProvider: TranslationProvider {
     static let providerID = "local"
 
@@ -18,7 +17,7 @@ struct LocalTranslationProvider: TranslationProvider {
         guard !trimmed.isEmpty else { throw TranslationError.emptyText }
 
         let sourceLanguage = source ?? detectLanguage(of: trimmed) ?? Locale.Language(identifier: "zh-Hans")
-        guard sourceLanguage.identifier != target.identifier else { return trimmed }
+        guard sourceLanguage.minimalIdentifier != target.minimalIdentifier else { return trimmed }
 
         let session = TranslationSession(installedSource: sourceLanguage, target: target)
         switch await availability(from: sourceLanguage, to: target) {
@@ -44,8 +43,8 @@ struct LocalTranslationProvider: TranslationProvider {
     }
 
     func availability(from source: Locale.Language, to target: Locale.Language) async -> TranslationAvailability {
-        guard source.identifier != target.identifier else { return .available }
-        switch LanguageAvailability().status(from: source, to: target) {
+        guard source.minimalIdentifier != target.minimalIdentifier else { return .available }
+        switch await LanguageAvailability().status(from: source, to: target) {
         case .installed: return .available
         case .supported: return .downloadable
         case .unsupported: return .unsupported

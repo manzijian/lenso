@@ -30,7 +30,7 @@ protocol TranslationProvider: Sendable {
 extension TranslationProvider {
     func defaultTargetLanguage(for text: String) -> Locale.Language {
         if let detected = detectLanguage(of: text) {
-            return detected.identifier.hasPrefix("zh")
+            return detected.minimalIdentifier.hasPrefix("zh")
                 ? Locale.Language(identifier: "en")
                 : Locale.Language(identifier: "zh-Hans")
         }
