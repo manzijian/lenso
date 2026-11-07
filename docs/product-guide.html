@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>LENSO 产品功能说明 · 当前实现</title>
+<style>
+  :root {
+    --canvas: #f5f6fa;
+    --paper: #ffffff;
+    --ink: #1c2333;
+    --muted: #5f6b82;
+    --faint: #8792a6;
+    --line: #dde3ee;
+    --line-strong: #c7d2e5;
+    --accent: #3457d5;
+    --accent-deep: #2342b4;
+    --accent-soft: #eaf0ff;
+    --violet: #7959c8;
+    --green: #16855a;
+    --green-soft: #e8f7ef;
+    --amber: #9a6708;
+    --amber-soft: #fff6dc;
+    --code-bg: #f6f8fc;
+    --shadow: 0 12px 36px rgba(30, 46, 90, .07);
+    --radius: 16px;
+    --sidebar: 252px;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 24px; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    background: var(--canvas);
+    font: 15px/1.72 var(--font);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  :focus-visible { outline: 3px solid rgba(52, 87, 213, .35); outline-offset: 3px; border-radius: 4px; }
+  .layout { display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); min-height: 100vh; }
+  .sidebar {
+    position: sticky; top: 0; align-self: start; height: 100vh;
+    overflow-y: auto; padding: 30px 18px 32px 24px;
+    background: rgba(255,255,255,.86); border-right: 1px solid var(--line);
+    backdrop-filter: blur(14px);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin: 0 8px 8px; }
+  .brand-mark {
+    width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center;
+    color: #fff; font-size: 14px; font-weight: 800; letter-spacing: -.5px;
+    background: linear-gradient(135deg, var(--accent), var(--violet));
+    box-shadow: 0 6px 14px rgba(52,87,213,.24);
+  }
+  .brand-name { font-size: 17px; font-weight: 750; letter-spacing: .08em; }
+  .brand-sub { margin: 0 8px 24px; color: var(--muted); font-size: 12px; }
+  .nav-label { margin: 20px 8px 8px; color: var(--faint); font-size: 11px; font-weight: 700; letter-spacing: .12em; }
+  .sidebar nav a {
+    display: block; padding: 7px 10px; border-radius: 9px;
+    color: #45516a; font-size: 13px; line-height: 1.45;
+  }
+  .sidebar nav a:hover, .sidebar nav a.active { background: var(--accent-soft); color: var(--accent-deep); text-decoration: none; }
+  .sidebar nav a.active { font-weight: 650; }
+  .sidebar-foot { margin: 26px 8px 0; padding-top: 16px; border-top: 1px solid var(--line); color: var(--faint); font-size: 11px; line-height: 1.6; }
+  main { min-width: 0; padding: 58px clamp(24px, 5vw, 88px) 100px; }
+  .document { max-width: 980px; margin: 0 auto; }
+  .eyebrow { color: var(--accent); font-size: 12px; font-weight: 750; letter-spacing: .16em; text-transform: uppercase; }
+  h1 { margin: 12px 0 14px; font-size: clamp(34px, 5vw, 52px); line-height: 1.14; letter-spacing: -.035em; }
+  .lede { max-width: 760px; margin: 0; color: var(--muted); font-size: 17px; line-height: 1.8; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 0; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px;
+    border: 1px solid var(--line-strong); border-radius: 999px; background: #fff;
+    color: var(--muted); font-size: 12px; font-weight: 600;
+  }
+  .pill strong { color: var(--ink); }
+  .hero {
+    margin: 36px 0 12px; padding: 26px 28px; border: 1px solid #d9e2f7; border-radius: var(--radius);
+    background: linear-gradient(135deg, #fdfdff 0%, #eff4ff 58%, #f5efff 100%); box-shadow: var(--shadow);
+  }
+  .hero h2 { margin: 0 0 8px; font-size: 17px; }
+  .hero p { margin: 0; color: #46536c; font-size: 14px; }
+  .hero-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .hero-links a { padding: 7px 12px; border: 1px solid #cddaf7; border-radius: 8px; background: rgba(255,255,255,.82); color: var(--accent-deep); font-size: 12px; font-weight: 650; }
+  section { scroll-margin-top: 24px; margin-top: 64px; }
+  .section-head { margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .kicker { display: block; margin-bottom: 4px; color: var(--accent); font: 700 11px/1.4 var(--mono); letter-spacing: .09em; }
+  h2 { margin: 0; font-size: clamp(24px, 3vw, 31px); line-height: 1.3; letter-spacing: -.02em; }
+  h3 { margin: 28px 0 10px; font-size: 17px; line-height: 1.45; letter-spacing: -.01em; }
+  h4 { margin: 20px 0 8px; font-size: 14px; }
+  p { margin: 10px 0; }
+  .section-intro { color: var(--muted); }
+  .card {
+    margin: 18px 0; padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px;
+    background: var(--paper); box-shadow: 0 3px 12px rgba(30,46,90,.035);
+  }
+  .card > :first-child { margin-top: 0; }
+  .card > :last-child { margin-bottom: 0; }
+  .card-title { margin-bottom: 10px; color: var(--accent-deep); font-size: 13px; font-weight: 750; letter-spacing: .03em; }
+  .definition-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 12px; margin: 18px 0; }
+  .definition { padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+  .definition dt { color: var(--faint); font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+  .definition dd { margin: 7px 0 0; font-size: 14px; }
+  .definition dd small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+  .table-wrap { overflow-x: auto; margin: 18px 0; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 11px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+  th { background: #f7f9fd; color: var(--muted); font-size: 11px; font-weight: 750; letter-spacing: .06em; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  td code { white-space: nowrap; }
+  code { padding: 2px 5px; border-radius: 5px; background: var(--code-bg); color: #344265; font: .88em/1.4 var(--mono); }
+  kbd {
+    display: inline-block; min-width: 22px; padding: 2px 6px; border: 1px solid #cbd5e8; border-bottom-width: 2px;
+    border-radius: 6px; background: #fff; color: #30405e; font: 600 12px/1.5 var(--mono); text-align: center;
+  }
+  .label { color: var(--accent-deep); font-weight: 650; }
+  .steps { margin: 14px 0 0; padding: 0; list-style: none; counter-reset: step; }
+  .steps > li { position: relative; padding: 0 0 16px 40px; counter-increment: step; }
+  .steps > li::before {
+    content: counter(step); position: absolute; left: 0; top: 2px; width: 25px; height: 25px;
+    display: grid; place-items: center; border-radius: 50%; background: var(--accent-soft);
+    color: var(--accent-deep); font: 700 11px/1 var(--mono);
+  }
+  .steps > li::after { content: ""; position: absolute; left: 12px; top: 31px; bottom: 3px; width: 1px; background: #dce5f7; }
+  .steps > li:last-child { padding-bottom: 0; }
+  .steps > li:last-child::after { display: none; }
+  .steps strong { color: #24324d; }
+  .branch-list { display: grid; gap: 10px; margin-top: 12px; }
+  .branch { display: grid; grid-template-columns: 150px 1fr; gap: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: #fcfdff; }
+  .branch b { color: var(--accent-deep); font-size: 13px; }
+  .branch span { color: var(--muted); font-size: 13px; }
+  pre {
+    margin: 14px 0; padding: 18px 20px; overflow-x: auto; border: 1px solid #d9e1ef; border-radius: 12px;
+    background: #f8fafd; color: #2d3a54; font: 12px/1.62 var(--mono); tab-size: 2;
+  }
+  pre code { padding: 0; background: transparent; color: inherit; font: inherit; }
+  .diagram-note { margin: -4px 0 18px; color: var(--faint); font-size: 12px; }
+  .callout { margin: 18px 0; padding: 14px 16px; border-left: 3px solid var(--accent); border-radius: 0 10px 10px 0; background: #f0f5ff; color: #3d4c68; font-size: 13px; }
+  .callout.note { border-left-color: var(--green); background: var(--green-soft); }
+  .callout.caution { border-left-color: #d9a21c; background: var(--amber-soft); }
+  .callout strong { color: var(--ink); }
+  .tag-row { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0; }
+  .tag { padding: 4px 9px; border: 1px solid #d4def1; border-radius: 7px; background: #fff; color: #46536c; font-size: 12px; }
+  .source { margin-top: 16px; color: var(--faint); font-size: 11px; line-height: 1.6; }
+  .source code { font-size: 11px; }
+  footer { margin-top: 72px; padding-top: 24px; border-top: 1px solid var(--line); color: var(--faint); font-size: 12px; }
+  .skip-link { position: absolute; left: 12px; top: -100px; z-index: 10; padding: 8px 12px; border-radius: 8px; background: #fff; box-shadow: var(--shadow); }
+  .skip-link:focus { top: 12px; }
+  @media (max-width: 900px) {
+    .layout { display: block; }
+    .sidebar { position: relative; width: auto; height: auto; max-height: 300px; padding: 18px 20px; border-right: 0; border-bottom: 1px solid var(--line); }
+    .brand-sub { margin-bottom: 12px; }
+    .sidebar nav { display: flex; flex-wrap: wrap; gap: 4px; }
+    .sidebar nav a { padding: 5px 9px; }
+    .nav-label, .sidebar-foot { display: none; }
+    main { padding: 38px 20px 72px; }
+    .branch { grid-template-columns: 1fr; gap: 4px; }
+  }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  @media print {
+    :root { --canvas: #fff; --shadow: none; }
+    body { background: #fff; font-size: 10.5pt; }
+    .layout { display: block; }
+    .sidebar, .skip-link, .hero-links { display: none; }
+    main { padding: 0; }
+    .document { max-width: none; }
+    .hero { margin-top: 18px; box-shadow: none; }
+    section { margin-top: 30px; break-inside: auto; }
+    .section-head, .card, .definition, .branch, .table-wrap, pre { break-inside: avoid; }
+    h1 { font-size: 28pt; }
+    h2 { font-size: 17pt; }
+    h3 { font-size: 12pt; }
+    a { color: inherit; }
+    pre { white-space: pre-wrap; font-size: 8pt; }
+    .source { font-size: 8pt; }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="layout">
+  <aside class="sidebar" aria-label="文档目录">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">L</span><span class="brand-name">LENSO</span></div>
+    <p class="brand-sub">产品功能说明 · 当前实现</p>
+    <div class="nav-label">总览</div>
+    <nav>
+      <a href="#overview">01 产品总览与任务速查</a>
+      <a href="#menubar">02 菜单栏快捷面板</a>
+      <div class="nav-label">截图链路</div>
+      <a href="#selector">03 区域选区浮层</a>
+      <a href="#editor">04 截图标注编辑器</a>
+      <a href="#toast">05 保存 / 操作提示</a>
+      <div class="nav-label">资料管理</div>
+      <a href="#library">06 图库窗口</a>
+      <a href="#notes">07 文字收纳</a>
+      <a href="#preview">08 预览窗口</a>
+      <a href="#pinned">09 置顶图片浮窗</a>
+      <a href="#search">10 全局搜索面板</a>
+      <a href="#clipboard">11 剪贴板历史面板</a>
+      <div class="nav-label">附录</div>
+      <a href="#settings">12 设置窗口</a>
+      <a href="#boundaries">13 当前实现边界</a>
+    </nav>
+    <div class="sidebar-foot">依据当前 Swift 源码整理（基准提交 <code>dcd0118</code>）。文档只描述已接通功能；视觉效果稿与实施计划中的规划能力不计入。</div>
+  </aside>
+
+  <main id="main">
+    <article class="document">
+      <header>
+        <div class="eyebrow">Product Delivery Guide</div>
+        <h1>LENSO 产品功能说明</h1>
+        <p class="lede">面向产品评审、演示与交付验收，逐屏说明当前 macOS 原生应用的界面布局、具体操作步骤与操作结果。全文以仓库当前 Swift 源码为准，界面语言为简体中文。</p>
+        <div class="meta">
+          <span class="pill"><strong>平台</strong> macOS 26</span>
+          <span class="pill"><strong>形态</strong> 菜单栏常驻应用</span>
+          <span class="pill"><strong>范围</strong> 11 个界面 / 浮层</span>
+          <span class="pill"><strong>基准</strong> <code>dcd0118</code></span>
+        </div>
+      </header>
+
+      <div class="hero">
+        <h2>一页看懂产品闭环</h2>
+        <p>从菜单栏或快捷键发起截图 → 拖拽选区 / 单击吸附窗口 → 在冻结画面上调整选区并标注 → 保存、复制或钉在屏幕上；截图进入图库，可通过搜索或预览取回。应用启动时自动监听剪贴板，把复制过的图片与文字存入剪贴板历史，并将文字同步收纳。</p>
+        <div class="hero-links">
+          <a href="#workflows">查看任务速查</a>
+          <a href="#shortcuts">查看快捷键</a>
+          <a href="#boundaries">查看实现边界</a>
+        </div>
+      </div>
+
+      <section id="overview">
+        <div class="section-head"><span class="kicker">01 / OVERVIEW</span><h2>产品总览与任务速查</h2></div>
+        <p class="section-intro">LENSO 是常驻系统菜单栏的截图与剪贴板资料工具。应用关闭最后一个窗口后仍继续运行，启动时自动开启剪贴板监听。当前实现由 11 个原生界面 / 浮层构成，统一使用浅色外观与蓝紫色玻璃质感。</p>
+
+        <h3 id="workflows">跨界面任务速查</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>用户任务</th><th>起点</th><th>最短操作路径</th><th>结果</th></tr></thead>
+            <tbody>
+              <tr><td>截取并保存一块区域</td><td>菜单栏「截图」或 <kbd>⇧</kbd><kbd>⌘</kbd><kbd>1</kbd></td><td>拖拽选区 → 可调整 / 标注 → 点「完成」</td><td>保存 PNG 与缩略图、写入图库、复制 TIFF 到剪贴板、显示「截图已保存」提示</td></tr>
+              <tr><td>只复制，不保存</td><td>标注编辑器右侧面板</td><td>点「复制到剪贴板」</td><td>合成图写入剪贴板；编辑器保持打开，不写入图库</td></tr>
+              <tr><td>把截图临时钉在屏幕上</td><td>标注编辑器底部工具栏</td><td>点图钉图标</td><td>关闭编辑器，生成可拖动的置顶浮窗；不保存、不复制</td></tr>
+              <tr><td>查看已保存的截图</td><td>菜单栏「图库」或 <kbd>⌘</kbd><kbd>0</kbd></td><td>双击缩略图</td><td>打开预览窗口，可缩放或导出 PNG</td></tr>
+              <tr><td>按文件名找到并复制截图</td><td>菜单栏「搜索」或 <kbd>⌘</kbd><kbd>K</kbd></td><td>输入关键词 → 单击结果行</td><td>复制原图到剪贴板并显示「已复制」提示</td></tr>
+              <tr><td>查看剪贴板历史</td><td>顶部菜单「搜索」→「剪贴板历史」或 <kbd>⇧</kbd><kbd>⌘</kbd><kbd>V</kbd></td><td>单击任意图片 / 文字卡片</td><td>把该条目写回系统剪贴板</td></tr>
+              <tr><td>管理文字收纳</td><td>图库侧栏「文字」</td><td>「新建」或卡片「编辑 / 复制 / 删除」</td><td>新增、修改、复制或删除文字片段；侧栏计数同步刷新</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="shortcuts">入口与快捷键</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>入口</th><th>快捷键</th><th>作用</th></tr></thead>
+            <tbody>
+              <tr><td>「截图」→「区域截图」/ 菜单栏「截图」</td><td><kbd>⇧</kbd><kbd>⌘</kbd><kbd>1</kbd></td><td>发起区域截图</td></tr>
+              <tr><td>「图库」→「打开图库」/ 菜单栏「图库」</td><td><kbd>⌘</kbd><kbd>0</kbd></td><td>打开或聚焦唯一的图库窗口</td></tr>
+              <tr><td>「图库」→「预览最新截图」</td><td><kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd></td><td>打开最近保存的一张截图</td></tr>
+              <tr><td>「搜索」→「全局搜索」/ 菜单栏「搜索」</td><td><kbd>⌘</kbd><kbd>K</kbd></td><td>打开搜索浮层并聚焦输入框</td></tr>
+              <tr><td>「搜索」→「剪贴板历史」</td><td><kbd>⇧</kbd><kbd>⌘</kbd><kbd>V</kbd></td><td>显示 / 隐藏剪贴板历史浮层（同一入口可切换）</td></tr>
+              <tr><td>「设置」→「打开设置」/ 菜单栏「设置」</td><td><kbd>⌘</kbd><kbd>,</kbd></td><td>打开或聚焦唯一的设置窗口</td></tr>
+              <tr><td>选区浮层、编辑器、搜索、剪贴板历史</td><td><kbd>Esc</kbd></td><td>取消截图或关闭对应浮层</td></tr>
+              <tr><td>「编辑文字」弹窗</td><td><kbd>Return</kbd></td><td>触发「保存」</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout"><strong>入口说明：</strong>以上快捷键来自应用顶部菜单命令，需要在 LENSO 处于前台时触发；当前实现没有注册系统级全局热键。设置「快捷键」页仅展示 <kbd>⇧</kbd><kbd>⌘</kbd><kbd>1</kbd> 与 <kbd>⌘</kbd><kbd>K</kbd> 两项。</div>
+
+        <h3>界面地图</h3>
+        <pre><code>系统菜单栏 ── 快捷面板 ─┬─ 截图 ── 选区浮层 ── 标注编辑器 ─┬─ 完成 ── 保存提示 ── 图库
+                        │                                  ├─ 复制到剪贴板 ── 保存提示
+                        │                                  └─ 钉图 ── 置顶浮窗
+                        ├─ 图库 ── 图库窗口 ─┬─ 全部截图 ── 双击 ── 预览窗口
+                        │                    └─ 文字 ──────────── 文字收纳 / 编辑弹窗
+                        ├─ 搜索 ── 搜索面板 ─┬─ 单击结果 ── 复制原图
+                        │                    └─ 「查看」── 预览窗口
+                        └─ 设置 ── 设置窗口
+
+后台常驻 ── 剪贴板监听 ── 剪贴板历史面板 ──┬─ 单击卡片 ── 写回剪贴板
+                                          └─ 收藏文字 ── 文字收纳</code></pre>
+        <p class="diagram-note">示意图表达界面之间的可达关系；框线不代表实际像素尺寸。</p>
+      </section>
+
+      <section id="menubar">
+        <div class="section-head"><span class="kicker">02 / MENU BAR</span><h2>菜单栏快捷面板</h2></div>
+        <p class="section-intro">点击系统菜单栏中的 LENSO 取景器图标，打开横向排列的四个快捷入口。面板由系统管理，宽 312pt，使用浅色玻璃容器；每个入口为 64 × 82pt 的图标与文字组合，悬停时图标底色变为系统强调色。</p>
+        <pre><code>┌──────────────── 系统菜单栏 ────────────────┐
+│ …                               ⌖ LENSO  ⋯ │
+└──────────────────────────────────┬─────────┘
+                                   ▼
+        ┌───────────────────────────────────────┐
+        │  ┌────┐   ┌────┐   ┌────┐   ┌────┐   │
+        │  │ ⌖  │   │ ▣  │   │ ⌕  │   │ ⚙  │   │
+        │  │截图│   │图库│   │搜索│   │设置│   │
+        │  └────┘   └────┘   └────┘   └────┘   │
+        └───────────────────────────────────────┘</code></pre>
+        <p class="diagram-note">四个入口从左到右依次为「截图」「图库」「搜索」「设置」；示意图仅表达结构。</p>
+        <div class="card">
+          <div class="card-title">布局说明</div>
+          <p>面板主体为水平等距排列的四个玻璃效果入口，每个入口上方是 52 × 52pt 圆角图标，下方是 11pt 标签。点击任一入口执行动作后立即收起面板。「图库」「设置」打开单实例窗口并激活应用；「搜索」显示浮动面板；「截图」启动截图链路。</p>
+        </div>
+        <h3>操作步骤</h3>
+        <ol class="steps">
+          <li><strong>打开面板：</strong>点击系统菜单栏右上区域的 LENSO 取景器图标。</li>
+          <li><strong>悬停确认：</strong>将指针移到目标入口，图标底色会高亮。</li>
+          <li><strong>单击执行：</strong>按需点击「截图」「图库」「搜索」或「设置」；面板随即关闭，对应窗口 / 浮层出现在屏幕上。</li>
+          <li><strong>重复打开窗口：</strong>再次点击「图库」或「设置」只会聚焦已有窗口，不会叠开第二个同类型窗口。</li>
+        </ol>
+        <div class="source">源码依据：<code>LENSO/LENSOApp.swift:11-14</code>、<code>LENSO/MenuBar/MenuBarPanelView.swift:10-15, 40-56, 59-87</code>。</div>
+      </section>
+
+      <section id="selector">
+        <div class="section-head"><span class="kicker">03 / SELECTION</span><h2>区域选区浮层</h2></div>
+        <p class="section-intro">截图开始时，每个外接 / 内置显示器上都会覆盖一块与屏幕等大的透明面板。屏幕画面被冻结，选区外覆盖 28% 黑色遮罩；用户可拖拽框选，也可单击吸附一个完整窗口。</p>
+        <pre><code>╔═══════════════ 冻结屏幕（每块显示器一块浮层） ═══════════════╗
+║▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒║
+║▒▒▒▒▒▒▒▒┌──────────────────────┐▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒║
+║▒▒▒▒▒▒▒▒│      选区（画面明亮）  │▒▒  1280 × 800          ║
+║▒▒▒▒▒▒▒▒│                      │▒▒  实时尺寸提示         ║
+║▒▒▒▒▒▒▒▒│   白色 1pt 描边       │▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒║
+║▒▒▒▒▒▒▒▒└──────────────────────┘▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒║
+║▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒║
+╚═════════════════════════════════════════════════════════════╝
+  ▒ = 28% 黑色遮罩      悬停窗口 = 蓝色 2pt 高亮框</code></pre>
+        <p class="diagram-note">示意图只表示层级与状态；尺寸提示实际位于选区上方附近，并随拖拽实时更新。</p>
+        <div class="card">
+          <div class="card-title">布局说明</div>
+          <p>每块浮层由三层组成：冻结屏幕图、黑色遮罩与选区挖空层、选区尺寸标签。选区使用白色细描边；窗口吸附候选区用蓝色描边。首次使用截图能力时，macOS 会要求「屏幕录制」权限；未获授权时仅发出提示音，应用内没有授权引导弹窗。</p>
+        </div>
+        <h3>操作步骤</h3>
+        <ol class="steps">
+          <li><strong>发起：</strong>点击菜单栏「截图」，或在前台按 <kbd>⇧</kbd><kbd>⌘</kbd><kbd>1</kbd>；若系统首次弹出权限请求，先完成授权。</li>
+          <li><strong>框选：</strong>在冻结画面上按住鼠标并拖拽，观察白色边框与「宽 × 高」实时数字，松开鼠标确认。</li>
+          <li><strong>或吸附窗口：</strong>移动指针到目标窗口，出现蓝色高亮后单次单击（指针移动小于 4pt），直接选中整个窗口。</li>
+          <li><strong>取消：</strong>按 <kbd>Esc</kbd> 退出，不进入编辑器。</li>
+        </ol>
+        <h3>结果与状态</h3>
+        <div class="branch-list">
+          <div class="branch"><b>有效选区</b><span>小于 8 × 8pt 的拖拽会被丢弃；有效选区进入标注编辑器，并成为初始裁剪范围。</span></div>
+          <div class="branch"><b>多显示器</b><span>每个屏幕各有一块浮层；实际截图使用鼠标按下所在屏幕的显示器 ID。</span></div>
+          <div class="branch"><b>权限未通过</b><span>不显示选区浮层，仅有提示音；需到 macOS 系统设置中开启屏幕录制后重试。</span></div>
+        </div>
+        <div class="source">源码依据：<code>LENSO/Application/CaptureCoordinator.swift:26-55, 58-95</code>、<code>LENSO/Infrastructure/RegionSelectorWindow.swift:22-37, 103-143, 264-299, 328-357</code>。</div>
+      </section>
+
+      <section id="editor">
+        <div class="section-head"><span class="kicker">04 / EDITOR</span><h2>截图标注编辑器</h2></div>
+        <p class="section-intro">确认选区后，应用重新抓取一块冻结的全屏画面，并显示与屏幕等大的无边框编辑器。用户仍可移动、缩放选区，再添加标注；最终合成图只包含选区内容。</p>
+        <pre><code>╔════════════════════════ 冻结全屏画面 ═════════════════════════╗
+║▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒║
+║▒▒▒▒▒▒▒▒  ○───────── 选区 ─────────○  ┌──────────────────┐  ║
+║▒▒▒▒▒▒▒▒  │                       │   │ 标注 翻译 OCR 更多│  ║
+║▒▒▒▒▒▒▒▒  │     冻结画面 / 标注    │   │ ● ● ● ● ● ● ●    │  ║
+║▒▒▒▒▒▒▒▒  │                       │   │ 粗细 1—10px       │  ║
+║▒▒▒▒▒▒▒▒  ○───────────────────────○   │ 形状快捷方式      │  ║
+║▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒│ 马赛克 / 高亮     │  ║
+║▒▒▒▒▒▒    ┌───────────────────────────────────┐   │ 复制到剪贴板 ⌘C │  ║
+║▒▒▒▒▒    │ 选择 矩形 椭圆 箭头 画笔 文字 马赛克 高亮 │   └──────────────────┘  ║
+║▒▒▒▒▒    │      撤销 重做  图钉   完成   ✕      │   252 × 470 属性面板 ║
+║▒▒▒▒▒    └───────────────────────────────────┘                 ║
+║▒▒▒▒▒▒▒▒▒▒▒▒▒▒       720 × 52 底部工具栏       ▒▒▒▒▒▒▒▒▒▒▒▒▒▒║
+╚═════════════════════════════════════════════════════════════╝
+  ○ = 8 个缩放把手（四角 + 四边）     ▒ = 30% 黑色遮罩</code></pre>
+        <p class="diagram-note">底部工具栏位于选区下方并始终收在屏幕内；右侧属性面板贴着选区右边、垂直居中，超出屏幕时自动向内收。</p>
+        <div class="card">
+          <div class="card-title">布局说明</div>
+          <p>编辑器以冻结画面为底，上覆 30% 黑色遮罩、选区挖空区域、8 个白色缩放把手和标注画布。底部 720 × 52pt 胶囊工具栏从左至右为：选择箭头，七种标注工具（<span class="label">矩形、椭圆、箭头、画笔、文字、马赛克、高亮</span>），撤销 / 重做，图钉，「完成」与「取消截图（Esc）」图标。</p>
+          <p>右侧 252 × 470pt 玻璃属性面板依次为：「标注 / 翻译 / OCR / 更多」、7 色色盘、1—10px 粗细滑杆、5 个形状快捷方式、「马赛克」「高亮」开关以及「复制到剪贴板」按钮。默认颜色为蓝色、粗细 2px、选择箭头激活。</p>
+          <p>再点一次当前工具可取消选中；「马赛克」「高亮」工具与右侧同名开关会互相影响激活状态。标注坐标按选区比例保存，因此缩放选区时标注会随之变化。</p>
+        </div>
+        <h3>操作步骤</h3>
+        <ol class="steps">
+          <li><strong>调整范围：</strong>未选标注工具时，拖拽选区内部可整体移动；拖拽四角或四边的白色把手可缩放范围。</li>
+          <li><strong>设置样式：</strong>在右侧属性面板点选 7 色之一，拖动 1—10px 滑杆设置粗细；也可用形状快捷行切换工具，或打开「马赛克」「高亮」开关。</li>
+          <li><strong>绘制标注：</strong>点底部工具图标，在选区内按住并拖拽出起点与终点，松开后生成一条标注；继续拖拽可叠加多个标注。</li>
+          <li><strong>撤销 / 重做：</strong>点底部左弯箭头撤销，或点右弯箭头重做；按钮在无可撤销 / 重做内容时置灰。</li>
+          <li><strong>选择结果：</strong>点「完成」保存；点右侧「复制到剪贴板」只复制；点图钉「钉在屏幕上」生成浮窗；点「✕」或按 <kbd>Esc</kbd> 丢弃。</li>
+        </ol>
+        <h3>四种结束方式与结果</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>操作</th><th>编辑器</th><th>图库</th><th>剪贴板</th><th>浮窗 / 反馈</th></tr></thead>
+            <tbody>
+              <tr><td><span class="label">完成</span></td><td>关闭</td><td>保存 PNG 原图与 480px 宽缩略图，写入 SQLite</td><td>写入合成图 TIFF</td><td>「截图已保存 / 到图片库」提示、提示音、图库刷新</td></tr>
+              <tr><td><span class="label">复制到剪贴板</span></td><td>保持打开</td><td>不保存</td><td>写入合成图 TIFF</td><td>显示「截图已保存 / 到图片库」提示（该文案与仅复制行为不一致，见实现边界）</td></tr>
+              <tr><td><span class="label">钉在屏幕上</span></td><td>关闭</td><td>不保存</td><td>不写入</td><td>生成居中的置顶浮窗</td></tr>
+              <tr><td><span class="label">✕ / Esc</span></td><td>关闭</td><td>不保存</td><td>不写入</td><td>无提示</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout caution"><strong>当前标注能力：</strong>矩形、椭圆、箭头、高亮和马赛克按拖拽的起止范围渲染；「画笔」当前生成一条直线段而非自由笔迹；「文字」暂不接收文字输入，导出为半透明黄色矩形。相关限制集中列于<a href="#boundaries">当前实现边界</a>。</div>
+        <div class="source">源码依据：<code>LENSO/Application/CaptureCoordinator.swift:97-164</code>、<code>LENSO/Editing/CaptureEditorView.swift:78-179, 183-270, 285-383, 406-481, 485-570</code>、<code>LENSO/Editing/AnnotationModel.swift:5-30, 44-93</code>。</div>
+      </section>
+
+      <section id="toast">
+        <div class="section-head"><span class="kicker">05 / FEEDBACK</span><h2>保存 / 操作提示</h2></div>
+        <p class="section-intro">保存、复制和收藏操作使用同一个轻量提示浮层：主屏幕右下角、距边缘 24pt、尺寸 300 × 64pt，不抢焦点，自动淡入、停留与淡出。</p>
+        <pre><code>                                      主屏幕右下角
+                              ┌──────────────────────────────┐
+                              │ ✓  截图已保存        [缩略图] │
+                              │    到图片库                  │
+                              └──────────────────────────────┘
+                                 绿色勾 · 标题 · 副标题 · 可选图</code></pre>
+        <div class="definition-grid">
+          <dl class="definition"><dt>显示时长</dt><dd>淡入 0.25 秒 → 停留 2.6 秒 → 淡出 0.3 秒<small>新提示会取消上一条的隐藏计时。</small></dd></dl>
+          <dl class="definition"><dt>内容结构</dt><dd>绿色勾选图标 + 主标题 + 副标题 + 可选 40 × 30pt 缩略图<small>浅色圆角卡片，无按钮，不响应点击。</small></dd></dl>
+        </div>
+        <h3>操作步骤与触发结果</h3>
+        <ol class="steps">
+          <li><strong>保存截图：</strong>编辑器点「完成」；出现「截图已保存 / 到图片库」。</li>
+          <li><strong>复制截图 / 文字：</strong>从搜索结果、剪贴板历史、文字收纳复制内容；出现「已复制 / 到剪贴板」。</li>
+          <li><strong>收藏文字：</strong>在剪贴板历史点书签；出现「已收藏 / 到文字收纳」。</li>
+          <li><strong>等待消失：</strong>无需手动关闭，提示会自动淡出。</li>
+        </ol>
+        <div class="source">源码依据：<code>LENSO/Application/SaveToast.swift:10-104</code>；文案调用见 <code>LENSO/Search/SearchPanelView.swift:163</code>、<code>LENSO/Clipboard/ClipboardPanelView.swift:172, 185</code>、<code>LENSO/TextNotes/TextNotesView.swift:149</code>。</div>
+      </section>
+
+      <section id="library">
+        <div class="section-head"><span class="kicker">06 / LIBRARY</span><h2>图库窗口</h2></div>
+        <p class="section-intro">图库是默认 1180 × 720pt、最小 900 × 560pt 的单实例窗口，隐藏标题栏、20pt 圆角、浅色蓝紫渐变背景。左侧为 180pt 侧栏，右侧为工具栏、自适应缩略图网格与底部状态栏。</p>
+        <pre><code>┌─────────────────────── 图库 1180 × 720 ───────────────────────┐
+│ ● ● ●   ┌──────────────┐  ┌──────────────────────────────────┐ │
+│         │ 全部截图   N  │  │ 网格/列表  全部时间 ▾   ⌕   ⋯   │ │
+│         │ 文字       N  │  ├──────────────────────────────────┤ │
+│         │ 最近 / 收藏   │  │ ┌──────┐ ┌──────┐ ┌──────┐      │ │
+│         │ 回收站        │  │ │ 缩略 │ │ 缩略 │ │ 缩略 │      │ │
+│         │ 标签          │  │ │  图  │ │  图  │ │  图  │      │ │
+│         │  工作 / 生活  │  │ └──────┘ └──────┘ └──────┘      │ │
+│         │  设计 / 其他  │  │ ┌──────┐ ┌──────┐ ┌──────┐      │ │
+│         │               │  │ │ 缩略 │ │ 缩略 │ │ 缩略 │      │ │
+│         │ 设置          │  │ │  图  │ │  图  │ │  图  │      │ │
+│         └──────────────┘  │ └──────┘ └──────┘ └──────┘      │ │
+│           180pt 侧栏      ├──────────────────────────────────┤ │
+│                           │ N 张截图              ↗  🗑  ⋯   │ │
+│                           └──────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘</code></pre>
+        <p class="diagram-note">缩略图网格列宽在 175—260pt 间自适应，单元格为 16:10 比例；示意图不代表固定列数。</p>
+        <div class="card">
+          <div class="card-title">布局说明</div>
+          <p>侧栏顶部留出交通灯区域；「全部截图」与「文字」显示真实数据条数并切换右侧内容。工具栏胶囊包含网格 / 列表图标、「全部时间 ▾」、放大镜与省略号；其中放大镜可打开全局搜索。网格显示按保存时间倒序排列的真实截图；单击项出现蓝色 2.5pt 描边与勾选标记，双击打开预览。</p>
+          <p>底部状态栏显示「N 张截图」；有选中项时显示「已选择 N 张 · X.X MB」。图库在出现时及收到 <code>.screenshotSaved</code> 通知后重新读取数据库；无记录时网格为空，状态栏显示「0 张截图」。</p>
+        </div>
+        <h3>操作步骤</h3>
+        <ol class="steps">
+          <li><strong>打开图库：</strong>点菜单栏「图库」，按 <kbd>⌘</kbd><kbd>0</kbd>，或使用顶部菜单「图库」→「打开图库」。</li>
+          <li><strong>浏览截图：</strong>保持侧栏「全部截图」选中，在右侧滚动查看按时间倒序排列的缩略图。</li>
+          <li><strong>选中一项或多项：</strong>单击缩略图切换蓝色选中态；底部计数与估算大小随之更新。</li>
+          <li><strong>打开预览：</strong>双击缩略图，打开对应截图的独立预览窗口；也可按 <kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd> 直接预览最新截图。</li>
+          <li><strong>发起搜索：</strong>点工具栏放大镜，切换到全局搜索面板。</li>
+          <li><strong>进入其他区域：</strong>点「文字」切换到文字收纳；点侧栏底部「设置」打开设置窗口。</li>
+        </ol>
+        <div class="callout note"><strong>窗口行为：</strong>重复执行「打开图库」只聚焦已有窗口。图库与设置窗口、预览窗口都可通过窗口背景拖动。</div>
+        <div class="source">源码依据：<code>LENSO/LENSOApp.swift:17-25, 64-70</code>、<code>LENSO/Library/LibraryWindowView.swift:9-45</code>、<code>LENSO/Library/LensoLibraryView.swift:20-59, 100-142, 195-314</code>。</div>
+      </section>
+
+      <section id="notes">
+        <div class="section-head"><span class="kicker">07 / TEXT NOTES</span><h2>文字收纳</h2></div>
+        <p class="section-intro">在图库侧栏点「文字」后，右侧主区域原位切换为文字卡片列表。文字来源包括：应用自动收录复制的文字、启动时从已有剪贴板历史补录、剪贴板历史中手动收藏，以及在页面内新建。</p>
+        <pre><code>图库侧栏「文字」 →  ┌──────────────────────────────────────────┐
+                    │ 文字  N 条                         ＋ 新建 │
+                    ├──────────────────────────────────────────┤
+                    │ ┌──────────────────────────────────────┐ │
+                    │ │ 文字内容（最多显示 8 行，可选中文本） │ │
+                    │ │ 来源应用 · 更新时间       ⧉  ✎  🗑    │ │
+                    │ └──────────────────────────────────────┘ │
+                    │ ┌──────────────────────────────────────┐ │
+                    │ │ 下一条文字…                          │ │
+                    │ └──────────────────────────────────────┘ │
+                    └──────────────────────────────────────────┘
+
+新建 / 编辑 →      ┌─────────── 编辑文字 ───────────┐
+                   │ ┌────────────────────────────┐ │
+                   │ │      多行文本输入框        │ │
+                   │ └────────────────────────────┘ │
+                   │              取消   保存       │
+                   └────────────────────────────────┘</code></pre>
+        <div class="card">
+          <div class="card-title">布局说明</div>
+          <p>顶部横栏为「文字」标题、真实条数与蓝色「新建」胶囊按钮。空状态显示「还没有文字收纳」及说明「复制的文字可在「剪贴板历史」里收藏，或点右上角新建」。非空时，卡片纵向滚动排列；卡片内文字最多显示 8 行，空内容显示「（空白）」，底部显示来源应用、更新时间，以及「复制」「编辑」「删除」三个图标操作。「编辑文字」弹窗宽 480pt，文本编辑区最小 420 × 220pt，提供「取消」「保存」按钮。</p>
+        </div>
+        <h3>操作步骤</h3>
+        <ol class="steps">
+          <li><strong>进入页面：</strong>打开图库，点侧栏「文字」。</li>
+          <li><strong>新建：</strong>点右上角「新建」；系统先创建一条空白记录并自动打开「编辑文字」弹窗。</li>
+          <li><strong>编辑并保存：</strong>在输入框填写或修改文字，点「保存」或按 <kbd>Return</kbd>；点「取消」关闭弹窗。列表与侧栏条数同步刷新。</li>
+          <li><strong>复制：</strong>点卡片底部「复制」图标；文字写入系统剪贴板，卡片短暂显示绿色对勾，同时出现「已复制 / 到剪贴板」提示。</li>
+          <li><strong>编辑或删除：</strong>点铅笔图标重新打开弹窗；点红色垃圾桶图标直接删除该条记录。</li>
+        </ol>
+        <h3>自动收纳规则</h3>
+        <div class="branch-list">
+          <div class="branch"><b>复制新文字时</b><span>监听每 0.7 秒轮询剪贴板；去除首尾空白后，若非空且与上一条不同，写入剪贴板历史并按完整内容去重后自动创建文字收纳。</span></div>
+          <div class="branch"><b>应用启动时</b><span>从最近 40 条剪贴板历史中筛选文字，最多取前 20 条；与现有文字内容相同的条目跳过。</span></div>
+          <div class="branch"><b>手动收藏时</b><span>剪贴板历史中的书签按钮直接新增文字收纳，不做内容去重。</span></div>
+        </div>
+        <div class="source">源码依据：<code>LENSO/TextNotes/TextNotesView.swift:11-31, 34-72, 74-161, 168-194</code>、<code>LENSO/Clipboard/ClipboardMonitor.swift:23-39, 61-134</code>。</div>
+      </section>
+
+      <section id="preview">
+        <div class="section-head"><span class="kicker">08 / PREVIEW</span><h2>预览窗口</h2></div>
+        <p class="section-intro">预览是默认 820 × 560pt、最小 560 × 400pt 的独立窗口，可同时打开多张截图的预览。窗口隐藏标题栏，以浅蓝渐变为底，图片居中按比例适配，右上角悬浮一条工具图标栏。</p>
+        <pre><code>┌─────────────────── 预览 820 × 560 ───────────────────┐
+│ ● ● ●                              ┌────────────────┐ │
+│                                    │ ＋ − ⌗ ‹ ✎ ⚲ ⇧ │ │
+│   ┌────────────────────────────────────────────────┐  │
+│   │                                                │  │
+│   │              图片按比例适配显示               │  │
+│   │                                                │  │
+│   └────────────────────────────────────────────────┘  │
+│              图片缺失时显示「图片不存在」               │
+└──────────────────────────────────────────────────────┘
+  ＋ / − 已接通缩放；⇧ 已接通导出 PNG</code></pre>
+        <div class="card">
+          <div class="card-title">布局说明</div>
+          <p>顶部右侧胶囊中排列 7 个 26 × 26pt 图标：放大、缩小、裁剪、返回、标注、取色、分享 / 导出。当前已接通的是放大、缩小与分享 / 导出；其余图标为展示型控件。图片四周留白：左右 12pt、顶部 44pt、底部 12pt，带 10pt 圆角与阴影。</p>
+        </div>
+        <h3>操作步骤</h3>
+        <ol class="steps">
+          <li><strong>打开：</strong>在图库双击缩略图；在搜索结果点「查看」；或按 <kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd> 预览最新截图。</li>
+          <li><strong>缩放：</strong>点右上角「＋」或「−」，缩放范围 1×—3×，每次变化 0.25；到上下限时按钮不再继续生效。</li>
+          <li><strong>导出 PNG：</strong>点右上角分享 / 导出图标，在 macOS 保存对话框中选择位置；默认文件名沿用该截图的原始文件名。</li>
+          <li><strong>关闭：</strong>使用窗口标准关闭按钮即可；该预览窗口不恢复上次会话。</li>
+        </ol>
+        <div class="callout"><strong>空状态：</strong>如果对应记录或原图文件不存在，窗口中央显示「图片不存在」及图片占位图标。</div>
+        <div class="source">源码依据：<code>LENSO/LENSOApp.swift:27-37, 64-70</code>、<code>LENSO/Preview/PreviewWindowView.swift:16-86</code>。</div>
+      </section>
+
+      <section id="pinned">
+        <div class="section-head"><span class="kicker">09 / PINNED</span><h2>置顶图片浮窗</h2></div>
+        <p class="section-intro">「钉在屏幕上」用于把当前合成结果临时悬浮在所有普通窗口上方。浮窗没有标题栏与文字标签，最大宽度 520pt，按图片比例缩放，初始显示在主屏幕中央。</p>
+        <pre><code>                    ┌─────────────────────┐
+                    │                  ✕  │ ← 悬停时出现
+                    │                     │
+                    │      钉住的截图     │
+                    │    可拖动整个浮窗   │
+                    │                     │
+                    └─────────────────────┘
+                        最大宽度 520pt</code></pre>
+        <div class="card">
+          <div class="card-title">布局说明</div>
+          <p>图片铺满浮窗并带 10pt 圆角；右上角距边缘 8pt 的圆形「✕」仅在鼠标悬停时显示。浮窗层级为 <code>.floating</code>，切换到其他应用时不会自动隐藏，可通过图片区域拖动。</p>
+        </div>
+        <h3>操作步骤</h3>
+        <ol class="steps">
+          <li><strong>生成：</strong>在标注编辑器调整好选区与标注后，点底部工具栏图钉图标（悬停提示「钉在屏幕上」）。</li>
+          <li><strong>移动：</strong>在浮窗图片区域按住并拖到目标位置。</li>
+          <li><strong>关闭：</strong>双击图片，或悬停后点右上角「✕」。</li>
+        </ol>
+        <div class="callout caution"><strong>数据结果：</strong>钉图会关闭编辑器，但不会把图片保存到图库，也不会写入剪贴板；关闭浮窗后当前合成图不再保留。置顶入口目前只存在于标注编辑器。</div>
+        <div class="source">源码依据：<code>LENSO/Application/CaptureCoordinator.swift:111-114, 166-200, 218-273</code>。</div>
+      </section>
+
+      <section id="search">
+        <div class="section-head"><span class="kicker">10 / SEARCH</span><h2>全局搜索面板</h2></div>
+        <p class="section-intro">搜索是 760 × 420pt 的浮动面板，位于主屏幕水平居中、距顶部约 120pt。它由一个 60pt 高的玻璃搜索胶囊和下方的玻璃结果卡片组成，打开时输入框自动聚焦。</p>
+        <pre><code>          ┌──────────────── 搜索面板 760 × 420 ────────────────┐
+          │  ┌───────────────────────────────────────────────┐  │
+          │  │ ⌕  搜索截图、图片或关键词…   [缩略图]  ⏎  ✕  │  │
+          │  └───────────────────────────────────────────────┘  │
+          │  ┌───────────────────────────────────────────────┐  │
+          │  │ [图] LENSO_20261107….png              👁 查看 │  │
+          │  │      1920 × 1080 · 2.4 MB                     │  │
+          │  ├───────────────────────────────────────────────┤  │
+          │  │ [图] LENSO_20261107….png              👁 查看 │  │
+          │  │      1280 × 720 · 1.1 MB                      │  │
+          │  └───────────────────────────────────────────────┘  │
+          └─────────────────────────────────────────────────────┘
+             单击结果行 = 复制原图        「查看」= 打开预览</code></pre>
+        <div class="card">
+          <div class="card-title">布局说明</div>
+          <p>搜索胶囊从左到右为放大镜、输入占位文案「搜索截图、图片或关键词…」、首个结果的 38 × 28pt 缩略图、Return 图标和关闭按钮。结果行包含 64 × 42pt 缩略图、文件名、尺寸与文件大小，右侧为「查看」眼睛按钮。结果卡片仅在有结果时显示。</p>
+        </div>
+        <h3>操作步骤</h3>
+        <ol class="steps">
+          <li><strong>打开：</strong>点菜单栏「搜索」，按 <kbd>⌘</kbd><kbd>K</kbd>，或点图库工具栏放大镜；输入框自动获得焦点。</li>
+          <li><strong>查看最近项：</strong>不输入关键词时，面板直接列出最近保存的 4 张截图。</li>
+          <li><strong>输入关键词：</strong>逐字输入；列表按截图文件名做不区分大小写的包含匹配，最多显示 8 条。当前不检索 OCR 文字、标签、日期或图片内容。</li>
+          <li><strong>复制：</strong>单击结果行的任意非「查看」区域，把对应原图写入剪贴板；该行短暂显示绿色对勾，右下角出现「已复制 / 到剪贴板」提示。</li>
+          <li><strong>预览：</strong>点结果行「查看」按钮，打开独立预览窗口并收起搜索面板。</li>
+          <li><strong>关闭：</strong>按 <kbd>Esc</kbd>、点右上角「✕」，或点击面板外部使其失去焦点。</li>
+        </ol>
+        <div class="callout"><strong>结果为空：</strong>没有匹配项时结果卡片整体消失，不显示专门的「无结果」文案。</div>
+        <div class="source">源码依据：<code>LENSO/Search/SearchPanelController.swift:19-79</code>、<code>LENSO/Search/SearchPanelView.swift:24-146, 153-171</code>。</div>
+      </section>
+
+      <section id="clipboard">
+        <div class="section-head"><span class="kicker">11 / CLIPBOARD</span><h2>剪贴板历史面板</h2></div>
+        <p class="section-intro">应用启动后持续监听系统剪贴板，自动记录复制过的图片与文字。历史面板为 760 × 460pt 的居中浮层，以自适应网格展示最近的图片卡片与文字卡片。</p>
+        <pre><code>┌──────────────── 剪贴板历史 760 × 460 ────────────────┐
+│ 🕘 剪贴板历史                         🗑 清空历史   ✕ │
+├───────────────────────────────────────────────────────┤
+│ ┌───────────┐ ┌───────────┐ ┌───────────┐            │
+│ │  图片预览 │ │ 文字前4行 │ │  图片预览 │            │
+│ │           │ │           │ │           │            │
+│ │ ▣ 来源·时 │ │ ▤ 来源·时 │ │ ▣ 来源·时 │            │
+│ │        间 │ │       🔖 │ │        间 │            │
+│ └───────────┘ └───────────┘ └───────────┘            │
+│ ┌───────────┐ ┌───────────┐ ┌───────────┐            │
+│ │    …      │ │    …      │ │    …      │            │
+│ └───────────┘ └───────────┘ └───────────┘            │
+└───────────────────────────────────────────────────────┘
+  单击卡片 = 写回剪贴板    文字卡片 🔖 = 收藏到文字收纳</code></pre>
+        <p class="diagram-note">网格单元宽度在 110—150pt 间自适应；图片预览区高 84pt，文字卡片最多显示 4 行，示意图不代表固定列数。</p>
+        <div class="card">
+          <div class="card-title">布局说明</div>
+          <p>顶栏左侧是时钟图标与「剪贴板历史」标题，右侧是「清空历史」垃圾桶与「关闭（Esc）」按钮。空状态显示「还没有剪贴板记录」及「复制过的截图和文字会自动出现在这里」。卡片底部显示内容类型图标、来源应用（缺省显示 LENSO）、时间；文字卡片额外显示书签按钮「收藏到文字收纳」；复制成功后卡片短暂显示绿色对勾。</p>
+          <p>数据库最多保留 200 条剪贴板记录，面板每次默认读取最近 60 条；来源应用取剪贴板变化时的最前台应用，若前台为 LENSO 自身则留空。</p>
+        </div>
+        <h3>操作步骤</h3>
+        <ol class="steps">
+          <li><strong>自动积累：</strong>保持 LENSO 在后台运行，在任意其他应用复制图片或文字；监听器约每 0.7 秒检查一次变化并写入历史，文字同时自动进入「文字收纳」。</li>
+          <li><strong>打开面板：</strong>使用顶部菜单「搜索」→「剪贴板历史」，或按 <kbd>⇧</kbd><kbd>⌘</kbd><kbd>V</kbd>；同一入口再次调用会隐藏已打开的面板。</li>
+          <li><strong>写回剪贴板：</strong>单击任意图片或文字卡片；内容写回系统剪贴板，卡片出现绿色对勾，并显示「已复制 / 到剪贴板」提示。</li>
+          <li><strong>收藏文字：</strong>点文字卡片右下角书签；新增一条文字收纳并显示「已收藏 / 到文字收纳」提示。</li>
+          <li><strong>清空历史：</strong>点顶栏垃圾桶；删除全部历史记录与对应剪贴板图片文件，列表立即变为空状态。</li>
+          <li><strong>关闭：</strong>按 <kbd>Esc</kbd> 或点右上角「✕」；再次按 <kbd>⇧</kbd><kbd>⌘</kbd><kbd>V</kbd> 也可切换隐藏。</li>
+        </ol>
+        <div class="callout note"><strong>关闭行为差异：</strong>搜索面板点击外部会关闭；剪贴板历史面板为避免误关，不采用「失去焦点即关闭」，需使用 <kbd>Esc</kbd>、关闭按钮或快捷键。</div>
+        <div class="source">源码依据：<code>LENSO/Clipboard/ClipboardPanelController.swift:18-72</code>、<code>LENSO/Clipboard/ClipboardPanelView.swift:20-88, 91-193</code>、<code>LENSO/Clipboard/ClipboardMonitor.swift:23-40, 61-112</code>、<code>LENSO/Infrastructure/ScreenshotStore.swift:348-395</code>。</div>
+      </section>
+
+      <section id="settings">
+        <div class="section-head"><span class="kicker">12 / SETTINGS</span><h2>设置窗口</h2></div>
+        <p class="section-intro">设置是默认 680 × 460pt、最小 620 × 420pt 的单实例窗口。左侧 150pt 分类侧栏，右侧为可滚动的分组内容区；五个分类依次为「通用」「截图」「快捷键」「外观」「关于」。</p>
+        <pre><code>┌──────────────── 设置 680 × 460 ─────────────────┐
+│ ● ● ●  ┌──────────┐ ┌────────────────────────────┐ │
+│        │ 通用      │ │ 通用                       │ │
+│        │ 截图      │ │ ┌────────────────────────┐ │ │
+│        │ 快捷键    │ │ │ 开机启动 LENSO      ●  │ │ │
+│        │ 外观      │ │ ├────────────────────────┤ │ │
+│        │ 关于      │ │ │ 在菜单栏显示图标    ●  │ │ │
+│        │          │ │ ├────────────────────────┤ │ │
+│        │          │ │ │ 截图后显示预览      ○  │ │ │
+│        │          │ │ └────────────────────────┘ │ │
+│        │ 150pt    │ │                            │ │
+│        └──────────┘ └────────────────────────────┘ │
+└───────────────────────────────────────────────────┘</code></pre>
+        <div class="card">
+          <div class="card-title">布局说明</div>
+          <p>选中分类以蓝色文字与白色圆角底高亮。右侧内容按圆角分组卡片排列，行间使用细分隔线。各分类展示内容如下：</p>
+          <div class="tag-row">
+            <span class="tag">通用：开机启动 LENSO / 在菜单栏显示图标 / 截图后显示预览</span>
+            <span class="tag">截图：截图后自动复制到剪贴板 / 显示浮动预览</span>
+            <span class="tag">快捷键：区域截图 ⇧⌘1 / 全局搜索 ⌘K</span>
+            <span class="tag">外观：跟随系统外观 / 玻璃材质效果</span>
+            <span class="tag">关于：LENSO · 版本 1.0 · macOS 26 · 原生截图与图片管理工具</span>
+          </div>
+        </div>
+        <h3>操作步骤</h3>
+        <ol class="steps">
+          <li><strong>打开：</strong>点菜单栏「设置」，按 <kbd>⌘</kbd><kbd>,</kbd>，或点图库侧栏底部「设置」。</li>
+          <li><strong>切换分类：</strong>在左侧点「通用」「截图」「快捷键」「外观」「关于」，右侧内容随之切换。</li>
+          <li><strong>查看信息：</strong>在「快捷键」页核对两个菜单快捷键；在「关于」页查看版本与产品定位。</li>
+          <li><strong>关闭：</strong>使用窗口标准关闭按钮；应用仍常驻菜单栏，剪贴板监听继续运行。</li>
+        </ol>
+        <div class="callout caution"><strong>当前交互状态：</strong>所有开关显示为固定状态且不持久化修改；它们不代表可由用户启停的实际配置。完整说明见<a href="#boundaries">当前实现边界</a>。</div>
+        <div class="source">源码依据：<code>LENSO/LENSOApp.swift:39-48, 81-87</code>、<code>LENSO/Settings/SettingsWindowView.swift:7-24, 26-48, 51-128, 133-160</code>。</div>
+      </section>
+
+      <section id="boundaries">
+        <div class="section-head"><span class="kicker">13 / SCOPE</span><h2>当前实现边界</h2></div>
+        <p class="section-intro">下列项目用于避免评审时把「已绘制的控件」误认为「已接通的能力」。它们不属于本版可交付的操作步骤，也不来自规划文档或 HTML 视觉 Demo。</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>区域</th><th>当前边界</th></tr></thead>
+            <tbody>
+              <tr><td>设置</td><td>所有开关使用固定值，点击不会改变配置，也没有设置持久化；显示「跟随系统外观」，但应用实际强制浅色外观。「快捷键」页仅展示两项，未列出全部菜单命令。</td></tr>
+              <tr><td>标注编辑器</td><td>「翻译」「OCR」「更多」按钮无动作；「画笔」为单条直线而非自由笔迹；「文字」不接受文字输入，导出为半透明黄色矩形；「⌘C」只是按钮上的提示文字，没有注册对应快捷键。</td></tr>
+              <tr><td>编辑器快速复制</td><td>点「复制到剪贴板」不会保存截图，但复用的提示文案仍为「截图已保存 / 到图片库」。</td></tr>
+              <tr><td>图库</td><td>「最近」「收藏」「回收站」、标签项及计数，网格 / 列表切换、「全部时间 ▾」、省略号、底部分享 / 删除 / 更多图标均为展示型控件；底部选中大小按每张约 2.3 MB 估算。当前界面没有接通批量删除或复制。</td></tr>
+              <tr><td>预览</td><td>裁剪、返回、标注、取色图标无动作；预览窗口没有复制或删除按钮。</td></tr>
+              <tr><td>搜索</td><td>仅按截图文件名做不区分大小写的包含匹配；无 OCR、全文、标签、日期或来源应用筛选；无结果时不显示空状态文案。</td></tr>
+              <tr><td>剪贴板 / 文字</td><td>图片去重使用进程内图片哈希；截图完成、编辑器快速复制、搜索复制等由 LENSO 自身写入剪贴板的操作可能再次进入剪贴板历史。手动「收藏到文字收纳」不做内容去重。</td></tr>
+              <tr><td>权限与入口</td><td>屏幕录制权限被拒绝时只有提示音，没有应用内引导；菜单快捷键是应用前台命令，不是系统级全局热键。</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout"><strong>数据存放：</strong>截图原图、缩略图、剪贴板图片与 SQLite 数据库位于用户目录 <code>~/Library/Application Support/LENSO/</code>。数据库包含 <code>screenshots</code>、<code>clipboard_items</code>、<code>text_notes</code> 三张表；截图和文字收纳无条数上限。</div>
+        <div class="source">源码依据：<code>LENSO/Infrastructure/ScreenshotStore.swift:38-102, 113-230, 235-306, 348-395</code>、<code>LENSO/Editing/CaptureEditorView.swift:186-193, 241-256, 285-339</code>、<code>LENSO/AppDelegate.swift:4-13</code>。</div>
+      </section>
+
+      <footer>
+        <p>文档版本：2026-11-07 · 依据当前工作树 Swift 源码整理，基准提交 <code>dcd0118</code>。本页为离线单文件 HTML，可直接打开或打印；不包含视觉效果稿与未来路线图。</p>
+      </footer>
+    </article>
+  </main>
+</div>
+<script>
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar nav a[href^="#"]'));
+    var sections = links.map(function (link) { return document.querySelector(link.getAttribute('href')); }).filter(Boolean);
+    if (!('IntersectionObserver' in window) || !sections.length) return;
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        links.forEach(function (link) {
+          var active = link.getAttribute('href') === '#' + entry.target.id;
+          link.classList.toggle('active', active);
+          if (active) link.setAttribute('aria-current', 'location');
+          else link.removeAttribute('aria-current');
+        });
+      });
+    }, { rootMargin: '-10% 0px -75% 0px', threshold: 0 });
+    sections.forEach(function (section) { observer.observe(section); });
+  }());
+</script>
+</body>
+</html>
