@@ -9,19 +9,25 @@ struct LENSOApp: App {
     @State private var settings = AppSettings.shared
 
     var body: some Scene {
-        // 菜单栏图标 → 玻璃快捷面板（参考图 4 右上），使用品牌光圈图标
+        // 菜单栏图标 → 玻璃快捷面板（参考图 4 右上），使用品牌光圈图标。
         // 设置里关掉后入口消失，用 Dock 图标点开图库再进设置。
-        if settings.showMenuBarIcon {
-            MenuBarExtra {
-                MenuBarPanelView()
-            } label: {
-                // 菜单栏状态项不能渲染自定义 Canvas 视图，使用预渲染的模板图。
-                Image(nsImage: LensoStatusIcon.image)
-                    .renderingMode(.template)
-                    .frame(width: 18, height: 18)
-            }
-            .menuBarExtraStyle(.window)
+        //
+        // 用 MenuBarExtra 的 isInserted 绑定而不是 if：SceneBuilder 只允许
+        // #available 分支，写 if 会让 Swift 编译器在类型检查时崩掉
+        // （"failed to produce diagnostic for expression"）。绑定读写同一个
+        // @Observable 设置项，设置一改，菜单栏入口立刻出现/消失。
+        MenuBarExtra(isInserted: Binding(
+            get: { AppSettings.shared.showMenuBarIcon },
+            set: { AppSettings.shared.showMenuBarIcon = $0 }
+        )) {
+            MenuBarPanelView()
+        } label: {
+            // 菜单栏状态项不能渲染自定义 Canvas 视图，使用预渲染的模板图。
+            Image(nsImage: LensoStatusIcon.image)
+                .renderingMode(.template)
+                .frame(width: 18, height: 18)
         }
+        .menuBarExtraStyle(.window)
 
         // 主图库窗口 — 单例窗口（重复点击“打开图库”只聚焦，不再叠开新窗）
         Window("图库", id: "library") {

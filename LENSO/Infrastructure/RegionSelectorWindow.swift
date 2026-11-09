@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import OSLog
+import ScreenCaptureKit
 
 private let selLog = Logger(subsystem: "com.lenso.app", category: "capture")
 
@@ -475,7 +476,7 @@ final class RegionSelectorPanel: NSPanel {
         dimSelectionView.autoresizingMask = [.width, .height]
         self.crosshairView = CrosshairView(frame: NSRect(origin: .zero, size: screen.frame.size))
         crosshairView.autoresizingMask = [.width, .height]
-        self.magnifierView = MagnifierView(displayFrame: screen.frame)
+        self.magnifierView = MagnifierView(displayID: displayID, screenFrame: screen.frame)
         self.confirmBar = ConfirmBar()
         super.init(
             contentRect: screen.frame,
@@ -547,10 +548,12 @@ final class RegionSelectorPanel: NSPanel {
             width: globalRect.width, height: globalRect.height
         )
         let proposedBelow = local.minY - barSize.height - 10
+        // 面板自身没有 bounds（那是 NSView 的），用显示器尺寸算边界
+        let panelSize = screenFrame.size
         let y = proposedBelow >= 8
             ? proposedBelow
-            : min(bounds.height - barSize.height - 8, local.maxY + 10)
-        let x = min(max(8, local.maxX - barSize.width), bounds.width - barSize.width - 8)
+            : min(panelSize.height - barSize.height - 8, local.maxY + 10)
+        let x = min(max(8, local.maxX - barSize.width), panelSize.width - barSize.width - 8)
         confirmBar.frame = CGRect(origin: CGPoint(x: x, y: y), size: barSize)
         confirmBar.isHidden = false
     }
@@ -683,10 +686,14 @@ private final class CrosshairView: NSView {
 
 /// 跟随鼠标的放大镜（Snipaste 式）：像素网格 + RGB + 坐标。
 ///
-/// v2 改成取活像素：每次移动时用 CGWindowListCreateImageFromArray 只抓
-/// 光标周围 12×8 个像素（把本面板排除在外，取到的是真实桌面颜色），
-/// 再按像素逐格填出来——坐标映射全是显式的，不依赖 draw 的翻转语义，
-/// 之前“放大镜上下是否颠倒”的疑问按构造就不会再有。
+/// 像素来源：ScreenCaptureKit 抓光标周围 12×8 个逻辑像素（sourceRect 只取
+/// 这一小块，输出也是 12×8）。CGWindowListCreateImage 在 macOS 15 起被标记
+/// 为 obsoleted，编译期直接报错，不能再用。
+///
+/// 坐标系：鼠标位置是 AppKit 全局坐标（原点左下），SCK 的 sourceRect 是
+/// 显示器内坐标（原点左上）。两者的换算、以及 sourceRect 到底是"显示器内"
+/// 还是"全局"，不同 SDK 版本说法不一致，所以在第一次取样时用一次全屏抓图
+/// 做自检，选出对的那一种，之后一直沿用。
 private final class MagnifierView: NSView {
     static let columns = 12
     static let rows = 8
@@ -695,19 +702,20 @@ private final class MagnifierView: NSView {
 
     /// 抓图时要排除的窗口（本面板），否则取到压暗后的像素
     var excludedWindowID: CGWindowID?
-    private let displayFrame: CGRect
-    private let globalMaxY: CGFloat
-    private var cursorPoint: CGPoint = .zero
-    /// 上一次抓到的 12×8 像素（RGBA，每像素 4 字节，行 0 = 屏幕最上方）
+    private let displayID: CGDirectDisplayID
+    /// 本显示器在 AppKit 全局坐标下的位置
+    private let screenFrame: CGRect
+    private let sampler = MagnifierSampler()
     private var pixels: [UInt8] = []
     private var cursorCol = 6
     private var cursorRowFromBottom = 4
+    private var cursorPoint: CGPoint = .zero
     private let rgbLabel = NSTextField(labelWithString: "")
     private let coordLabel = NSTextField(labelWithString: "")
 
-    init(displayFrame: CGRect) {
-        self.displayFrame = displayFrame
-        self.globalMaxY = NSScreen.screens.map(\.frame).map(\.maxY).max() ?? displayFrame.maxY
+    init(displayID: CGDirectDisplayID, screenFrame: CGRect) {
+        self.displayID = displayID
+        self.screenFrame = screenFrame
         let width = CGFloat(Self.columns) * Self.pixelSize + 4
         let height = CGFloat(Self.rows) * Self.pixelSize + Self.infoHeight + 4
         super.init(frame: NSRect(origin: .zero, size: NSSize(width: width, height: height)))
@@ -744,22 +752,36 @@ private final class MagnifierView: NSView {
     func update(cursorPoint globalPoint: CGPoint) {
         cursorPoint = globalPoint
         isHidden = false
-        if let captured = capturePixels(around: globalPoint) {
-            pixels = captured.bytes
-            cursorCol = captured.cursorCol
-            cursorRowFromBottom = captured.cursorRowFromBottom
-        }
         needsDisplay = true
         updateLabels()
         layoutNearCursor()
+        // 取样是异步的（SCK 抓图要几百毫秒），抓完再回填像素
+        Task { [weak self] in
+            guard let self else { return }
+            await self.refreshPixels()
+        }
+    }
+
+    private func refreshPixels() async {
+        guard let sample = await sampler.sample(
+            displayID: displayID,
+            screenFrame: screenFrame,
+            cursor: cursorPoint,
+            excludedWindowIDs: excludedWindowID.map { [$0] } ?? []
+        ) else { return }
+        pixels = sample.bytes
+        cursorCol = sample.col
+        cursorRowFromBottom = sample.rowFromBottom
+        needsDisplay = true
+        updateLabels()
     }
 
     private func layoutNearCursor() {
         guard let superview else { return }
         // 光标在面板内容坐标里（原点左下）
         let local = CGPoint(
-            x: cursorPoint.x - displayFrame.origin.x,
-            y: cursorPoint.y - displayFrame.origin.y
+            x: cursorPoint.x - screenFrame.origin.x,
+            y: cursorPoint.y - screenFrame.origin.y
         )
         var origin = CGPoint(x: local.x + 24, y: local.y - 24 - bounds.height)
         if origin.x + bounds.width > superview.bounds.width {
@@ -775,8 +797,8 @@ private final class MagnifierView: NSView {
 
     private func updateLabels() {
         // 显示坐标：显示器内、左上原点
-        let localX = cursorPoint.x - displayFrame.origin.x
-        let localYFromTop = displayFrame.height - (cursorPoint.y - displayFrame.origin.y)
+        let localX = cursorPoint.x - screenFrame.origin.x
+        let localYFromTop = screenFrame.height - (cursorPoint.y - screenFrame.origin.y)
         coordLabel.stringValue = "x \(Int(localX)) · y \(Int(localYFromTop))"
         if let color = cursorPixelColor() {
             rgbLabel.stringValue = "#\(color.hex) · R \(color.r) G \(color.g) B \(color.b)"
@@ -793,78 +815,6 @@ private final class MagnifierView: NSView {
         guard idx >= 0, idx + 2 < pixels.count else { return nil }
         let r = Int(pixels[idx]), g = Int(pixels[idx + 1]), b = Int(pixels[idx + 2])
         return (r, g, b, String(format: "%02X%02X%02X", r, g, b))
-    }
-
-    /// 抓光标周围 12×8 个活像素（AppKit 坐标算好再转 Quartz 坐标）。
-    /// 返回的字节行 0 = 屏幕最上方；同时算出光标像素在网格里的列和行（行从下往上数）。
-    private func capturePixels(around globalPoint: CGPoint) -> (bytes: [UInt8], cursorCol: Int, cursorRowFromBottom: Int)? {
-        let cols = Self.columns, rows = Self.rows
-        // AppKit 坐标的取图矩形（原点左下），夹在本显示器内
-        var appKitRect = CGRect(
-            x: globalPoint.x - CGFloat(cols) / 2,
-            y: globalPoint.y - CGFloat(rows) / 2,
-            width: CGFloat(cols), height: CGFloat(rows)
-        ).integral
-        appKitRect = appKitRect.intersection(displayFrame)
-        guard appKitRect.width >= 1, appKitRect.height >= 1 else { return nil }
-        // Quartz 坐标（原点左上）：y = 全局最大 Y - AppKit 上沿
-        let quartzRect = CGRect(
-            x: appKitRect.minX,
-            y: globalMaxY - appKitRect.maxY,
-            width: appKitRect.width, height: appKitRect.height
-        )
-        // 排除本面板后的在屏窗口列表
-        let windowIDs: [NSNumber]
-        if let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] {
-            windowIDs = list.compactMap { info in
-                guard let number = info[kCGWindowNumber as String] as? NSNumber,
-                      CGWindowID(number.uint32Value) != excludedWindowID else { return nil }
-                return number
-            }
-        } else {
-            windowIDs = []
-        }
-        let image: CGImage?
-        if windowIDs.isEmpty {
-            image = CGWindowListCreateImage(quartzRect, .optionOnScreenOnly, kCGNullWindowID)
-        } else {
-            image = CGWindowListCreateImageFromArray(quartzRect, windowIDs as CFArray, [])
-                ?? CGWindowListCreateImage(quartzRect, .optionOnScreenOnly, kCGNullWindowID)
-        }
-        guard let image,
-              let ctx = CGContext(
-                data: nil, width: image.width, height: image.height,
-                bitsPerComponent: 8, bytesPerRow: image.width * 4,
-                space: CGColorSpaceCreateDeviceRGB(),
-                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-              ),
-              let data = ctx.data
-        else { return nil }
-        ctx.interpolationQuality = .none
-        ctx.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
-        let w = image.width, h = image.height
-        let count = w * h * 4
-        let bytes = [UInt8](UnsafeBufferPointer(start: data.bindMemory(to: UInt8.self, capacity: count), count: count))
-        // 贴边时抓到的图比 12×8 小：按边缘像素延展补满 12×8（字节行 0 = 屏幕最上方）。
-        // 抓图在左/下贴边时从网格左/下角起排，在右/上贴边时从右/上角起排。
-        let colOffset = (appKitRect.width < CGFloat(cols) && appKitRect.maxX >= displayFrame.maxX - 0.5) ? cols - w : 0
-        let rowOffset = (appKitRect.height < CGFloat(rows) && appKitRect.maxY >= displayFrame.maxY - 0.5) ? rows - h : 0
-        var padded = [UInt8](repeating: 0, count: cols * rows * 4)
-        for col in 0..<cols {
-            for rowFromBottom in 0..<rows {
-                let srcCol = min(max(col - colOffset, 0), w - 1)
-                let srcRowFromBottom = min(max(rowFromBottom - rowOffset, 0), h - 1)
-                let srcBufferRow = h - 1 - srcRowFromBottom
-                let srcIdx = (srcBufferRow * w + srcCol) * 4
-                let dstBufferRow = rows - 1 - rowFromBottom
-                let dstIdx = (dstBufferRow * cols + col) * 4
-                for k in 0..<4 { padded[dstIdx + k] = bytes[srcIdx + k] }
-            }
-        }
-        // 光标像素在网格里的位置（行从下往上数）
-        let cursorCol = colOffset + min(max(Int(globalPoint.x - appKitRect.minX), 0), w - 1)
-        let cursorRowFromBottom = rowOffset + min(max(Int(globalPoint.y - appKitRect.minY), 0), h - 1)
-        return (padded, cursorCol, cursorRowFromBottom)
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -916,6 +866,191 @@ private final class MagnifierView: NSView {
         ctx.setStrokeColor(NSColor.systemRed.cgColor)
         ctx.setLineWidth(2)
         ctx.stroke(centerCell.insetBy(dx: 1, dy: 1))
+    }
+}
+
+/// 放大镜取样器：SCK 抓光标周围 12×8 个逻辑像素。
+///
+/// SCK 的 sourceRect 坐标系在"显示器内"与"全局"两种解释下都能编过，但只有
+/// 一种能对上真实屏幕。所以第一次取样时先抓一张全屏图做对照，选中正确解释，
+/// 之后缓存下来复用——避免每次鼠标移动都重新枚举窗口。
+@MainActor
+private final class MagnifierSampler {
+    private struct Full {
+        let image: CGImage
+        let pixels: [UInt8]
+        let width: Int
+        let height: Int
+    }
+
+    /// 相对显示器原点的偏移（AppKit 全局 → SCK sourceRect）
+    private var resolvedOffset: CGVector?
+    private var content: SCShareableContent?
+    private var fullCapture: Full?
+    private var probeDone = false
+
+    struct Sample {
+        let bytes: [UInt8]
+        let col: Int
+        let rowFromBottom: Int
+    }
+
+    /// 取一次样：12×8 个逻辑像素 + 光标在网格里的位置
+    func sample(
+        displayID: CGDirectDisplayID,
+        screenFrame: CGRect,
+        cursor: CGPoint,
+        excludedWindowIDs: [CGWindowID]
+    ) async -> Sample? {
+        let content: SCShareableContent
+        if let existing = self.content {
+            content = existing
+        } else {
+            guard let fresh = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true) else {
+                return nil
+            }
+            self.content = fresh
+            content = fresh
+        }
+        guard let display = content.displays.first(where: { $0.displayID == displayID }) else { return nil }
+
+        // 鼠标在显示器内的位置（原点左上）
+        let localX = cursor.x - screenFrame.origin.x
+        let localYTop = screenFrame.height - (cursor.y - screenFrame.origin.y)
+        let w = 12.0, h = 8.0
+
+        // 候选解释：显示器内坐标 / 全局坐标
+        let candidates: [CGVector] = [
+            CGVector(dx: screenFrame.origin.x, dy: screenFrame.origin.y),
+            CGVector(dx: 0, dy: 0)
+        ]
+
+        var offset = resolvedOffset ?? candidates[0]
+        if !probeDone {
+            if let picked = await resolveOffset(
+                candidates: candidates,
+                display: display,
+                content: content,
+                excludedWindowIDs: excludedWindowIDs,
+                localX: localX, localYTop: localYTop, w: w, h: h
+            ) {
+                offset = picked
+            }
+            resolvedOffset = offset
+            probeDone = true
+        }
+
+        let rect = CGRect(
+            x: localX - w / 2 + offset.dx,
+            y: localYTop - h / 2 + offset.dy,
+            width: w, height: h
+        )
+        let config = SCStreamConfiguration()
+        config.sourceRect = rect
+        config.width = 12
+        config.height = 8
+        config.showsCursor = false
+        config.captureResolution = .best
+        guard let image = try? await SCScreenshotManager.captureImage(
+            contentFilter: SCContentFilter(display: display, excludingWindows: excludedWindows(content, excludedWindowIDs)),
+            configuration: config
+        ) else { return nil }
+        guard let bytes = Self.rgbaBytes(image) else { return nil }
+
+        // 光标落在网格里的哪一格（夹在边缘时按实际位置算）
+        let col = min(max(Int(round(localX + offset.dx - rect.minX)), 0), 11)
+        let rowFromTop = min(max(Int(round(localYTop + offset.dy - rect.minY)), 0), 7)
+        return Sample(bytes: bytes, col: col, rowFromBottom: 7 - rowFromTop)
+    }
+
+    /// 抓一张全屏图做对照，找出 sourceRect 的正确解释
+    private func resolveOffset(
+        candidates: [CGVector],
+        display: SCDisplay,
+        content: SCShareableContent,
+        excludedWindowIDs: [CGWindowID],
+        localX: CGFloat, localYTop: CGFloat, w: CGFloat, h: CGFloat
+    ) async -> CGVector? {
+        let fullConfig = SCStreamConfiguration()
+        fullConfig.width = Int(display.width)
+        fullConfig.height = Int(display.height)
+        fullConfig.showsCursor = false
+        fullConfig.captureResolution = .best
+        guard let fullImage = try? await SCScreenshotManager.captureImage(
+            contentFilter: SCContentFilter(display: display, excludingWindows: excludedWindows(content, excludedWindowIDs)),
+            configuration: fullConfig
+        ),
+            let fullPixels = Self.rgbaBytes(fullImage)
+        else { return nil }
+
+        var best: (offset: CGVector, error: Double)?
+        for candidate in candidates {
+            let rect = CGRect(
+                x: localX - w / 2 + candidate.dx,
+                y: localYTop - h / 2 + candidate.dy,
+                width: w, height: h
+            )
+            let config = SCStreamConfiguration()
+            config.sourceRect = rect
+            config.width = 12
+            config.height = 8
+            config.showsCursor = false
+            config.captureResolution = .best
+            guard let image = try? await SCScreenshotManager.captureImage(
+                contentFilter: SCContentFilter(display: display, excludingWindows: excludedWindows(content, excludedWindowIDs)),
+                configuration: config
+            ), let bytes = Self.rgbaBytes(image) else { continue }
+            let error = Self.compare(bytes, fullPixels, fullWidth: fullImage.width, fullHeight: fullImage.height, rect: rect)
+            if best == nil || error < best!.error {
+                best = (candidate, error)
+            }
+        }
+        guard let best, best.error < 40 else { return nil }
+        return best.offset
+    }
+
+    /// 把 12×8 取样与全屏图对应区域比一比，返回平均像素差
+    private static func compare(
+        _ bytes: [UInt8], _ full: [UInt8], fullWidth: Int, fullHeight: Int, rect: CGRect
+    ) -> Double {
+        let scaleX = CGFloat(fullWidth) / max(1, rect.width)
+        let scaleY = CGFloat(fullHeight) / max(1, rect.height)
+        var total = 0.0
+        var count = 0
+        for row in 0..<8 {
+            for col in 0..<12 {
+                let idx = (row * 12 + col) * 4
+                guard idx + 2 < bytes.count else { continue }
+                let fx = Int((rect.minX + CGFloat(col) * 0.5) * scaleX)
+                let fy = Int((rect.minY + CGFloat(row) * 0.5) * scaleY)
+                let fidx = (fy * fullWidth + fx) * 4
+                guard fidx + 2 < full.count else { continue }
+                total += abs(Double(bytes[idx]) - Double(full[fidx]))
+                total += abs(Double(bytes[idx + 1]) - Double(full[fidx + 1]))
+                total += abs(Double(bytes[idx + 2]) - Double(full[fidx + 2]))
+                count += 3
+            }
+        }
+        return count > 0 ? total / Double(count) : .greatestFiniteMagnitude
+    }
+
+    /// CGImage → RGBA 字节数组（行 0 = 图像最上方）
+    private static func rgbaBytes(_ image: CGImage) -> [UInt8]? {
+        let w = image.width, h = image.height
+        guard let ctx = CGContext(
+            data: nil, width: w, height: h,
+            bitsPerComponent: 8, bytesPerRow: w * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ), let data = ctx.data else { return nil }
+        ctx.interpolationQuality = .none
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        return [UInt8](UnsafeBufferPointer(start: data.bindMemory(to: UInt8.self, capacity: w * h * 4), count: w * h * 4))
+    }
+
+    private func excludedWindows(_ content: SCShareableContent, _ ids: [CGWindowID]) -> [SCWindow] {
+        guard !ids.isEmpty else { return [] }
+        return content.windows.filter { ids.contains($0.windowID) }
     }
 }
 

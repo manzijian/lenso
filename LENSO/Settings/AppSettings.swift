@@ -73,21 +73,25 @@ final class AppSettings {
 
     private init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        launchAtLogin = read(.launchAtLogin, default: false)
-        showMenuBarIcon = read(.showMenuBarIcon, default: true)
-        showPreviewAfterCapture = read(.showPreviewAfterCapture, default: false)
-        autoCopyAfterCapture = read(.autoCopyAfterCapture, default: true)
-        showFloatingPreview = read(.showFloatingPreview, default: true)
-        followSystemAppearance = read(.followSystemAppearance, default: false)
-        glassEffect = read(.glassEffect, default: true)
+        // read 是 static：@Observable 宏生成的存储属性在 init 里还没初始化完，
+        // 调用实例方法会报 "self used before all stored properties are initialized"。
+        launchAtLogin = Self.read(.launchAtLogin, default: false, defaults: defaults)
+        showMenuBarIcon = Self.read(.showMenuBarIcon, default: true, defaults: defaults)
+        showPreviewAfterCapture = Self.read(.showPreviewAfterCapture, default: false, defaults: defaults)
+        autoCopyAfterCapture = Self.read(.autoCopyAfterCapture, default: true, defaults: defaults)
+        showFloatingPreview = Self.read(.showFloatingPreview, default: true, defaults: defaults)
+        followSystemAppearance = Self.read(.followSystemAppearance, default: false, defaults: defaults)
+        glassEffect = Self.read(.glassEffect, default: true, defaults: defaults)
         // 开机启动：按存量值静默同步一次（注册是幂等的）。
         if launchAtLogin { try? SMAppService.mainApp.register() }
-        applyAppearance()
+        // 注意：这里不要调 applyAppearance()——SwiftUI 的 App.init() 早于
+        // NSApplicationMain，NSApp 还是 nil，取 appearance 会崩。
+        // 外观改由 AppDelegate.applicationDidFinishLaunching 统一应用。
     }
 
     // MARK: - Persistence
 
-    private func read(_ key: Key, default defaultValue: Bool) -> Bool {
+    private static func read(_ key: Key, default defaultValue: Bool, defaults: UserDefaults) -> Bool {
         defaults.object(forKey: Self.key(key)) as? Bool ?? defaultValue
     }
 
@@ -116,8 +120,10 @@ final class AppSettings {
     }
 
     /// 跟随系统时把 NSApp.appearance 置空（系统决定）；否则锁定浅色。
+    /// NSApp 在应用启动前为 nil，直接返回（启动后 AppDelegate 会再调一次）。
     func applyAppearance() {
-        NSApp.appearance = followSystemAppearance ? nil : NSAppearance(named: .aqua)
+        guard let app = NSApp else { return }
+        app.appearance = followSystemAppearance ? nil : NSAppearance(named: .aqua)
     }
 }
 
