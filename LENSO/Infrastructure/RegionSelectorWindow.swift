@@ -168,9 +168,6 @@ final class RegionSelectorController: NSObject {
         }
         panels.first?.makeKey()
         NSCursor.crosshair.set()
-        // 十字线立刻定位到当前光标：不等第一次 mouseMoved，浮层一出现就有反馈
-        let cursor = NSEvent.mouseLocation
-        panels.forEach { $0.syncCrosshair(to: cursor) }
         // 窗口枚举（CGWindowListCopyWindowInfo）放到下一拍再做：
         // 它会阻塞主线程十几毫秒，挡在浮层上屏之后、第一次鼠标事件之前，
         // 手感上就是「浮层出来了但第一下拖动有点黏」。
@@ -467,7 +464,6 @@ final class RegionSelectorPanel: NSPanel {
     private weak var controller: RegionSelectorController?
     private let sizeLabel: NSTextField
     private let dimSelectionView: SelectionView
-    private let crosshairView: CrosshairView
     private let confirmBar: ConfirmBar
     let screenFrame: CGRect
     let ownDisplayID: CGDirectDisplayID
@@ -485,9 +481,7 @@ final class RegionSelectorPanel: NSPanel {
         // 暗幕+选区绘制层（直接叠在实时桌面上）
         self.dimSelectionView = SelectionView(frame: NSRect(origin: .zero, size: screen.frame.size), screenFrame: screen.frame)
         dimSelectionView.autoresizingMask = [.width, .height]
-        self.crosshairView = CrosshairView(frame: NSRect(origin: .zero, size: screen.frame.size))
-        crosshairView.autoresizingMask = [.width, .height]
-        self.confirmBar = ConfirmBar()
+        self.confirmBar = ConfirmBar(frame: NSRect(origin: .zero, size: ConfirmBar.preferredSize))
         super.init(
             contentRect: screen.frame,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -508,7 +502,6 @@ final class RegionSelectorPanel: NSPanel {
         let container = NSView(frame: NSRect(origin: .zero, size: screen.frame.size))
         container.autoresizingMask = [.width, .height]
         container.addSubview(dimSelectionView)
-        container.addSubview(crosshairView)
         container.addSubview(confirmBar)
         container.addSubview(sizeLabel)
         self.contentView = container
@@ -569,23 +562,6 @@ final class RegionSelectorPanel: NSPanel {
         confirmBar.isHidden = true
     }
 
-    /// 浮层刚上屏时调用：不等用户移动鼠标，十字线立刻出现在当前光标处。
-    /// （以前只有第一次 mouseMoved 才画十字线，浮层出现到鼠标动之间是空白的，
-    ///   手感上就是「按了热键但没反应」。）
-    func syncCrosshair(to globalPoint: CGPoint) {
-        guard screenFrame.contains(globalPoint) else { return }
-        updateOverlay(at: globalPoint)
-    }
-
-    /// 鼠标移动/拖拽时刷新十字线
-    private func updateOverlay(at globalPoint: CGPoint) {
-        let local = CGPoint(
-            x: globalPoint.x - screenFrame.origin.x,
-            y: globalPoint.y - screenFrame.origin.y
-        )
-        crosshairView.update(at: local)
-    }
-
     override func cancelOperation(_ sender: Any?) {
         controller?.cancel()
     }
@@ -602,14 +578,12 @@ final class RegionSelectorPanel: NSPanel {
     override func mouseDragged(with event: NSEvent) {
         let location = NSEvent.mouseLocation
         controller?.mouseDragged(to: location)
-        updateOverlay(at: location)
     }
 
     override func mouseMoved(with event: NSEvent) {
         let location = NSEvent.mouseLocation
         controller?.mouseMovedOrHovered(at: location)
         controller?.cursor(at: location).set()
-        updateOverlay(at: location)
     }
 
     override func mouseUp(with event: NSEvent) {
@@ -624,45 +598,58 @@ final class RegionSelectorPanel: NSPanel {
 // MARK: - 完成/取消条
 
 /// 选区确认条：小胶囊，两个按钮。只在选区停住后出现。
+///
+/// 原来用 NSVisualEffectView(.withinWindow) 做背景，在**透明无边框面板**里
+/// 没有可混合的内容，渲染出来几乎是个空白圆角块，按钮也被压在下面看不见
+/// （SaveToastView 里踩过同一个坑）。改成实色背景 + Auto Layout：
+/// 尺寸固定、按钮位置确定，不会再出现「有框没按钮」。
 private final class ConfirmBar: NSView {
-    static let preferredSize = NSSize(width: 168, height: 36)
+    static let preferredSize = NSSize(width: 196, height: 40)
 
     var onConfirm: (() -> Void)?
     var onCancel: (() -> Void)?
 
-    private let effectView = NSVisualEffectView()
+    private let confirmButton = NSButton()
+    private let cancelButton = NSButton()
 
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
-        effectView.material = .hudWindow
-        effectView.blendingMode = .withinWindow
-        effectView.state = .active
-        effectView.wantsLayer = true
-        effectView.layer?.cornerRadius = 10
-        effectView.layer?.masksToBounds = true
-        effectView.frame = bounds
-        effectView.autoresizingMask = [.width, .height]
-        addSubview(effectView)
+        layer?.backgroundColor = NSColor.white.withAlphaComponent(0.97).cgColor
+        layer?.cornerRadius = 10
+        layer?.borderWidth = 1
+        layer?.borderColor = NSColor.black.withAlphaComponent(0.12).cgColor
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = 0.25
+        layer?.shadowRadius = 10
+        layer?.shadowOffset = CGSize(width: 0, height: -3)
 
-        let stack = NSStackView()
+        confirmButton.title = "完成"
+        confirmButton.bezelStyle = .rounded
+        confirmButton.controlSize = .regular
+        confirmButton.keyEquivalent = "\r"
+        confirmButton.target = self
+        confirmButton.action = #selector(confirmClicked)
+
+        cancelButton.title = "取消"
+        cancelButton.bezelStyle = .rounded
+        cancelButton.controlSize = .regular
+        cancelButton.keyEquivalent = "\u{1b}"
+        cancelButton.target = self
+        cancelButton.action = #selector(cancelClicked)
+
+        let stack = NSStackView(views: [cancelButton, confirmButton])
         stack.orientation = .horizontal
-        stack.spacing = 6
+        stack.spacing = 8
         stack.alignment = .centerY
-        stack.frame = bounds.insetBy(dx: 8, dy: 5)
-        stack.autoresizingMask = [.width, .height]
-
-        let confirm = NSButton(title: "完成", target: self, action: #selector(confirmClicked))
-        confirm.bezelStyle = .rounded
-        confirm.controlSize = .small
-        confirm.keyEquivalent = "\r"
-        let cancel = NSButton(title: "取消", target: self, action: #selector(cancelClicked))
-        cancel.bezelStyle = .rounded
-        cancel.controlSize = .small
-        cancel.keyEquivalent = "\u{1b}"
-        stack.addArrangedSubview(confirm)
-        stack.addArrangedSubview(cancel)
+        stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.centerXAnchor.constraint(equalTo: centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            confirmButton.widthAnchor.constraint(equalToConstant: 76),
+            cancelButton.widthAnchor.constraint(equalToConstant: 76),
+        ])
         isHidden = true
     }
 
@@ -670,35 +657,6 @@ private final class ConfirmBar: NSView {
 
     @objc private func confirmClicked() { onConfirm?() }
     @objc private func cancelClicked() { onCancel?() }
-}
-
-// MARK: - 十字线与放大镜
-
-/// 全屏十字线（Snipaste 式）：两条 1px 白线跟随鼠标
-private final class CrosshairView: NSView {
-    private let vLine = CALayer()
-    private let hLine = CALayer()
-
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        wantsLayer = true
-        for layer in [vLine, hLine] {
-            layer.backgroundColor = NSColor.white.withAlphaComponent(0.85).cgColor
-            self.layer?.addSublayer(layer)
-        }
-        isHidden = true
-    }
-
-    required init?(coder: NSCoder) { fatalError("not used") }
-
-    func update(at localPoint: CGPoint) {
-        isHidden = false
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        vLine.frame = CGRect(x: localPoint.x - 0.5, y: 0, width: 1, height: bounds.height)
-        hLine.frame = CGRect(x: 0, y: localPoint.y - 0.5, width: bounds.width, height: 1)
-        CATransaction.commit()
-    }
 }
 
 // MARK: - 暗幕与选区
