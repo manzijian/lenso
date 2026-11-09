@@ -51,14 +51,20 @@ final class CaptureCoordinator: NSObject {
         let selector = RegionSelectorController()
         self.selector = selector
         let captureService = capture
-        selector.begin { [weak self, weak selector] rect, displayID, panelWindowNumber in
+        selector.begin { [weak self, weak selector] rect, displayID, panelWindowNumber, prefrozen in
             Task { @MainActor in
                 guard let self, let selector, !selector.isDismissed else { return }
                 do {
-                    // 选区还在台上时先抓图（面板已排除），再开编辑器，最后关选区
-                    let frozen = try await captureService.captureDisplayExcluding(
-                        displayID: displayID, excludedWindowIDs: [panelWindowNumber]
-                    )
+                    // 优先用选区阶段就已经冻结好的画面：编辑器可以立刻上屏。
+                    // 只有冻结帧还没到位（热键按下后不到 ~200ms 就确认）才现场抓。
+                    let frozen: CGImage
+                    if let prefrozen {
+                        frozen = prefrozen
+                    } else {
+                        frozen = try await captureService.captureDisplayExcluding(
+                            displayID: displayID, excludedWindowIDs: [panelWindowNumber]
+                        )
+                    }
                     let screenFrame = NSScreen.screens
                         .first(where: {
                             $0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! CGDirectDisplayID == displayID

@@ -134,7 +134,9 @@ private enum SelectorRectEditor {
 @MainActor
 final class RegionSelectorController: NSObject {
     private var panels: [RegionSelectorPanel] = []
-    private var onComplete: ((CGRect, CGDirectDisplayID, CGWindowID) -> Void)?
+    private var onComplete: ((CGRect, CGDirectDisplayID, CGWindowID, CGImage?) -> Void)?
+    /// 各显示器的冻结帧（按下热键那一刻的画面）
+    private var frozenFrames: [CGDirectDisplayID: CGImage] = [:]
     private var origin: CGPoint?
     private weak var downPanel: RegionSelectorPanel?
     private var dragMode: SelectorDragMode = .creating
@@ -152,8 +154,9 @@ final class RegionSelectorController: NSObject {
     /// 是否已被关闭（供 coordinator 在回调 Task 里判断用户是否已 Esc 取消）
     private(set) var isDismissed = false
 
-    /// 开始选区。面板立刻上屏，不抓图、不等权限以外的任何东西。
-    func begin(onComplete: @escaping (CGRect, CGDirectDisplayID, CGWindowID) -> Void) {
+    /// 开始选区。面板立刻上屏，同时后台冻结每一块屏（Snipaste 的做法）。
+    /// 回调带上该屏的冻结帧，确认时直接用它开编辑器，不用再等抓图。
+    func begin(onComplete: @escaping (CGRect, CGDirectDisplayID, CGWindowID, CGImage?) -> Void) {
         // 关闭可能残留的旧面板（泄漏防护）
         end()
         isDismissed = false
@@ -166,8 +169,18 @@ final class RegionSelectorController: NSObject {
             panel.setFrame(panel.screenFrameForDisplay, display: true)
             panel.orderFrontRegardless()
         }
-        panels.first?.makeKey()
         NSCursor.crosshair.set()
+        // 键盘（Esc 取消 / Return 确认）依赖面板是 key window。
+        // 从别的 App 按热键时，NSApp.activate 是异步的，立刻 makeKey 会失败，
+        // 表现就是「浮层出来了但 Esc / 回车没反应」。所以激活后下一拍再 makeKey。
+        NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.isDismissed else { return }
+            self.panels.first(where: { $0.screenFrameForDisplay.contains(NSEvent.mouseLocation) })?
+                .makeKey()
+            if NSApp.keyWindow == nil { self.panels.first?.makeKey() }
+        }
+        freezeDisplays()
         // 窗口枚举（CGWindowListCopyWindowInfo）放到下一拍再做：
         // 它会阻塞主线程十几毫秒，挡在浮层上屏之后、第一次鼠标事件之前，
         // 手感上就是「浮层出来了但第一下拖动有点黏」。
@@ -181,6 +194,26 @@ final class RegionSelectorController: NSObject {
             guard let self, self.panels.contains(where: { event.window === $0 }) else { return event }
             self.cancel()
             return nil
+        }
+    }
+
+    /// 后台冻结每块屏：把各面板排除在外各抓一张。
+    /// 抓到就铺到对应面板底层——用户看到画面「定住」，和 Snipaste 一致。
+    private func freezeDisplays() {
+        frozenFrames.removeAll()
+        let panelIDs = panels.map { (displayID: $0.ownDisplayID, windowNumber: CGWindowID($0.windowNumber)) }
+        Task { [weak self] in
+            for entry in panelIDs {
+                guard let self, !self.isDismissed else { return }
+                guard let image = try? await ScreenCaptureService().captureDisplayExcluding(
+                    displayID: entry.displayID, excludedWindowIDs: [entry.windowNumber]
+                ) else { continue }
+                guard !self.isDismissed else { return }
+                self.frozenFrames[entry.displayID] = image
+                self.panels.first(where: { $0.ownDisplayID == entry.displayID })?
+                    .setFrozenImage(image)
+            }
+            selLog.info("frozen \(self?.frozenFrames.count ?? 0) display(s)")
         }
     }
 
@@ -371,7 +404,7 @@ final class RegionSelectorController: NSObject {
         let displayID = downPanel.ownDisplayID
         let panelWindowNumber = CGWindowID(downPanel.windowNumber)
         selLog.info("selector confirmed rect=\(NSStringFromRect(selection), privacy: .public)")
-        onComplete?(selection, displayID, panelWindowNumber)
+        onComplete?(selection, displayID, panelWindowNumber, frozenFrames[displayID])
     }
 
     /// 窗口吸附：单击悬停窗口直接确认
@@ -379,7 +412,8 @@ final class RegionSelectorController: NSObject {
         guard let hit = hitTestWindow(at: globalPoint),
               let downPanel else { return }
         selLog.info("window snap click at \(NSStringFromPoint(globalPoint), privacy: .public)")
-        onComplete?(hit, downPanel.ownDisplayID, CGWindowID(downPanel.windowNumber))
+        let id = downPanel.ownDisplayID
+        onComplete?(hit, id, CGWindowID(downPanel.windowNumber), frozenFrames[id])
     }
 
     /// 供 coordinator 在编辑器上屏后调用：关选区面板（不触发回调）
@@ -452,6 +486,7 @@ final class RegionSelectorController: NSObject {
         hoverWindowFrame = nil
         selection = nil
         onComplete = nil
+        frozenFrames.removeAll()
         NSCursor.arrow.set()
     }
 }
@@ -463,6 +498,7 @@ final class RegionSelectorController: NSObject {
 final class RegionSelectorPanel: NSPanel {
     private weak var controller: RegionSelectorController?
     private let sizeLabel: NSTextField
+    private let frozenView: NSImageView
     private let dimSelectionView: SelectionView
     private let confirmBar: ConfirmBar
     let screenFrame: CGRect
@@ -478,7 +514,15 @@ final class RegionSelectorPanel: NSPanel {
         label.textColor = .white
         label.isHidden = true
         self.sizeLabel = label
-        // 暗幕+选区绘制层（直接叠在实时桌面上）
+        // 冻结帧：按下热键后立刻抓一张，抓到就铺在面板最底层。
+        // Snipaste 就是「按下热键即冻结」，这样框选时看到的是静止画面，
+        // 确认时也不用再等抓图，编辑器秒开。
+        let frozen = NSImageView(frame: NSRect(origin: .zero, size: screen.frame.size))
+        frozen.imageScaling = .scaleAxesIndependently
+        frozen.autoresizingMask = [.width, .height]
+        frozen.isHidden = true
+        self.frozenView = frozen
+        // 暗幕+选区绘制层（叠在冻结帧上）
         self.dimSelectionView = SelectionView(frame: NSRect(origin: .zero, size: screen.frame.size), screenFrame: screen.frame)
         dimSelectionView.autoresizingMask = [.width, .height]
         self.confirmBar = ConfirmBar(frame: NSRect(origin: .zero, size: ConfirmBar.preferredSize))
@@ -501,6 +545,7 @@ final class RegionSelectorPanel: NSPanel {
 
         let container = NSView(frame: NSRect(origin: .zero, size: screen.frame.size))
         container.autoresizingMask = [.width, .height]
+        container.addSubview(frozenView)
         container.addSubview(dimSelectionView)
         container.addSubview(confirmBar)
         container.addSubview(sizeLabel)
@@ -511,6 +556,12 @@ final class RegionSelectorPanel: NSPanel {
     }
 
     var screenFrameForDisplay: CGRect { screenFrame }
+
+    /// 冻结帧到位后铺上（抓图是异步的，通常 100~200ms 后到）
+    func setFrozenImage(_ image: CGImage) {
+        frozenView.image = NSImage(cgImage: image, size: screenFrame.size)
+        frozenView.isHidden = false
+    }
 
     override var canBecomeKey: Bool { true }
 
@@ -624,7 +675,9 @@ private final class ConfirmBar: NSView {
         layer?.shadowRadius = 10
         layer?.shadowOffset = CGSize(width: 0, height: -3)
 
-        confirmButton.title = "完成"
+        // 按钮进的是标注编辑器（OCR / 翻译 / 标注都在那），叫「完成」会让人以为
+        // 点了就结束，看不到后面的工具栏。改成「编辑」，意图更明确。
+        confirmButton.title = "编辑"
         confirmButton.bezelStyle = .rounded
         confirmButton.controlSize = .regular
         confirmButton.keyEquivalent = "\r"
