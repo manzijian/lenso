@@ -282,7 +282,7 @@ final class RegionSelectorController: NSObject {
         activeDisplayFrame = panel.screenFrameForDisplay
         origin = globalPoint
         didDrag = false
-        hideConfirmBar()
+        hideHandles()
         if let selection {
             if let handle = SelectorRectEditor.resizeHandle(at: globalPoint, for: selection) {
                 dragMode = .resizing(handle: handle, original: selection)
@@ -334,7 +334,9 @@ final class RegionSelectorController: NSObject {
             if didDrag {
                 // 拖出选区：太小算误触，清掉、保持打开（Ta 的做法，不直接关）
                 if let selection, selection.width >= 8, selection.height >= 8 {
-                    enterSelectedState()
+                    // 松手直接进标注编辑器（Snipaste 的手感：框完就是工具栏，
+                    // 不需要再点一次按钮）。编辑器里仍然可以用手柄微调选区。
+                    confirmSelection()
                 } else {
                     selection = nil
                     refreshSelectionViews()
@@ -387,7 +389,6 @@ final class RegionSelectorController: NSObject {
         let moved = SelectorRectEditor.moved(selection, by: CGPoint(x: dx, y: dy), inside: displayFrame)
         self.selection = moved
         refreshSelectionViews()
-        downPanel?.showConfirmBar(for: moved)
     }
 
     /// 双击选区内确认（Snipaste 同款）
@@ -430,7 +431,6 @@ final class RegionSelectorController: NSObject {
     private func enterSelectedState() {
         refreshSelectionViews()
         downPanel?.setHandlesVisible(true)
-        if let selection { downPanel?.showConfirmBar(for: selection) }
         NSCursor.crosshair.set()
     }
 
@@ -438,8 +438,7 @@ final class RegionSelectorController: NSObject {
         panels.forEach { $0.drawSelection(selection) }
     }
 
-    private func hideConfirmBar() {
-        panels.forEach { $0.hideConfirmBar() }
+    private func hideHandles() {
         panels.forEach { $0.setHandlesVisible(false) }
     }
 
@@ -500,7 +499,6 @@ final class RegionSelectorPanel: NSPanel {
     private let sizeLabel: NSTextField
     private let frozenView: NSImageView
     private let dimSelectionView: SelectionView
-    private let confirmBar: ConfirmBar
     let screenFrame: CGRect
     let ownDisplayID: CGDirectDisplayID
 
@@ -525,7 +523,6 @@ final class RegionSelectorPanel: NSPanel {
         // 暗幕+选区绘制层（叠在冻结帧上）
         self.dimSelectionView = SelectionView(frame: NSRect(origin: .zero, size: screen.frame.size), screenFrame: screen.frame)
         dimSelectionView.autoresizingMask = [.width, .height]
-        self.confirmBar = ConfirmBar(frame: NSRect(origin: .zero, size: ConfirmBar.preferredSize))
         super.init(
             contentRect: screen.frame,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -540,14 +537,11 @@ final class RegionSelectorPanel: NSPanel {
         self.acceptsMouseMovedEvents = true
         self.becomesKeyOnlyIfNeeded = false
         self.worksWhenModal = true
-        confirmBar.onConfirm = { [weak controller] in controller?.confirmSelection() }
-        confirmBar.onCancel = { [weak controller] in controller?.cancel() }
 
         let container = NSView(frame: NSRect(origin: .zero, size: screen.frame.size))
         container.autoresizingMask = [.width, .height]
         container.addSubview(frozenView)
         container.addSubview(dimSelectionView)
-        container.addSubview(confirmBar)
         container.addSubview(sizeLabel)
         self.contentView = container
         // 显式设置 frame：borderless NSPanel 的 contentRect 初始化有时不生效
@@ -590,28 +584,6 @@ final class RegionSelectorPanel: NSPanel {
         dimSelectionView.showsHandles = visible
     }
 
-    /// 完成/取消条：优先放选区下方，没地方放上方，横向贴在选区右沿
-    func showConfirmBar(for globalRect: CGRect) {
-        let barSize = ConfirmBar.preferredSize
-        let local = CGRect(
-            x: globalRect.origin.x - screenFrame.origin.x,
-            y: globalRect.origin.y - screenFrame.origin.y,
-            width: globalRect.width, height: globalRect.height
-        )
-        let proposedBelow = local.minY - barSize.height - 10
-        // 面板自身没有 bounds（那是 NSView 的），用显示器尺寸算边界
-        let panelSize = screenFrame.size
-        let y = proposedBelow >= 8
-            ? proposedBelow
-            : min(panelSize.height - barSize.height - 8, local.maxY + 10)
-        let x = min(max(8, local.maxX - barSize.width), panelSize.width - barSize.width - 8)
-        confirmBar.frame = CGRect(origin: CGPoint(x: x, y: y), size: barSize)
-        confirmBar.isHidden = false
-    }
-
-    func hideConfirmBar() {
-        confirmBar.isHidden = true
-    }
 
     override func cancelOperation(_ sender: Any?) {
         controller?.cancel()
@@ -647,70 +619,6 @@ final class RegionSelectorPanel: NSPanel {
 }
 
 // MARK: - 完成/取消条
-
-/// 选区确认条：小胶囊，两个按钮。只在选区停住后出现。
-///
-/// 原来用 NSVisualEffectView(.withinWindow) 做背景，在**透明无边框面板**里
-/// 没有可混合的内容，渲染出来几乎是个空白圆角块，按钮也被压在下面看不见
-/// （SaveToastView 里踩过同一个坑）。改成实色背景 + Auto Layout：
-/// 尺寸固定、按钮位置确定，不会再出现「有框没按钮」。
-private final class ConfirmBar: NSView {
-    static let preferredSize = NSSize(width: 196, height: 40)
-
-    var onConfirm: (() -> Void)?
-    var onCancel: (() -> Void)?
-
-    private let confirmButton = NSButton()
-    private let cancelButton = NSButton()
-
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        wantsLayer = true
-        layer?.backgroundColor = NSColor.white.withAlphaComponent(0.97).cgColor
-        layer?.cornerRadius = 10
-        layer?.borderWidth = 1
-        layer?.borderColor = NSColor.black.withAlphaComponent(0.12).cgColor
-        layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = 0.25
-        layer?.shadowRadius = 10
-        layer?.shadowOffset = CGSize(width: 0, height: -3)
-
-        // 按钮进的是标注编辑器（OCR / 翻译 / 标注都在那），叫「完成」会让人以为
-        // 点了就结束，看不到后面的工具栏。改成「编辑」，意图更明确。
-        confirmButton.title = "编辑"
-        confirmButton.bezelStyle = .rounded
-        confirmButton.controlSize = .regular
-        confirmButton.keyEquivalent = "\r"
-        confirmButton.target = self
-        confirmButton.action = #selector(confirmClicked)
-
-        cancelButton.title = "取消"
-        cancelButton.bezelStyle = .rounded
-        cancelButton.controlSize = .regular
-        cancelButton.keyEquivalent = "\u{1b}"
-        cancelButton.target = self
-        cancelButton.action = #selector(cancelClicked)
-
-        let stack = NSStackView(views: [cancelButton, confirmButton])
-        stack.orientation = .horizontal
-        stack.spacing = 8
-        stack.alignment = .centerY
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.centerXAnchor.constraint(equalTo: centerXAnchor),
-            stack.centerYAnchor.constraint(equalTo: centerYAnchor),
-            confirmButton.widthAnchor.constraint(equalToConstant: 76),
-            cancelButton.widthAnchor.constraint(equalToConstant: 76),
-        ])
-        isHidden = true
-    }
-
-    required init?(coder: NSCoder) { fatalError("not used") }
-
-    @objc private func confirmClicked() { onConfirm?() }
-    @objc private func cancelClicked() { onCancel?() }
-}
 
 // MARK: - 暗幕与选区
 
