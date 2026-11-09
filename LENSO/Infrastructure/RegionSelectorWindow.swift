@@ -869,33 +869,27 @@ private final class MagnifierView: NSView {
     }
 }
 
-/// 放大镜取样器：SCK 抓光标周围 12×8 个逻辑像素。
+/// 放大镜取样器：SCK 抓光标周围 12×8 个像素。
 ///
-/// SCK 的 sourceRect 坐标系在"显示器内"与"全局"两种解释下都能编过，但只有
-/// 一种能对上真实屏幕。所以第一次取样时先抓一张全屏图做对照，选中正确解释，
-/// 之后缓存下来复用——避免每次鼠标移动都重新枚举窗口。
+/// 坐标系（已用 screencapture 基准实测验证）：
+/// - 鼠标位置：AppKit 全局坐标，原点左下。
+/// - SCK 的 sourceRect：**显示器内坐标，原点左上**，不是全局坐标。
+///   （实测：主屏两种解释重合；副屏上「显示器内」才对，「全局」抓不到图。）
+/// - 输出：sourceRect 指定的区域按 1:1 采样成 width×height 像素，所以
+///   width=12/height=8 拿到的是光标周围 12×8 个**逻辑点**对应的那块画面。
 @MainActor
 private final class MagnifierSampler {
-    private struct Full {
-        let image: CGImage
-        let pixels: [UInt8]
-        let width: Int
-        let height: Int
-    }
-
-    /// 相对显示器原点的偏移（AppKit 全局 → SCK sourceRect）
-    private var resolvedOffset: CGVector?
-    private var content: SCShareableContent?
-    private var fullCapture: Full?
-    private var probeDone = false
-
+    /// 一次取样结果：RGBA 字节（行 0 = 区域最上方）+ 光标在网格里的位置
     struct Sample {
         let bytes: [UInt8]
         let col: Int
         let rowFromBottom: Int
     }
 
-    /// 取一次样：12×8 个逻辑像素 + 光标在网格里的位置
+    private static let columns = 12
+    private static let rows = 8
+
+    /// 取一次样
     func sample(
         displayID: CGDirectDisplayID,
         screenFrame: CGRect,
@@ -903,135 +897,41 @@ private final class MagnifierSampler {
         excludedWindowIDs: [CGWindowID]
     ) async -> Sample? {
         let content: SCShareableContent
-        if let existing = self.content {
-            content = existing
-        } else {
-            guard let fresh = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true) else {
-                return nil
-            }
-            self.content = fresh
-            content = fresh
+        do {
+            content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        } catch {
+            return nil
         }
         guard let display = content.displays.first(where: { $0.displayID == displayID }) else { return nil }
 
         // 鼠标在显示器内的位置（原点左上）
         let localX = cursor.x - screenFrame.origin.x
         let localYTop = screenFrame.height - (cursor.y - screenFrame.origin.y)
-        let w = 12.0, h = 8.0
+        // 取样区域：光标周围 12×8 个逻辑点，夹在显示器内
+        let w = CGFloat(Self.columns), h = CGFloat(Self.rows)
+        let rect = CGRect(x: localX - w / 2, y: localYTop - h / 2, width: w, height: h)
+            .intersection(CGRect(origin: .zero, size: screenFrame.size))
 
-        // 候选解释：显示器内坐标 / 全局坐标
-        let candidates: [CGVector] = [
-            CGVector(dx: screenFrame.origin.x, dy: screenFrame.origin.y),
-            CGVector(dx: 0, dy: 0)
-        ]
-
-        var offset = resolvedOffset ?? candidates[0]
-        if !probeDone {
-            if let picked = await resolveOffset(
-                candidates: candidates,
-                display: display,
-                content: content,
-                excludedWindowIDs: excludedWindowIDs,
-                localX: localX, localYTop: localYTop, w: w, h: h
-            ) {
-                offset = picked
-            }
-            resolvedOffset = offset
-            probeDone = true
-        }
-
-        let rect = CGRect(
-            x: localX - w / 2 + offset.dx,
-            y: localYTop - h / 2 + offset.dy,
-            width: w, height: h
-        )
         let config = SCStreamConfiguration()
         config.sourceRect = rect
-        config.width = 12
-        config.height = 8
+        config.width = Self.columns
+        config.height = Self.rows
         config.showsCursor = false
         config.captureResolution = .best
+        let filter = SCContentFilter(
+            display: display,
+            excludingWindows: excludedWindowIDs.isEmpty
+                ? []
+                : content.windows.filter { excludedWindowIDs.contains($0.windowID) }
+        )
         guard let image = try? await SCScreenshotManager.captureImage(
-            contentFilter: SCContentFilter(display: display, excludingWindows: excludedWindows(content, excludedWindowIDs)),
-            configuration: config
-        ) else { return nil }
-        guard let bytes = Self.rgbaBytes(image) else { return nil }
+            contentFilter: filter, configuration: config
+        ), let bytes = Self.rgbaBytes(image) else { return nil }
 
         // 光标落在网格里的哪一格（夹在边缘时按实际位置算）
-        let col = min(max(Int(round(localX + offset.dx - rect.minX)), 0), 11)
-        let rowFromTop = min(max(Int(round(localYTop + offset.dy - rect.minY)), 0), 7)
-        return Sample(bytes: bytes, col: col, rowFromBottom: 7 - rowFromTop)
-    }
-
-    /// 抓一张全屏图做对照，找出 sourceRect 的正确解释
-    private func resolveOffset(
-        candidates: [CGVector],
-        display: SCDisplay,
-        content: SCShareableContent,
-        excludedWindowIDs: [CGWindowID],
-        localX: CGFloat, localYTop: CGFloat, w: CGFloat, h: CGFloat
-    ) async -> CGVector? {
-        let fullConfig = SCStreamConfiguration()
-        fullConfig.width = Int(display.width)
-        fullConfig.height = Int(display.height)
-        fullConfig.showsCursor = false
-        fullConfig.captureResolution = .best
-        guard let fullImage = try? await SCScreenshotManager.captureImage(
-            contentFilter: SCContentFilter(display: display, excludingWindows: excludedWindows(content, excludedWindowIDs)),
-            configuration: fullConfig
-        ),
-            let fullPixels = Self.rgbaBytes(fullImage)
-        else { return nil }
-
-        var best: (offset: CGVector, error: Double)?
-        for candidate in candidates {
-            let rect = CGRect(
-                x: localX - w / 2 + candidate.dx,
-                y: localYTop - h / 2 + candidate.dy,
-                width: w, height: h
-            )
-            let config = SCStreamConfiguration()
-            config.sourceRect = rect
-            config.width = 12
-            config.height = 8
-            config.showsCursor = false
-            config.captureResolution = .best
-            guard let image = try? await SCScreenshotManager.captureImage(
-                contentFilter: SCContentFilter(display: display, excludingWindows: excludedWindows(content, excludedWindowIDs)),
-                configuration: config
-            ), let bytes = Self.rgbaBytes(image) else { continue }
-            let error = Self.compare(bytes, fullPixels, fullWidth: fullImage.width, fullHeight: fullImage.height, rect: rect)
-            if best == nil || error < best!.error {
-                best = (candidate, error)
-            }
-        }
-        guard let best, best.error < 40 else { return nil }
-        return best.offset
-    }
-
-    /// 把 12×8 取样与全屏图对应区域比一比，返回平均像素差
-    private static func compare(
-        _ bytes: [UInt8], _ full: [UInt8], fullWidth: Int, fullHeight: Int, rect: CGRect
-    ) -> Double {
-        let scaleX = CGFloat(fullWidth) / max(1, rect.width)
-        let scaleY = CGFloat(fullHeight) / max(1, rect.height)
-        var total = 0.0
-        var count = 0
-        for row in 0..<8 {
-            for col in 0..<12 {
-                let idx = (row * 12 + col) * 4
-                guard idx + 2 < bytes.count else { continue }
-                let fx = Int((rect.minX + CGFloat(col) * 0.5) * scaleX)
-                let fy = Int((rect.minY + CGFloat(row) * 0.5) * scaleY)
-                let fidx = (fy * fullWidth + fx) * 4
-                guard fidx + 2 < full.count else { continue }
-                total += abs(Double(bytes[idx]) - Double(full[fidx]))
-                total += abs(Double(bytes[idx + 1]) - Double(full[fidx + 1]))
-                total += abs(Double(bytes[idx + 2]) - Double(full[fidx + 2]))
-                count += 3
-            }
-        }
-        return count > 0 ? total / Double(count) : .greatestFiniteMagnitude
+        let col = min(max(Int(round(localX - rect.minX)), 0), Self.columns - 1)
+        let rowFromTop = min(max(Int(round(localYTop - rect.minY)), 0), Self.rows - 1)
+        return Sample(bytes: bytes, col: col, rowFromBottom: Self.rows - 1 - rowFromTop)
     }
 
     /// CGImage → RGBA 字节数组（行 0 = 图像最上方）
@@ -1046,11 +946,6 @@ private final class MagnifierSampler {
         ctx.interpolationQuality = .none
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
         return [UInt8](UnsafeBufferPointer(start: data.bindMemory(to: UInt8.self, capacity: w * h * 4), count: w * h * 4))
-    }
-
-    private func excludedWindows(_ content: SCShareableContent, _ ids: [CGWindowID]) -> [SCWindow] {
-        guard !ids.isEmpty else { return [] }
-        return content.windows.filter { ids.contains($0.windowID) }
     }
 }
 

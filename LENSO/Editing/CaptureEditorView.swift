@@ -54,7 +54,20 @@ struct CaptureEditorView: View {
         self.onComplete = onComplete
         self.onQuickCopy = onQuickCopy
         self.onPin = onPin
-        _selection = State(initialValue: initialSelection)
+        // 编辑器内部统一用「屏幕内坐标、原点左上」——和 CGImage 的行序一致。
+        // 传进来的 initialSelection 是 AppKit 全局坐标（原点左下），这里换算一次，
+        // 之后所有绘制/裁剪/标注都在这一个坐标系里做。
+        _selection = State(initialValue: Self.localTopDown(initialSelection, in: screenFrame))
+    }
+
+    /// AppKit 全局坐标 → 屏幕内坐标（原点左上，y 向下）
+    static func localTopDown(_ rect: CGRect, in screenFrame: CGRect) -> CGRect {
+        CGRect(
+            x: rect.minX - screenFrame.minX,
+            y: screenFrame.maxY - rect.maxY,
+            width: rect.width,
+            height: rect.height
+        )
     }
 
     var body: some View {
@@ -63,7 +76,7 @@ struct CaptureEditorView: View {
             Image(decorative: frozenImage, scale: 1)
                 .resizable()
                 .frame(width: screenFrame.width, height: screenFrame.height)
-                .position(x: screenFrame.midX - screenFrame.origin.x, y: screenFrame.midY - screenFrame.origin.y)
+                .position(x: screenFrame.width / 2, y: screenFrame.height / 2)
                 .allowsHitTesting(false)
 
             // 选区内容视图（挖空 + 标注渲染）
@@ -124,14 +137,9 @@ struct CaptureEditorView: View {
 
     /// 输入框中心点：落点 + 半个框宽/高，夹在屏幕内
     private func textFieldCenter(for point: CGPoint) -> CGPoint {
-        let localSel = CGRect(
-            x: selection.origin.x - screenFrame.origin.x,
-            y: selection.origin.y - screenFrame.origin.y,
-            width: selection.width, height: selection.height
-        )
         let topLeft = CGPoint(
-            x: localSel.minX + point.x * selection.width,
-            y: localSel.minY + point.y * selection.height
+            x: selection.minX + point.x * selection.width,
+            y: selection.minY + point.y * selection.height
         )
         return CGPoint(
             x: min(max(topLeft.x + 130, 130), screenFrame.width - 130),
@@ -148,11 +156,8 @@ struct CaptureEditorView: View {
     /// 工具栏挂在选区下边缘中点；属性面板挂在选区右侧垂直居中
     @ViewBuilder
     private var toolbarAndPanel: some View {
-        let localSel = CGRect(
-            x: selection.origin.x - screenFrame.origin.x,
-            y: selection.origin.y - screenFrame.origin.y,
-            width: selection.width, height: selection.height
-        )
+        // selection 已是屏幕内坐标（原点左上），直接用
+        let localSel = selection
         // 工具栏位置：选区下方 12pt，横向居中于选区（越界时往屏内收）
         let toolbarSize = CGSize(width: 720, height: 52)
         let toolbarX = min(
@@ -458,9 +463,10 @@ struct CaptureEditorView: View {
 
     /// 当前选区的原图裁剪（不带标注，OCR 用）
     private func selectionCropImage() -> CGImage? {
+        // selection 是屏幕内坐标（原点左上），CGImage.cropping 用的也是左上原点 → 直接乘比例
         let pxRect = CGRect(
-            x: (selection.origin.x - screenFrame.origin.x) * imageScale,
-            y: (selection.origin.y - screenFrame.origin.y) * imageScale,
+            x: selection.origin.x * imageScale,
+            y: selection.origin.y * imageScale,
             width: selection.width * imageScale,
             height: selection.height * imageScale
         ).integral
@@ -569,8 +575,8 @@ struct CaptureEditorView: View {
     /// 合成：冻结帧裁剪选区 + 标注
     private func renderFinalImage() -> CGImage? {
         let pxRect = CGRect(
-            x: (selection.origin.x - screenFrame.origin.x) * imageScale,
-            y: (selection.origin.y - screenFrame.origin.y) * imageScale,
+            x: selection.origin.x * imageScale,
+            y: selection.origin.y * imageScale,
             width: selection.width * imageScale,
             height: selection.height * imageScale
         ).integral
@@ -706,11 +712,8 @@ private struct SelectionContent: View {
     var body: some View {
         // 暗幕层（全屏，选区挖空）
         Canvas { context, size in
-            let localSel = CGRect(
-                x: selection.origin.x - screenFrame.origin.x,
-                y: selection.origin.y - screenFrame.origin.y,
-                width: selection.width, height: selection.height
-            )
+            // selection 已是屏幕内坐标（原点左上），与 Canvas 坐标系一致
+            let localSel = selection
             context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.black.opacity(0.3)))
             context.blendMode = .clear
             context.fill(Path(localSel), with: .color(.white))
@@ -730,10 +733,7 @@ private struct SelectionContent: View {
                 imageScale: imageScale
             )
             .frame(width: selection.width, height: selection.height)
-            .position(
-                x: selection.midX - screenFrame.origin.x,
-                y: selection.midY - screenFrame.origin.y
-            )
+            .position(x: selection.midX, y: selection.midY)
             .contentShape(Rectangle())
             .gesture(annotationGesture, including: state.activeKind != nil ? .all : .subviews)
         }
@@ -761,14 +761,14 @@ private struct SelectionContent: View {
     private var handlePositions: [(SelectionHandle, CGPoint)] {
         let sel = selection
         return [
-            (.topLeft, CGPoint(x: sel.minX - screenFrame.origin.x, y: sel.minY - screenFrame.origin.y)),
-            (.topRight, CGPoint(x: sel.maxX - screenFrame.origin.x, y: sel.minY - screenFrame.origin.y)),
-            (.bottomLeft, CGPoint(x: sel.minX - screenFrame.origin.x, y: sel.maxY - screenFrame.origin.y)),
-            (.bottomRight, CGPoint(x: sel.maxX - screenFrame.origin.x, y: sel.maxY - screenFrame.origin.y)),
-            (.topEdge, CGPoint(x: sel.midX - screenFrame.origin.x, y: sel.minY - screenFrame.origin.y)),
-            (.bottomEdge, CGPoint(x: sel.midX - screenFrame.origin.x, y: sel.maxY - screenFrame.origin.y)),
-            (.leftEdge, CGPoint(x: sel.minX - screenFrame.origin.x, y: sel.midY - screenFrame.origin.y)),
-            (.rightEdge, CGPoint(x: sel.maxX - screenFrame.origin.x, y: sel.midY - screenFrame.origin.y)),
+            (.topLeft, CGPoint(x: sel.minX, y: sel.minY)),
+            (.topRight, CGPoint(x: sel.maxX, y: sel.minY)),
+            (.bottomLeft, CGPoint(x: sel.minX, y: sel.maxY)),
+            (.bottomRight, CGPoint(x: sel.maxX, y: sel.maxY)),
+            (.topEdge, CGPoint(x: sel.midX, y: sel.minY)),
+            (.bottomEdge, CGPoint(x: sel.midX, y: sel.maxY)),
+            (.leftEdge, CGPoint(x: sel.minX, y: sel.midY)),
+            (.rightEdge, CGPoint(x: sel.maxX, y: sel.midY)),
         ]
     }
 
@@ -863,13 +863,14 @@ private struct SelectionContent: View {
     }
 
     private func normalizedPoint(_ startLocal: CGPoint, current: CGPoint) -> (start: CGPoint, end: CGPoint) {
+        // 手势坐标是 SwiftUI 全局坐标（屏幕内，原点左上），selection 同坐标系
         let innerStart = CGPoint(
-            x: startLocal.x - (selection.origin.x),
-            y: startLocal.y - (selection.origin.y)
+            x: startLocal.x - selection.origin.x,
+            y: startLocal.y - selection.origin.y
         )
         let innerCurrent = CGPoint(
-            x: current.x - (selection.origin.x),
-            y: current.y - (selection.origin.y)
+            x: current.x - selection.origin.x,
+            y: current.y - selection.origin.y
         )
         func norm(_ p: CGPoint) -> CGPoint {
             CGPoint(x: min(1, max(0, p.x / max(1, selection.width))),
@@ -890,10 +891,10 @@ private struct SelectionInner: View {
 
     var body: some View {
         ZStack {
-            // 选区原图预览
+            // 选区原图预览（selection 已是屏幕内坐标、原点左上）
             let pxRect = CGRect(
-                x: (selection.origin.x - screenFrame.origin.x) * imageScale,
-                y: (selection.origin.y - screenFrame.origin.y) * imageScale,
+                x: selection.origin.x * imageScale,
+                y: selection.origin.y * imageScale,
                 width: selection.width * imageScale,
                 height: selection.height * imageScale
             ).integral
