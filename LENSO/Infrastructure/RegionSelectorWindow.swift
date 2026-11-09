@@ -799,7 +799,12 @@ private final class MagnifierView: NSView {
         // 显示坐标：显示器内、左上原点
         let localX = cursorPoint.x - screenFrame.origin.x
         let localYFromTop = screenFrame.height - (cursorPoint.y - screenFrame.origin.y)
-        coordLabel.stringValue = "x \(Int(localX)) · y \(Int(localYFromTop))"
+        // 鼠标可能在另一块屏上（坐标跑到本显示器之外），非有限值不能转 Int
+        if localX.isFinite, localYFromTop.isFinite {
+            coordLabel.stringValue = "x \(Int(localX)) · y \(Int(localYFromTop))"
+        } else {
+            coordLabel.stringValue = ""
+        }
         if let color = cursorPixelColor() {
             rgbLabel.stringValue = "#\(color.hex) · R \(color.r) G \(color.g) B \(color.b)"
         } else {
@@ -907,10 +912,19 @@ private final class MagnifierSampler {
         // 鼠标在显示器内的位置（原点左上）
         let localX = cursor.x - screenFrame.origin.x
         let localYTop = screenFrame.height - (cursor.y - screenFrame.origin.y)
-        // 取样区域：光标周围 12×8 个逻辑点，夹在显示器内
+        // 光标不在这个显示器上时（鼠标在另一块屏），直接不取样
+        guard localX.isFinite, localYTop.isFinite,
+              localX >= 0, localX <= screenFrame.width,
+              localYTop >= 0, localYTop <= screenFrame.height else { return nil }
+
+        // 取样区域：光标周围 12×8 个逻辑点，夹在显示器内。
+        // 注意：CGRect.intersection 不相交时返回 CGRect.null（原点是无穷大），
+        // 后面拿它算坐标会得到 NaN/inf 再转 Int 直接崩，所以这里自己夹。
         let w = CGFloat(Self.columns), h = CGFloat(Self.rows)
-        let rect = CGRect(x: localX - w / 2, y: localYTop - h / 2, width: w, height: h)
-            .intersection(CGRect(origin: .zero, size: screenFrame.size))
+        let minX = max(0, min(localX - w / 2, screenFrame.width - w))
+        let minY = max(0, min(localYTop - h / 2, screenFrame.height - h))
+        let rect = CGRect(x: minX, y: minY, width: w, height: h)
+        guard rect.minX.isFinite, rect.minY.isFinite else { return nil }
 
         let config = SCStreamConfiguration()
         config.sourceRect = rect
@@ -929,8 +943,8 @@ private final class MagnifierSampler {
         ), let bytes = Self.rgbaBytes(image) else { return nil }
 
         // 光标落在网格里的哪一格（夹在边缘时按实际位置算）
-        let col = min(max(Int(round(localX - rect.minX)), 0), Self.columns - 1)
-        let rowFromTop = min(max(Int(round(localYTop - rect.minY)), 0), Self.rows - 1)
+        let col = min(max(Int((localX - rect.minX).rounded()), 0), Self.columns - 1)
+        let rowFromTop = min(max(Int((localYTop - rect.minY).rounded()), 0), Self.rows - 1)
         return Sample(bytes: bytes, col: col, rowFromBottom: Self.rows - 1 - rowFromTop)
     }
 
