@@ -186,8 +186,11 @@ final class RegionSelectorController: NSObject {
             return []
         }
         let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        // 屏幕全局最大 Y（CG 坐标左上原点 ↔ AppKit 左下原点转换基准）
-        let globalMaxY = NSScreen.screens.map(\.frame).map(\.maxY).max() ?? 0
+        // CGWindowBounds 用的是「主屏左上角为原点、y 向下」的坐标系，
+        // 所以换算回 AppKit 全局坐标时，基准必须是**主屏**的高度，
+        // 不能用所有屏里最大的 maxY——接上更高的外接屏后，窗口吸附会整体偏移。
+        let mainScreenHeight = NSScreen.screens.first(where: { $0.frame.origin == .zero })?.frame.height
+            ?? NSScreen.main?.frame.height ?? 0
         var result: [(CGWindowID, CGRect, String)] = []
         for w in list {
             guard let layer = w[kCGWindowLayer as String] as? Int, layer >= 0,
@@ -202,7 +205,7 @@ final class RegionSelectorController: NSObject {
             let x = boundsDict["X"] ?? 0
             let yTop = boundsDict["Y"] ?? 0
             // CGWindowBounds：全局左上原点 → AppKit 全局左下原点
-            let appKitY = globalMaxY - yTop - height
+            let appKitY = mainScreenHeight - yTop - height
             let frame = CGRect(x: x, y: appKitY, width: width, height: height)
             let title = w[kCGWindowName as String] as? String ?? ""
             result.append((windowID, frame.integral, title))
@@ -472,7 +475,7 @@ final class RegionSelectorPanel: NSPanel {
         label.isHidden = true
         self.sizeLabel = label
         // 暗幕+选区绘制层（直接叠在实时桌面上）
-        self.dimSelectionView = SelectionView(frame: NSRect(origin: .zero, size: screen.frame.size))
+        self.dimSelectionView = SelectionView(frame: NSRect(origin: .zero, size: screen.frame.size), screenFrame: screen.frame)
         dimSelectionView.autoresizingMask = [.width, .height]
         self.crosshairView = CrosshairView(frame: NSRect(origin: .zero, size: screen.frame.size))
         crosshairView.autoresizingMask = [.width, .height]
@@ -975,19 +978,17 @@ private final class SelectionView: NSView {
     private let hoverBorderLayer = CAShapeLayer()
     private let handlesLayer = CAShapeLayer()
 
-    var selection: CGRect = .zero {
-        didSet { layoutLayers() }
-    }
-    var hoverFrame: CGRect? = nil {
-        didSet { layoutLayers() }
-    }
-    var showsHandles = false {
-        didSet { layoutLayers() }
-    }
+    /// 本视图所在显示器在 AppKit 全局坐标下的 frame。
+    ///
+    /// 必须显式持有它来做「全局 → 面板局部」换算，不能用
+    /// `convert(_:from: nil)`：那个方法把入参当成**窗口坐标**，不会做
+    /// 屏幕原点偏移。主屏原点是 (0,0) 所以碰巧正确；外接屏原点可能是
+    /// (-2560,-187)，传进去的全局坐标全是负数，intersection 后变成空矩形，
+    /// 选区框、手柄、挖空全被裁掉——表现就是「外接屏上框选了但什么都没画」。
+    let screenFrame: CGRect
 
-    required init?(coder: NSCoder) { fatalError("not used") }
-
-    override init(frame: NSRect) {
+    init(frame: NSRect, screenFrame: CGRect) {
+        self.screenFrame = screenFrame
         super.init(frame: frame)
         wantsLayer = true
         dimLayer.fillColor = NSColor.black.withAlphaComponent(0.28).cgColor
@@ -1007,6 +1008,29 @@ private final class SelectionView: NSView {
         layer?.addSublayer(handlesLayer)
     }
 
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    /// AppKit 全局坐标 → 面板局部坐标（原点在面板左下）
+    private func localRect(_ global: CGRect) -> CGRect {
+        CGRect(
+            x: global.minX - screenFrame.minX,
+            y: global.minY - screenFrame.minY,
+            width: global.width,
+            height: global.height
+        )
+    }
+
+    var selection: CGRect = .zero {
+        didSet { layoutLayers() }
+    }
+    var hoverFrame: CGRect? = nil {
+        didSet { layoutLayers() }
+    }
+    var showsHandles = false {
+        didSet { layoutLayers() }
+    }
+
+
     override func layout() {
         super.layout()
         layoutLayers()
@@ -1024,7 +1048,7 @@ private final class SelectionView: NSView {
         let dimPath = CGMutablePath()
         dimPath.addRect(bounds)
         if let brightGlobal {
-            let brightLocal = convert(brightGlobal, from: nil).intersection(bounds)
+            let brightLocal = localRect(brightGlobal).intersection(bounds)
             if !brightLocal.isEmpty {
                 dimPath.addRect(brightLocal)
             }
@@ -1033,7 +1057,7 @@ private final class SelectionView: NSView {
         dimLayer.frame = bounds
 
         if selection.width > 0 {
-            let local = convert(selection, from: nil)
+            let local = localRect(selection)
             borderLayer.path = CGPath(rect: local.insetBy(dx: 0.5, dy: 0.5), transform: nil)
             borderLayer.frame = bounds
             borderLayer.isHidden = false
@@ -1042,7 +1066,7 @@ private final class SelectionView: NSView {
         }
 
         if let hover = hoverFrame, selection.width == 0 {
-            let localHover = convert(hover, from: nil).intersection(bounds)
+            let localHover = localRect(hover).intersection(bounds)
             if !localHover.isEmpty {
                 hoverBorderLayer.path = CGPath(rect: localHover.insetBy(dx: 1, dy: 1), transform: nil)
                 hoverBorderLayer.frame = bounds
@@ -1055,7 +1079,7 @@ private final class SelectionView: NSView {
         }
 
         if showsHandles, selection.width > 0 {
-            let local = convert(selection, from: nil)
+            let local = localRect(selection)
             let handlePath = CGMutablePath()
             for handle in SelectorResizeHandle.allCases {
                 let point = handle.point(in: local)

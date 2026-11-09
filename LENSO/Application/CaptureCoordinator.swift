@@ -124,7 +124,7 @@ final class CaptureCoordinator: NSObject {
         panel.orderFrontRegardless()
         panel.makeKey()
         editorPanel = panel
-        log.info("full editor shown")
+        log.info("full editor shown on display \(NSStringFromRect(panel.screen?.frame ?? .zero), privacy: .public)")
     }
 
     private func closeEditor() {
