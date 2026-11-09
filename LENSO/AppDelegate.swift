@@ -14,6 +14,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         registerApplicationIcon()
         // 开始监听剪贴板（记录复制过的截图与文字，含来源应用）
         ClipboardMonitor.shared.start()
+        // 菜单栏常驻应用不该被系统的「突然终止」回收：
+        // 没有窗口时 macOS 会认为它可以随时退出，导致热键忽然全部失灵。
+        ProcessInfo.processInfo.disableSuddenTermination()
+
+        // 截图走直连：热键一按立刻开选区，不等 App 激活、不依赖菜单响应链
+        GlobalHotKeyManager.shared.directHandlers[.captureRegion] = {
+            CaptureCoordinator.shared.startRegionCapture()
+        }
         // 注册系统级全局热键：切到别的 App 也能按 ⇧⌘1 截图
         GlobalHotKeyManager.shared.refresh(using: ShortcutStore.shared)
         // 设置里改了快捷键就重新注册

@@ -23,31 +23,28 @@ final class CaptureCoordinator: NSObject {
     private var editorHost: NSHostingView<CaptureEditorView>?
     /// 钉图窗口集合（持有引用防止释放）
     private var pinnedPanels: [NSPanel] = []
-    /// 屏幕录制权限已验证通过（TCC 状态会话内几乎不变，通过一次后不再重复探测）
-    private var permissionKnownGood = false
 
     func startRegionCapture() {
         log.info("startRegionCapture triggered")
+        // 已经有一轮选区在进行：先把它收掉再重开，而不是默默不理
+        // （用户按了热键却什么都没发生，会以为应用卡住了）
+        if let selector {
+            log.info("selector already open, restarting")
+            selector.cancel()
+            self.selector = nil
+        }
         Task { await startRegionCaptureAsync() }
     }
 
     private func startRegionCaptureAsync() async {
-        // 以真实能力为准（preflight 对 ad-hoc 调试构建不可靠）
-        // 权限通过后会话内缓存，不再每次截图都枚举 SCShareableContent
-        var allowed = permissionKnownGood ? true : await CapturePermissionService.probeAccess()
-        if allowed {
-            permissionKnownGood = true
-        } else {
-            log.info("probe failed, requesting permission")
-            let status = await CapturePermissionService.requestAccess()
-            allowed = status == .authorized
-            if allowed { permissionKnownGood = true }
-        }
-        guard allowed else {
-            log.error("screen capture not permitted")
-            NSSound.beep()
-            return
-        }
+        // 触发阶段**不再**做权限探测。
+        //
+        // 以前这里会先枚举 SCShareableContent 当作权限检查，问题有两个：
+        //   1. 枚举本身会偶发失败（锁屏、显示器热插拔、系统繁忙都会），
+        //      一失败就直接 return，用户看到的就是「按了热键没反应」；
+        //   2. 选区浮层根本不需要屏幕录制权限——它只是个透明面板。
+        // 所以现在先无条件把选区上屏，真正抓图时若没权限，在「确认」那一步
+        // 给出明确提示（见下面的 catch）。触发因此永远是即时的。
 
         // 丝滑 v2：面板立刻上屏（不预抓图），选区里透出实时桌面。
         // 确认后才抓一张全屏当编辑器背景，抓时把选区面板排除在外。
@@ -73,6 +70,14 @@ final class CaptureCoordinator: NSObject {
                 } catch {
                     NSSound.beep()
                     log.error("capture failed: \(error.localizedDescription, privacy: .public)")
+                    if Self.isPermissionError(error) {
+                        self.presentCaptureError(
+                            title: "无法截图：缺少屏幕录制权限",
+                            message: "请到 系统设置 → 隐私与安全性 → 屏幕录制 里勾选 lenso，然后重启应用。"
+                        )
+                    } else {
+                        self.presentCaptureError(title: "截图失败", message: error.localizedDescription)
+                    }
                 }
             }
         }
@@ -193,6 +198,26 @@ final class CaptureCoordinator: NSObject {
         panel.orderFrontRegardless()
         pinnedPanels.append(panel)
         log.info("pinned image \(size.width)x\(size.height)")
+    }
+
+    /// SCK 在没有屏幕录制权限时抛的错误（域 SCStreamErrorDomain / 用户取消）。
+    private static func isPermissionError(_ error: Error) -> Bool {
+        let ns = error as NSError
+        if ns.domain == "SCStreamErrorDomain" { return true }
+        // CGError 里 .notPermitted / .invalidDisplay 也常被包成这个
+        return ns.code == -3801 || ns.code == -3802
+    }
+
+    /// 截图失败时给一个用户看得见的提示（beep 太容易错过）。
+    /// 用 NSAlert 而不是自绘浮层：失败路径要尽量简单，别再依赖别的东西能跑起来。
+    private func presentCaptureError(title: String, message: String) {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "好")
+        alert.runModal()
     }
 
     private func copyToClipboard(image: CGImage) {

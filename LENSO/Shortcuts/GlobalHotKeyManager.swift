@@ -120,19 +120,39 @@ final class GlobalHotKeyManager {
 
     // MARK: - 触发
 
+    /// 直接注册的动作（不经过菜单响应链）。
+    ///
+    /// 为什么要有这条路径：原来统一靠「找菜单项 → sendAction」转发，但
+    /// `NSApp.activate` 是异步的，刚激活时响应链可能还没就绪，菜单项也可能
+    /// 找不到目标，结果就是按了热键却什么都不发生（用户说的「没反应」）。
+    /// 截图是最高频的动作，直接调函数最可靠。
+    var directHandlers: [ShortcutAction: @MainActor () -> Void] = [:]
+
     private func handle(_ hotKeyID: EventHotKeyID) {
         guard hotKeyID.signature == Self.signature else { return }
         let index = Int(hotKeyID.id)
         guard ShortcutAction.allCases.indices.contains(index) else { return }
         let action = ShortcutAction.allCases[index]
         hotKeyLog.info("global hotkey fired: \(action.rawValue, privacy: .public)")
-        NSApp.activate(ignoringOtherApps: true)
-        guard let item = Self.findMenuItem(titled: action.menuTitle) else {
-            hotKeyLog.error("menu item not found for \(action.rawValue, privacy: .public)")
+
+        // 截图：直接执行，不等激活、不走响应链
+        if let direct = directHandlers[action] {
+            NSApp.activate(ignoringOtherApps: true)
+            direct()
             return
         }
-        guard let selector = item.action else { return }
-        NSApp.sendAction(selector, to: item.target, from: item)
+
+        // 其余动作（开窗口等）走菜单：激活是异步的，等下一拍再发，
+        // 否则刚激活时响应链还没接好，sendAction 会石沉大海。
+        NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.async {
+            guard let item = Self.findMenuItem(titled: action.menuTitle) else {
+                hotKeyLog.error("menu item not found for \(action.rawValue, privacy: .public)")
+                return
+            }
+            guard let selector = item.action else { return }
+            NSApp.sendAction(selector, to: item.target, from: item)
+        }
     }
 
     /// 在主菜单里按标题找菜单项（递归子菜单）。
