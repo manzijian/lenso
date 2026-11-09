@@ -14,6 +14,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         registerApplicationIcon()
         // 开始监听剪贴板（记录复制过的截图与文字，含来源应用）
         ClipboardMonitor.shared.start()
+        // 注册系统级全局热键：切到别的 App 也能按 ⇧⌘1 截图
+        GlobalHotKeyManager.shared.refresh(using: ShortcutStore.shared)
+        // 设置里改了快捷键就重新注册
+        NotificationCenter.default.addObserver(
+            forName: .lensoShortcutsChanged,
+            object: nil,
+            queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                GlobalHotKeyManager.shared.refresh(using: ShortcutStore.shared)
+            }
+        }
     }
 
     private func registerApplicationIcon() {

@@ -1,6 +1,11 @@
 import Foundation
 import Observation
 
+extension Notification.Name {
+    /// 快捷键配置变化（设置里改了 / 恢复默认）
+    static let lensoShortcutsChanged = Notification.Name("com.lenso.shortcutsChanged")
+}
+
 /// 快捷键配置的单一数据源：读取 / 修改 / 持久化到 UserDefaults。
 @Observable
 @MainActor
@@ -30,6 +35,7 @@ final class ShortcutStore {
         guard conflict(for: combo, excluding: action) == nil else { return false }
         combos[action] = combo
         persist()
+        notifyChanged()
         return true
     }
 
@@ -43,16 +49,23 @@ final class ShortcutStore {
     func reset(_ action: ShortcutAction) {
         combos[action] = .defaultCombo(for: action)
         persist()
+        notifyChanged()
     }
 
     func resetAll() {
         combos = Dictionary(
             uniqueKeysWithValues: ShortcutAction.allCases.map { ($0, ShortcutCombo.defaultCombo(for: $0)) }
         )
+        notifyChanged()
         persist()
     }
 
     // MARK: - Persistence
+
+    /// 快捷键变了：通知全局热键管理器重新注册。
+    private func notifyChanged() {
+        NotificationCenter.default.post(name: .lensoShortcutsChanged, object: nil)
+    }
 
     private func persist() {
         // String 键保证 JSON 编码为对象，且对旧版本缺失的动作更宽容。

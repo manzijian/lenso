@@ -25,6 +25,20 @@ enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// 顶部菜单里对应的菜单项标题。
+    /// 全局热键触发时按这个标题找到菜单项并执行它的动作，
+    /// 这样菜单与全局热键共用同一份实现，不会各写一套逻辑跑偏。
+    var menuTitle: String {
+        switch self {
+        case .captureRegion: "区域截图"
+        case .openLibrary: "打开图库"
+        case .previewLatest: "预览最新截图"
+        case .globalSearch: "全局搜索"
+        case .clipboardHistory: "剪贴板历史"
+        case .openSettings: "打开设置"
+        }
+    }
+
     /// 设置窗口中使用的 SF Symbol。
     var icon: String {
         switch self {
