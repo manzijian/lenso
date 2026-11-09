@@ -168,8 +168,17 @@ final class RegionSelectorController: NSObject {
         }
         panels.first?.makeKey()
         NSCursor.crosshair.set()
-        snappableWindows = Self.loadSnappableWindows()
-        selLog.info("selector shown live, snappable windows: \(self.snappableWindows.count)")
+        // 十字线立刻定位到当前光标：不等第一次 mouseMoved，浮层一出现就有反馈
+        let cursor = NSEvent.mouseLocation
+        panels.forEach { $0.syncCrosshair(to: cursor) }
+        // 窗口枚举（CGWindowListCopyWindowInfo）放到下一拍再做：
+        // 它会阻塞主线程十几毫秒，挡在浮层上屏之后、第一次鼠标事件之前，
+        // 手感上就是「浮层出来了但第一下拖动有点黏」。
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.isDismissed else { return }
+            self.snappableWindows = Self.loadSnappableWindows()
+            selLog.info("selector shown live, snappable windows: \(self.snappableWindows.count)")
+        }
 
         rightClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown]) { [weak self] event in
             guard let self, self.panels.contains(where: { event.window === $0 }) else { return event }
@@ -560,7 +569,15 @@ final class RegionSelectorPanel: NSPanel {
         confirmBar.isHidden = true
     }
 
-    /// 鼠标移动/拖拽时刷新十字线和放大镜
+    /// 浮层刚上屏时调用：不等用户移动鼠标，十字线立刻出现在当前光标处。
+    /// （以前只有第一次 mouseMoved 才画十字线，浮层出现到鼠标动之间是空白的，
+    ///   手感上就是「按了热键但没反应」。）
+    func syncCrosshair(to globalPoint: CGPoint) {
+        guard screenFrame.contains(globalPoint) else { return }
+        updateOverlay(at: globalPoint)
+    }
+
+    /// 鼠标移动/拖拽时刷新十字线
     private func updateOverlay(at globalPoint: CGPoint) {
         let local = CGPoint(
             x: globalPoint.x - screenFrame.origin.x,
@@ -676,8 +693,11 @@ private final class CrosshairView: NSView {
 
     func update(at localPoint: CGPoint) {
         isHidden = false
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         vLine.frame = CGRect(x: localPoint.x - 0.5, y: 0, width: 1, height: bounds.height)
         hLine.frame = CGRect(x: 0, y: localPoint.y - 0.5, width: bounds.width, height: 1)
+        CATransaction.commit()
     }
 }
 
@@ -753,6 +773,12 @@ private final class SelectionView: NSView {
 
     private func layoutLayers() {
         guard let layer else { return }
+        // CAShapeLayer 的 path / frame 都是可动画属性：不在事务里关掉隐式动画的话，
+        // 每次拖拽更新都会补一段 0.25s 的过渡，选区会明显「追不上」光标。
+        // 这是拖拽手感发飘的主要原因。
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
         // 亮区 = 选区（拖拽中）或悬停窗口（未拖拽）；其余全部压暗
         let brightGlobal: CGRect?
         if selection.width > 0 {
