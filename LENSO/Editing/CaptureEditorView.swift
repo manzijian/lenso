@@ -350,7 +350,7 @@ struct CaptureEditorView: View {
                     .frame(width: 30, height: 30)
                 Image(systemName: "arrow.up.left")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(state.activeKind == nil ? .white : .secondary)
+                    .foregroundStyle(state.activeKind == nil ? .white : Color.primary.opacity(0.85))
             }
             .frame(width: 34, height: 34)
             .contentShape(Rectangle())
@@ -384,7 +384,7 @@ struct CaptureEditorView: View {
             // 钉图：把当前合成结果钉在屏幕最上层
             Image(systemName: "pin.fill")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.primary.opacity(0.85))
                 .frame(width: 30, height: 30)
                 .contentShape(Rectangle())
                 .onTapGesture { pinImage() }
@@ -401,7 +401,7 @@ struct CaptureEditorView: View {
             // 丢弃本次截图（不保存）
             Image(systemName: "xmark")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.primary.opacity(0.85))
                 .frame(width: 30, height: 30)
                 .background(Circle().fill(.primary.opacity(0.07)))
                 .contentShape(Rectangle())
@@ -411,13 +411,14 @@ struct CaptureEditorView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background {
-            if #available(macOS 26.0, *), AppSettings.shared.glassEffect {
-                Capsule().fill(.clear).glassEffect(.regular, in: Capsule())
-            } else {
-                Capsule().fill(.ultraThinMaterial)
-            }
+            Capsule()
+                .fill(Color(nsColor: .windowBackgroundColor))
+                .overlay(
+                    Capsule()
+                        .stroke(Color.black.opacity(0.12), lineWidth: 1)
+                )
         }
-        .shadow(color: .black.opacity(0.2), radius: 16, y: 4)
+        .shadow(color: .black.opacity(0.22), radius: 16, y: 5)
     }
 
     // MARK: - 右侧属性面板（严格对齐参考图 3）
@@ -458,16 +459,14 @@ struct CaptureEditorView: View {
         }
         .padding(16)
         .background {
-            if #available(macOS 26.0, *), AppSettings.shared.glassEffect {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(.clear)
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            } else {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(.ultraThinMaterial)
-            }
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color(nsColor: .windowBackgroundColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                )
         }
-        .shadow(color: .black.opacity(0.2), radius: 20, y: 8)
+        .shadow(color: .black.opacity(0.22), radius: 20, y: 6)
     }
 
     // MARK: - 面板页签内容
@@ -1246,14 +1245,14 @@ private struct ToolIcon: View {
     var body: some View {
         Image(systemName: icon)
             .font(.system(size: 15, weight: .medium))
-            .foregroundStyle(isActive ? Color(nsColor: .controlAccentColor) : (hovering ? .primary : .secondary))
+            .foregroundStyle(isActive ? Color(nsColor: .controlAccentColor) : (hovering ? .primary : Color.primary.opacity(0.85)))
             .opacity(disabled ? 0.35 : 1)
             .frame(width: 32, height: 32)
             .background {
                 if isActive {
                     RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .controlAccentColor).opacity(0.15))
                 } else if hovering {
-                    RoundedRectangle(cornerRadius: 8).fill(.primary.opacity(0.06))
+                    RoundedRectangle(cornerRadius: 8).fill(.primary.opacity(0.08))
                 }
             }
             .onHover { hovering = $0 }
