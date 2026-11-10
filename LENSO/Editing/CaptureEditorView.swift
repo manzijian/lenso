@@ -26,6 +26,8 @@ struct CaptureEditorView: View {
     @State private var draggingHandle: SelectionHandle? = nil
     @State private var drawingAnnotation = false
 
+    /// 是否显示右侧属性面板（可关闭，避免遮挡）
+    @State private var isSidePanelVisible = true
     /// 右侧面板页签
     @State private var panelTab: PanelTab = .annotation
     /// OCR 与翻译的运行状态
@@ -153,34 +155,123 @@ struct CaptureEditorView: View {
         onPin(composited)
     }
 
-    /// 工具栏挂在选区下边缘中点；属性面板挂在选区右侧垂直居中
+    // MARK: - 布局计算与避免遮挡
+
+    private struct EditorLayoutPositions {
+        let toolbarFrame: CGRect
+        let panelFrame: CGRect
+    }
+
+    /// 计算工具栏与属性面板（OCR卡片）位置，严格保证二者永不重叠，避免保存/取消按钮被遮挡
+    private static func calculateLayout(
+        selection: CGRect,
+        screenSize: CGSize,
+        toolbarSize: CGSize,
+        panelSize: CGSize
+    ) -> EditorLayoutPositions {
+        let margin: CGFloat = 8
+        let spacing: CGFloat = 12
+
+        // 1. 计算 bottomToolbar 位置
+        let toolbarX = min(
+            max(toolbarSize.width / 2 + margin, selection.midX),
+            screenSize.width - toolbarSize.width / 2 - margin
+        )
+
+        // 优先在选区下方；放不下放选区上方；都放不下放选区内底端（Snipaste 策略）
+        let toolbarY: CGFloat
+        if selection.maxY + spacing + toolbarSize.height + margin <= screenSize.height {
+            toolbarY = selection.maxY + spacing + toolbarSize.height / 2
+        } else if selection.minY - spacing - toolbarSize.height >= margin {
+            toolbarY = selection.minY - spacing - toolbarSize.height / 2
+        } else {
+            toolbarY = min(
+                selection.maxY - spacing - toolbarSize.height / 2,
+                screenSize.height - toolbarSize.height / 2 - margin
+            )
+        }
+
+        let toolbarRect = CGRect(
+            x: toolbarX - toolbarSize.width / 2,
+            y: toolbarY - toolbarSize.height / 2,
+            width: toolbarSize.width,
+            height: toolbarSize.height
+        )
+
+        // 2. 计算 sidePanel（OCR/属性面板）位置
+        // 优先放选区右侧；右侧不够放选区左侧；两边都不够放屏幕右侧
+        let panelX: CGFloat
+        if selection.maxX + spacing + panelSize.width + margin <= screenSize.width {
+            panelX = selection.maxX + spacing + panelSize.width / 2
+        } else if selection.minX - spacing - panelSize.width >= margin {
+            panelX = selection.minX - spacing - panelSize.width / 2
+        } else {
+            panelX = screenSize.width - panelSize.width / 2 - margin
+        }
+
+        let panelLeft = panelX - panelSize.width / 2
+        let panelRight = panelX + panelSize.width / 2
+
+        // 判断 X 轴是否与底部工具栏重叠（留出间距）
+        let overlapsX = panelLeft < toolbarRect.maxX + spacing && panelRight > toolbarRect.minX - spacing
+
+        var panelY: CGFloat
+        if overlapsX {
+            // X 轴重叠：垂直方向严格避让工具栏，绝不能遮挡保存/取消按钮
+            if toolbarRect.midY > screenSize.height / 2 {
+                // 工具栏偏屏幕下方：属性面板放置在工具栏上方
+                let maxPanelBottom = toolbarRect.minY - spacing
+                panelY = maxPanelBottom - panelSize.height / 2
+                panelY = max(panelSize.height / 2 + margin, panelY)
+            } else {
+                // 工具栏偏屏幕上方：属性面板放置在工具栏下方
+                let minPanelTop = toolbarRect.maxY + spacing
+                panelY = minPanelTop + panelSize.height / 2
+                panelY = min(screenSize.height - panelSize.height / 2 - margin, panelY)
+            }
+        } else {
+            // X 轴不重叠：垂直居中于选区
+            panelY = min(
+                max(panelSize.height / 2 + margin, selection.midY),
+                screenSize.height - panelSize.height / 2 - margin
+            )
+        }
+
+        let panelRect = CGRect(
+            x: panelX - panelSize.width / 2,
+            y: panelY - panelSize.height / 2,
+            width: panelSize.width,
+            height: panelSize.height
+        )
+
+        return EditorLayoutPositions(toolbarFrame: toolbarRect, panelFrame: panelRect)
+    }
+
+    /// 工具栏与属性面板挂载
     @ViewBuilder
     private var toolbarAndPanel: some View {
-        // selection 已是屏幕内坐标（原点左上），直接用
         let localSel = selection
-        // 工具栏位置：选区下方 12pt，横向居中于选区（越界时往屏内收）
-        let toolbarSize = CGSize(width: 720, height: 52)
-        let toolbarX = min(
-            max(toolbarSize.width / 2 + 8, localSel.midX),
-            screenFrame.width - toolbarSize.width / 2 - 8
-        )
-        let toolbarY = min(localSel.maxY + 14 + toolbarSize.height / 2, screenFrame.height - toolbarSize.height / 2 - 8)
-        // 面板位置：选区右侧 16pt，垂直居中于选区（越界时往屏内收）
-        let panelSize = CGSize(width: 252, height: 470)
-        let panelX = min(localSel.maxX + 16 + panelSize.width / 2, screenFrame.width - panelSize.width / 2 - 8)
-        let panelY = min(
-            max(panelSize.height / 2 + 8, localSel.midY),
-            screenFrame.height - panelSize.height / 2 - 8
+        let toolbarSize = CGSize(width: 610, height: 52)
+        let panelSize = CGSize(width: 270, height: 410)
+        let layout = Self.calculateLayout(
+            selection: localSel,
+            screenSize: screenFrame.size,
+            toolbarSize: toolbarSize,
+            panelSize: panelSize
         )
 
         Group {
+            if isSidePanelVisible {
+                sidePanel
+                    .frame(width: panelSize.width)
+                    .position(x: layout.panelFrame.midX, y: layout.panelFrame.midY)
+                    .zIndex(1)
+            }
+
             bottomToolbar
                 .frame(width: toolbarSize.width)
-                .position(x: toolbarX, y: toolbarY)
-
-            sidePanel
-                .frame(width: panelSize.width)
-                .position(x: panelX, y: panelY)
+                .position(x: layout.toolbarFrame.midX, y: layout.toolbarFrame.midY)
+                .zIndex(10)
         }
     }
 
@@ -213,6 +304,18 @@ struct CaptureEditorView: View {
 
             ToolIcon(icon: "arrow.uturn.backward", kind: nil, state: state, disabled: !state.canUndo) { state.undo() }
             ToolIcon(icon: "arrow.uturn.forward", kind: nil, state: state, disabled: !state.canRedo) { state.redo() }
+
+            // OCR 快捷入口：点按直接打开 OCR 卡片
+            ToolIcon(icon: "doc.text.viewfinder", kind: nil, state: state) {
+                if isSidePanelVisible && panelTab == .ocr {
+                    isSidePanelVisible = false
+                } else {
+                    isSidePanelVisible = true
+                    panelTab = .ocr
+                    if ocrPhase == .idle { runOCR() }
+                }
+            }
+            .help("文字识别（OCR）")
 
             // 钉图：把当前合成结果钉在屏幕最上层
             Image(systemName: "pin.fill")
@@ -257,8 +360,8 @@ struct CaptureEditorView: View {
 
     private var sidePanel: some View {
         VStack(spacing: 14) {
-            // 顶部工具行：标注 / 翻译 / OCR / 更多（图标圆底）
-            HStack(spacing: 20) {
+            // 顶部工具行：标注 / 翻译 / OCR / 关闭
+            HStack(spacing: 16) {
                 SideTool(icon: "highlighter", label: "标注", active: panelTab == .annotation) {
                     panelTab = .annotation
                     state.activeKind = .brush
@@ -269,7 +372,18 @@ struct CaptureEditorView: View {
                 SideTool(icon: "doc.text.viewfinder", label: "OCR", active: panelTab == .ocr) {
                     if ocrPhase == .idle { runOCR() } else { panelTab = .ocr }
                 }
-                SideTool(icon: "ellipsis", label: "更多", active: false) {}
+                Spacer()
+                Button {
+                    isSidePanelVisible = false
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 24, height: 24)
+                        .background(Circle().fill(.primary.opacity(0.06)))
+                }
+                .buttonStyle(.plain)
+                .help("关闭面板")
             }
 
             switch panelTab {
