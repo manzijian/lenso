@@ -791,8 +791,9 @@ private struct SelectionContent: View {
                     dragOrigin = value.startLocation
                     selectionOrigin = selection
                 }
-                let delta = CGPoint(x: value.location.x - dragOrigin!.x, y: value.location.y - dragOrigin!.y)
-                let newSel = adjustedSelection(handle: draggingHandle, origin: selectionOrigin!, delta: delta)
+                guard let origin = dragOrigin, let selOrigin = selectionOrigin else { return }
+                let delta = CGPoint(x: value.location.x - origin.x, y: value.location.y - origin.y)
+                let newSel = adjustedSelection(handle: draggingHandle, origin: selOrigin, delta: delta)
                 onSelectionChange(newSel)
             }
             .onEnded { _ in

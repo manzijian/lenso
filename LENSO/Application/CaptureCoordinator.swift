@@ -67,7 +67,8 @@ final class CaptureCoordinator: NSObject {
                     }
                     let screenFrame = NSScreen.screens
                         .first(where: {
-                            $0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! CGDirectDisplayID == displayID
+                            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == displayID
+                                || ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) == displayID
                         })?
                         .frame ?? rect
                     self.showFullEditor(frozen: frozen, screenFrame: screenFrame, initialSelection: rect)
@@ -79,7 +80,8 @@ final class CaptureCoordinator: NSObject {
                     if Self.isPermissionError(error) {
                         self.presentCaptureError(
                             title: "无法截图：缺少屏幕录制权限",
-                            message: "请到 系统设置 → 隐私与安全性 → 屏幕录制 里勾选 lenso，然后重启应用。"
+                            message: "请到「系统设置 → 隐私与安全性 → 屏幕录制」中为 lenso 开启权限，然后重新截图。",
+                            isPermission: true
                         )
                     } else {
                         self.presentCaptureError(title: "截图失败", message: error.localizedDescription)
@@ -216,14 +218,24 @@ final class CaptureCoordinator: NSObject {
 
     /// 截图失败时给一个用户看得见的提示（beep 太容易错过）。
     /// 用 NSAlert 而不是自绘浮层：失败路径要尽量简单，别再依赖别的东西能跑起来。
-    private func presentCaptureError(title: String, message: String) {
+    private func presentCaptureError(title: String, message: String, isPermission: Bool = false) {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = message
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "好")
-        alert.runModal()
+        if isPermission {
+            alert.addButton(withTitle: "打开系统设置")
+            alert.addButton(withTitle: "好")
+        } else {
+            alert.addButton(withTitle: "好")
+        }
+        let response = alert.runModal()
+        if isPermission && response == .alertFirstButtonReturn {
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+                NSWorkspace.shared.open(url)
+            }
+        }
     }
 
     private func copyToClipboard(image: CGImage) {

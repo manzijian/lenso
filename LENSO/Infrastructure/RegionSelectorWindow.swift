@@ -217,14 +217,14 @@ final class RegionSelectorController: NSObject {
         }
     }
 
-    /// CGWindowList 取窗口：只认当时前台 App 的窗口（Ta 的策略），
-    /// 避免切到别的 App 后仍命中旧窗口；层级 >= 0，太小/透明的不要。
+    /// CGWindowList 取在屏窗口：排除自身，允许吸附其他 App 的窗口；
+    /// 层级 >= 0 且 <= 25，太小/透明的不要。
     static func loadSnappableWindows() -> [(windowID: CGWindowID, frame: CGRect, title: String)] {
         let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
         guard let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
             return []
         }
-        let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let ownPID = ProcessInfo.processInfo.processIdentifier
         // CGWindowBounds 用的是「主屏左上角为原点、y 向下」的坐标系，
         // 所以换算回 AppKit 全局坐标时，基准必须是**主屏**的高度，
         // 不能用所有屏里最大的 maxY——接上更高的外接屏后，窗口吸附会整体偏移。
@@ -232,9 +232,9 @@ final class RegionSelectorController: NSObject {
             ?? NSScreen.main?.frame.height ?? 0
         var result: [(CGWindowID, CGRect, String)] = []
         for w in list {
-            guard let layer = w[kCGWindowLayer as String] as? Int, layer >= 0,
+            guard let layer = w[kCGWindowLayer as String] as? Int, layer >= 0 && layer <= 25,
                   let ownerPID = (w[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value,
-                  frontmostPID == nil || ownerPID == frontmostPID,
+                  ownerPID != ownPID,
                   let boundsDict = w[kCGWindowBounds as String] as? [String: CGFloat],
                   let width = boundsDict["Width"], let height = boundsDict["Height"],
                   width >= 24, height >= 16,
@@ -412,9 +412,11 @@ final class RegionSelectorController: NSObject {
     func clickAt(globalPoint: CGPoint) {
         guard let hit = hitTestWindow(at: globalPoint),
               let downPanel else { return }
+        let clamped = hit.intersection(downPanel.screenFrameForDisplay)
+        guard clamped.width >= 8, clamped.height >= 8 else { return }
         selLog.info("window snap click at \(NSStringFromPoint(globalPoint), privacy: .public)")
         let id = downPanel.ownDisplayID
-        onComplete?(hit, id, CGWindowID(downPanel.windowNumber), frozenFrames[id])
+        onComplete?(clamped, id, CGWindowID(downPanel.windowNumber), frozenFrames[id])
     }
 
     /// 供 coordinator 在编辑器上屏后调用：关选区面板（不触发回调）
@@ -505,7 +507,9 @@ final class RegionSelectorPanel: NSPanel {
     init(screen: NSScreen, controller: RegionSelectorController) {
         self.controller = controller
         self.screenFrame = screen.frame
-        let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! CGDirectDisplayID
+        let displayID = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+            ?? (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID)
+            ?? 0
         self.ownDisplayID = displayID
         let label = NSTextField(labelWithString: "")
         label.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)

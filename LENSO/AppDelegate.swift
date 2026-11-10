@@ -18,9 +18,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 没有窗口时 macOS 会认为它可以随时退出，导致热键忽然全部失灵。
         ProcessInfo.processInfo.disableSuddenTermination()
 
-        // 截图走直连：热键一按立刻开选区，不等 App 激活、不依赖菜单响应链
+        // 快捷键走直连：立刻开选区/浮窗，不等 App 激活、不依赖菜单响应链
         GlobalHotKeyManager.shared.directHandlers[.captureRegion] = {
             CaptureCoordinator.shared.startRegionCapture()
+        }
+        GlobalHotKeyManager.shared.directHandlers[.globalSearch] = {
+            SearchPanelController.shared.show()
+        }
+        GlobalHotKeyManager.shared.directHandlers[.clipboardHistory] = {
+            ClipboardPanelController.shared.show()
         }
         // 注册系统级全局热键：切到别的 App 也能按 ⇧⌘1 截图
         GlobalHotKeyManager.shared.refresh(using: ShortcutStore.shared)
