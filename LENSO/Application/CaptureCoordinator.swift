@@ -7,6 +7,8 @@ extension Notification.Name {
     static let screenshotSaved = Notification.Name("com.lenso.screenshotSaved")
     /// 截图后显示预览：保存完成后发给菜单栏面板，打开预览窗口
     static let openPreviewForScreenshot = Notification.Name("com.lenso.openPreviewForScreenshot")
+    /// 编辑器滚轮事件通知
+    static let editorScrollWheel = Notification.Name("com.lenso.editorScrollWheel")
 }
 
 private let log = Logger(subsystem: "com.lenso.app", category: "capture")
@@ -247,21 +249,27 @@ final class CaptureCoordinator: NSObject {
     }
 }
 
-/// 编辑器覆盖面板：Esc 取消
+/// 编辑器覆盖面板：Esc 取消，滚轮缩放选区
 final class EditorPanel: NSPanel {
     var onCancel: (() -> Void)?
     override var canBecomeKey: Bool { true }
     override func cancelOperation(_ sender: Any?) { onCancel?() }
+    override func scrollWheel(with event: NSEvent) {
+        NotificationCenter.default.post(name: .editorScrollWheel, object: event)
+    }
 }
 
-/// 钉图视图：可拖动；悬停右上角出现关闭按钮；双击关闭
+/// 钉图视图：可拖动；滚轮以鼠标为中心缩放；悬停右上角出现关闭按钮；双击关闭
 final class PinnedImageView: NSView {
     var onClose: (() -> Void)?
     private let imageView: NSImageView
     private let closeButton = NSButton()
     private var tracking: NSTrackingArea?
+    private let baseSize: NSSize
+    private var currentScale: CGFloat = 1.0
 
     init(frame: NSRect, image: CGImage) {
+        self.baseSize = frame.size
         imageView = NSImageView(frame: NSRect(origin: .zero, size: frame.size))
         super.init(frame: frame)
         imageView.image = NSImage(cgImage: image, size: frame.size)
@@ -297,6 +305,35 @@ final class PinnedImageView: NSView {
         }
         super.mouseDown(with: event)
         window?.performDrag(with: event)
+    }
+
+    /// 鼠标滚轮放大缩小贴图（Snipaste 核心交互）
+    override func scrollWheel(with event: NSEvent) {
+        let delta = event.scrollingDeltaY
+        guard abs(delta) > 0.05 else { return }
+
+        // 向上滚放大，向下滚缩小（缩放区间 15% ~ 500%）
+        let zoomFactor: CGFloat = delta > 0 ? 1.08 : 0.92
+        let newScale = min(max(currentScale * zoomFactor, 0.15), 5.0)
+        guard newScale != currentScale else { return }
+
+        currentScale = newScale
+        guard let window else { return }
+
+        let mouseScreen = NSEvent.mouseLocation
+        let oldFrame = window.frame
+        let newWidth = max(40, round(baseSize.width * newScale))
+        let newHeight = max(40, round(baseSize.height * newScale))
+
+        // 以鼠标指针在当前窗口内的相对位置为锚点缩放
+        let relX = (mouseScreen.x - oldFrame.minX) / max(1, oldFrame.width)
+        let relY = (mouseScreen.y - oldFrame.minY) / max(1, oldFrame.height)
+
+        let newX = mouseScreen.x - newWidth * relX
+        let newY = mouseScreen.y - newHeight * relY
+        let newFrame = NSRect(x: newX, y: newY, width: newWidth, height: newHeight)
+
+        window.setFrame(newFrame, display: true)
     }
 
     override func updateTrackingAreas() {

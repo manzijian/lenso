@@ -127,6 +127,40 @@ struct CaptureEditorView: View {
             nudgeSelection(dx: 0, dy: 1)
             return .handled
         }
+        .onReceive(NotificationCenter.default.publisher(for: .editorScrollWheel)) { note in
+            guard let event = note.object as? NSEvent else { return }
+            handleScrollWheel(event)
+        }
+    }
+
+    /// 鼠标滚轮缩放选区大小（以鼠标指针所在位置为锚点缩放）
+    private func handleScrollWheel(_ event: NSEvent) {
+        guard state.textEditingPoint == nil else { return }
+        let delta = event.scrollingDeltaY
+        guard abs(delta) > 0.05 else { return }
+
+        let factor: CGFloat = delta > 0 ? 1.04 : 0.96
+        let loc = event.locationInWindow
+        // AppKit 窗口坐标原点在左下，转换为屏幕内坐标（原点在左上）
+        let mouseInScreen = CGPoint(
+            x: loc.x,
+            y: screenFrame.height - loc.y
+        )
+
+        let newWidth = max(24, min(screenFrame.width, selection.width * factor))
+        let newHeight = max(24, min(screenFrame.height, selection.height * factor))
+
+        // 以鼠标为中心缩放（如果鼠标在选区内），否则以选区中心缩放
+        let anchorX = selection.contains(mouseInScreen) ? mouseInScreen.x : selection.midX
+        let anchorY = selection.contains(mouseInScreen) ? mouseInScreen.y : selection.midY
+
+        let relX = (anchorX - selection.minX) / max(1, selection.width)
+        let relY = (anchorY - selection.minY) / max(1, selection.height)
+
+        let newX = min(max(0, anchorX - newWidth * relX), screenFrame.width - newWidth)
+        let newY = min(max(0, anchorY - newHeight * relY), screenFrame.height - newHeight)
+
+        selection = CGRect(x: newX, y: newY, width: newWidth, height: newHeight)
     }
 
     /// 方向键微调选区

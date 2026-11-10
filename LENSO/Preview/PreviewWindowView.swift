@@ -11,6 +11,7 @@ struct PreviewWindowView: View {
     @State private var zoom: CGFloat = 1
     @State private var image: CGImage?
     @State private var record: ScreenshotRecord?
+    @State private var scrollMonitor: Any? = nil
     @Environment(\.dismissWindow) private var dismissWindow
 
     var body: some View {
@@ -59,6 +60,21 @@ struct PreviewWindowView: View {
         }
         .lensoColorScheme()
         .task(id: screenshotID) { loadRecord() }
+        .onAppear {
+            scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel]) { event in
+                let delta = event.scrollingDeltaY
+                if abs(delta) > 0.05 {
+                    zoom = min(max(zoom + (delta > 0 ? 0.08 : -0.08), 0.25), 4.0)
+                }
+                return event
+            }
+        }
+        .onDisappear {
+            if let monitor = scrollMonitor {
+                NSEvent.removeMonitor(monitor)
+                scrollMonitor = nil
+            }
+        }
     }
 
     private func loadRecord() {
