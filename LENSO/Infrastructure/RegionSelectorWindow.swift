@@ -312,9 +312,12 @@ final class RegionSelectorController: NSObject {
         didDrag = true
         switch dragMode {
         case .creating:
-            hoverWindowFrame = nil
-            panels.forEach { $0.drawHoverHighlight(nil) }
-            let rect = snapRect(rectBetween(origin, globalPoint)).intersection(displayFrame)
+            if hoverWindowFrame != nil {
+                hoverWindowFrame = nil
+                panels.forEach { $0.drawHoverHighlight(nil) }
+            }
+            // 自由框选：1:1 紧跟鼠标光标，不强行吸附后台散落窗口边缘，保证丝滑流畅
+            let rect = rectBetween(origin, globalPoint).intersection(displayFrame)
             selection = rect.width >= 1 && rect.height >= 1 ? rect : nil
         case .moving(let original):
             NSCursor.closedHand.set()

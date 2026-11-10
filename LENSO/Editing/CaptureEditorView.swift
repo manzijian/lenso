@@ -23,7 +23,6 @@ struct CaptureEditorView: View {
 
     @State private var state = AnnotationState()
     @State private var selection: CGRect
-    @State private var draggingHandle: SelectionHandle? = nil
     @State private var drawingAnnotation = false
 
     /// 是否显示右侧属性面板（可关闭，避免遮挡）
@@ -81,16 +80,14 @@ struct CaptureEditorView: View {
                 .position(x: screenFrame.width / 2, y: screenFrame.height / 2)
                 .allowsHitTesting(false)
 
-            // 选区内容视图（挖空 + 标注渲染）
+            // 选区内容视图（挖空 + 手柄 + 标注渲染 + 尺寸调整）
             SelectionContent(
                 frozenImage: frozenImage,
                 screenFrame: screenFrame,
                 selection: selection,
                 state: state,
                 imageScale: imageScale,
-                onSelectionChange: { selection = $0 },
-                onDragHandle: { draggingHandle = $0 },
-                draggingHandle: draggingHandle
+                onSelectionChange: { selection = $0 }
             )
 
             // 工具栏：紧贴选区下方（随选区移动），右侧属性面板紧贴选区右侧
@@ -110,6 +107,39 @@ struct CaptureEditorView: View {
         .frame(width: screenFrame.width, height: screenFrame.height)
         .background(Color.black.opacity(0.001)) // 接管点击
         .onExitCommand { discard() }           // Esc 取消
+        .onKeyPress(.return) {
+            finishEditing()
+            return .handled
+        }
+        .onKeyPress(.leftArrow) {
+            nudgeSelection(dx: -1, dy: 0)
+            return .handled
+        }
+        .onKeyPress(.rightArrow) {
+            nudgeSelection(dx: 1, dy: 0)
+            return .handled
+        }
+        .onKeyPress(.upArrow) {
+            nudgeSelection(dx: 0, dy: -1)
+            return .handled
+        }
+        .onKeyPress(.downArrow) {
+            nudgeSelection(dx: 0, dy: 1)
+            return .handled
+        }
+    }
+
+    /// 方向键微调选区
+    private func nudgeSelection(dx: CGFloat, dy: CGFloat) {
+        guard state.textEditingPoint == nil else { return }
+        let moved = selection.offsetBy(dx: dx, dy: dy)
+        let clamped = CGRect(
+            x: min(max(0, moved.minX), screenFrame.width - moved.width),
+            y: min(max(0, moved.minY), screenFrame.height - moved.height),
+            width: moved.width,
+            height: moved.height
+        )
+        selection = clamped
     }
 
     /// 丢弃本次截图
@@ -803,11 +833,17 @@ struct CaptureEditorView: View {
     }
 }
 
-// MARK: - 选区内容（挖空 + 手柄 + 标注绘制接收鼠标）
+// MARK: - 选区内容（挖空 + 8 个调整手柄 + 实时尺寸徽标 + 标注画布）
 
-enum SelectionHandle {
-    case topLeft, topRight, bottomLeft, bottomRight
-    case topEdge, bottomEdge, leftEdge, rightEdge
+enum SelectionHandle: CaseIterable {
+    case topLeft, topEdge, topRight, rightEdge, bottomRight, bottomEdge, bottomLeft, leftEdge
+
+    var isCorner: Bool {
+        switch self {
+        case .topLeft, .topRight, .bottomLeft, .bottomRight: true
+        default: false
+        }
+    }
 }
 
 private struct SelectionContent: View {
@@ -817,89 +853,164 @@ private struct SelectionContent: View {
     let state: AnnotationState
     let imageScale: CGFloat
     let onSelectionChange: (CGRect) -> Void
-    let onDragHandle: (SelectionHandle?) -> Void
-    let draggingHandle: SelectionHandle?
 
     @State private var dragOrigin: CGPoint? = nil
     @State private var selectionOrigin: CGRect? = nil
+    @State private var handleDragOrigin: CGPoint? = nil
 
     var body: some View {
-        // 暗幕层（全屏，选区挖空）
-        Canvas { context, size in
-            // selection 已是屏幕内坐标（原点左上），与 Canvas 坐标系一致
-            let localSel = selection
-            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.black.opacity(0.3)))
-            context.blendMode = .clear
-            context.fill(Path(localSel), with: .color(.white))
-            context.blendMode = .normal
-            context.stroke(Path(localSel), with: .color(.white.opacity(0.9)), lineWidth: 1.5)
-        }
-        .frame(width: screenFrame.width, height: screenFrame.height)
-        .position(x: screenFrame.midX - screenFrame.origin.x, y: screenFrame.midY - screenFrame.origin.y)
-        .overlay {
-            // 选区内部：标注绘制画布 + 选中图像预览
-            // 仅在选中标注工具时才消费拖拽（否则拖拽用于移动选区）
-            SelectionInner(
-                frozenImage: frozenImage,
-                screenFrame: screenFrame,
-                selection: selection,
-                state: state,
-                imageScale: imageScale
-            )
-            .frame(width: selection.width, height: selection.height)
-            .position(x: selection.midX, y: selection.midY)
-            .contentShape(Rectangle())
-            .gesture(annotationGesture, including: state.activeKind != nil ? .all : .subviews)
-        }
-        .overlay {
-            // 八个手柄
+        ZStack {
+            // 暗幕层（全屏，选区挖空）：底层完整冻结图透出来，零延迟零卡顿
+            Canvas { context, size in
+                let localSel = selection
+                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.black.opacity(0.3)))
+                context.blendMode = .clear
+                context.fill(Path(localSel), with: .color(.white))
+                context.blendMode = .normal
+                context.stroke(Path(localSel), with: .color(.white.opacity(0.9)), lineWidth: 1.5)
+            }
+            .frame(width: screenFrame.width, height: screenFrame.height)
+            .position(x: screenFrame.midX - screenFrame.origin.x, y: screenFrame.midY - screenFrame.origin.y)
+            .allowsHitTesting(false)
+
+            // 选区内部：选择工具下允许拖拽移动整个选区；标注工具下绘制标注
+            if state.activeKind != nil {
+                SelectionInner(
+                    selection: selection,
+                    state: state
+                )
+                .frame(width: max(1, selection.width), height: max(1, selection.height))
+                .position(x: selection.midX, y: selection.midY)
+                .contentShape(Rectangle())
+                .gesture(annotationGesture)
+            } else {
+                SelectionInner(
+                    selection: selection,
+                    state: state
+                )
+                .frame(width: max(1, selection.width), height: max(1, selection.height))
+                .position(x: selection.midX, y: selection.midY)
+                .contentShape(Rectangle())
+                .gesture(moveGesture)
+            }
+
+            // 尺寸提示（Snipaste 风格胶囊徽标：实时显示宽度与高度）
+            sizeBadge
+
+            // 8 个调整手柄（置于最顶层，直接抓取拖动即可调整选区大小）
             handles
         }
-        .contentShape(Rectangle())
-        .gesture(adjustGesture)
     }
 
-    // MARK: 手柄
+    // MARK: - 尺寸指示器
+
+    private var sizeBadge: some View {
+        Text("\(Int(selection.width)) × \(Int(selection.height))")
+            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(Color.black.opacity(0.75)))
+            .position(
+                x: min(max(45, selection.minX + 45), screenFrame.width - 45),
+                y: selection.minY >= 26 ? selection.minY - 14 : selection.minY + 16
+            )
+            .allowsHitTesting(false)
+    }
+
+    // MARK: - 八个手柄与光标
 
     private var handles: some View {
-        ForEach(handlePositions, id: \.0) { handle, point in
-            RoundedRectangle(cornerRadius: handle == .topEdge || handle == .bottomEdge || handle == .leftEdge || handle == .rightEdge ? 2 : 6)
-                .fill(.white)
-                .frame(width: handleSize(for: handle).width, height: handleSize(for: handle).height)
-                .shadow(radius: 2)
-                .position(point)
-                .onTapGesture { onDragHandle(handle) }
+        ForEach(handlePositions(for: selection), id: \.0) { handle, point in
+            let size = handleSize(for: handle)
+            ZStack {
+                // 增大点击与拖拽热区（26x26），让手柄极其容易被抓取
+                Rectangle()
+                    .fill(Color.white.opacity(0.001))
+                    .frame(width: max(26, size.width + 12), height: max(26, size.height + 12))
+
+                // Snipaste 经典白色圆角方块手柄
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color.white)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 2)
+                            .stroke(Color(nsColor: .controlAccentColor), lineWidth: 1.5)
+                    )
+                    .frame(width: size.width, height: size.height)
+                    .shadow(color: .black.opacity(0.28), radius: 2, y: 1)
+            }
+            .position(point)
+            .gesture(handleDragGesture(for: handle))
+            .onHover { isHovered in
+                if isHovered {
+                    cursorFor(handle: handle).push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
         }
     }
 
-    private var handlePositions: [(SelectionHandle, CGPoint)] {
-        let sel = selection
-        return [
+    private func handlePositions(for sel: CGRect) -> [(SelectionHandle, CGPoint)] {
+        [
             (.topLeft, CGPoint(x: sel.minX, y: sel.minY)),
-            (.topRight, CGPoint(x: sel.maxX, y: sel.minY)),
-            (.bottomLeft, CGPoint(x: sel.minX, y: sel.maxY)),
-            (.bottomRight, CGPoint(x: sel.maxX, y: sel.maxY)),
             (.topEdge, CGPoint(x: sel.midX, y: sel.minY)),
-            (.bottomEdge, CGPoint(x: sel.midX, y: sel.maxY)),
-            (.leftEdge, CGPoint(x: sel.minX, y: sel.midY)),
+            (.topRight, CGPoint(x: sel.maxX, y: sel.minY)),
             (.rightEdge, CGPoint(x: sel.maxX, y: sel.midY)),
+            (.bottomRight, CGPoint(x: sel.maxX, y: sel.maxY)),
+            (.bottomEdge, CGPoint(x: sel.midX, y: sel.maxY)),
+            (.bottomLeft, CGPoint(x: sel.minX, y: sel.maxY)),
+            (.leftEdge, CGPoint(x: sel.minX, y: sel.midY)),
         ]
     }
 
     private func handleSize(for handle: SelectionHandle) -> CGSize {
         switch handle {
-        case .topEdge, .bottomEdge: CGSize(width: 18, height: 6)
-        case .leftEdge, .rightEdge: CGSize(width: 6, height: 18)
-        default: CGSize(width: 11, height: 11)
+        case .topEdge, .bottomEdge: CGSize(width: 18, height: 7)
+        case .leftEdge, .rightEdge: CGSize(width: 7, height: 18)
+        default: CGSize(width: 9, height: 9)
         }
     }
 
-    // MARK: 手势
+    private func cursorFor(handle: SelectionHandle) -> NSCursor {
+        switch handle {
+        case .leftEdge, .rightEdge:
+            return .resizeLeftRight
+        case .topEdge, .bottomEdge:
+            return .resizeUpDown
+        case .topLeft, .bottomRight:
+            return NSCursor.frameResize(position: .topLeft, directions: .all)
+        case .topRight, .bottomLeft:
+            return NSCursor.frameResize(position: .topRight, directions: .all)
+        }
+    }
 
-    private var adjustGesture: some Gesture {
+    // MARK: - 手势
+
+    /// 拖拽手柄调整大小
+    private func handleDragGesture(for handle: SelectionHandle) -> some Gesture {
         DragGesture(minimumDistance: 1, coordinateSpace: .global)
             .onChanged { value in
-                // 正在输文字时不移动/改选区
+                guard state.textEditingPoint == nil else { return }
+                if handleDragOrigin == nil {
+                    handleDragOrigin = value.startLocation
+                    selectionOrigin = selection
+                }
+                guard let origin = handleDragOrigin, let selOrigin = selectionOrigin else { return }
+                let delta = CGPoint(x: value.location.x - origin.x, y: value.location.y - origin.y)
+                let newSel = adjustedSelection(handle: handle, origin: selOrigin, delta: delta)
+                onSelectionChange(newSel)
+            }
+            .onEnded { _ in
+                handleDragOrigin = nil
+                selectionOrigin = nil
+            }
+    }
+
+    /// 拖拽选区整体平移
+    private var moveGesture: some Gesture {
+        DragGesture(minimumDistance: 1, coordinateSpace: .global)
+            .onChanged { value in
                 guard state.textEditingPoint == nil else { return }
                 if dragOrigin == nil {
                     dragOrigin = value.startLocation
@@ -907,44 +1018,86 @@ private struct SelectionContent: View {
                 }
                 guard let origin = dragOrigin, let selOrigin = selectionOrigin else { return }
                 let delta = CGPoint(x: value.location.x - origin.x, y: value.location.y - origin.y)
-                let newSel = adjustedSelection(handle: draggingHandle, origin: selOrigin, delta: delta)
+                let newSel = adjustedSelection(handle: nil, origin: selOrigin, delta: delta)
                 onSelectionChange(newSel)
             }
             .onEnded { _ in
                 dragOrigin = nil
                 selectionOrigin = nil
-                onDragHandle(nil)
             }
     }
 
     private func adjustedSelection(handle: SelectionHandle?, origin: CGRect, delta: CGPoint) -> CGRect {
         guard let handle else {
-            return origin.offsetBy(dx: delta.x, dy: delta.y)
+            let moved = origin.offsetBy(dx: delta.x, dy: delta.y)
+            return CGRect(
+                x: min(max(0, moved.minX), screenFrame.width - moved.width),
+                y: min(max(0, moved.minY), screenFrame.height - moved.height),
+                width: moved.width,
+                height: moved.height
+            )
         }
         var s = origin
         switch handle {
         case .topLeft:
-            s = CGRect(x: origin.minX + delta.x, y: origin.minY + delta.y,
-                       width: origin.width - delta.x, height: origin.height - delta.y)
+            s = CGRect(
+                x: min(origin.maxX - 16, origin.minX + delta.x),
+                y: min(origin.maxY - 16, origin.minY + delta.y),
+                width: max(16, origin.width - delta.x),
+                height: max(16, origin.height - delta.y)
+            )
         case .topRight:
-            s = CGRect(x: origin.minX, y: origin.minY + delta.y,
-                       width: origin.width + delta.x, height: origin.height - delta.y)
+            s = CGRect(
+                x: origin.minX,
+                y: min(origin.maxY - 16, origin.minY + delta.y),
+                width: max(16, origin.width + delta.x),
+                height: max(16, origin.height - delta.y)
+            )
         case .bottomLeft:
-            s = CGRect(x: origin.minX + delta.x, y: origin.minY,
-                       width: origin.width - delta.x, height: origin.height + delta.y)
+            s = CGRect(
+                x: min(origin.maxX - 16, origin.minX + delta.x),
+                y: origin.minY,
+                width: max(16, origin.width - delta.x),
+                height: max(16, origin.height + delta.y)
+            )
         case .bottomRight:
-            s = CGRect(x: origin.minX, y: origin.minY,
-                       width: origin.width + delta.x, height: origin.height + delta.y)
+            s = CGRect(
+                x: origin.minX,
+                y: origin.minY,
+                width: max(16, origin.width + delta.x),
+                height: max(16, origin.height + delta.y)
+            )
         case .topEdge:
-            s = CGRect(x: origin.minX, y: origin.minY + delta.y, width: origin.width, height: origin.height - delta.y)
+            s = CGRect(
+                x: origin.minX,
+                y: min(origin.maxY - 16, origin.minY + delta.y),
+                width: origin.width,
+                height: max(16, origin.height - delta.y)
+            )
         case .bottomEdge:
-            s = CGRect(x: origin.minX, y: origin.minY, width: origin.width, height: origin.height + delta.y)
+            s = CGRect(
+                x: origin.minX,
+                y: origin.minY,
+                width: origin.width,
+                height: max(16, origin.height + delta.y)
+            )
         case .leftEdge:
-            s = CGRect(x: origin.minX + delta.x, y: origin.minY, width: origin.width - delta.x, height: origin.height)
+            s = CGRect(
+                x: min(origin.maxX - 16, origin.minX + delta.x),
+                y: origin.minY,
+                width: max(16, origin.width - delta.x),
+                height: origin.height
+            )
         case .rightEdge:
-            s = CGRect(x: origin.minX, y: origin.minY, width: origin.width + delta.x, height: origin.height)
+            s = CGRect(
+                x: origin.minX,
+                y: origin.minY,
+                width: max(16, origin.width + delta.x),
+                height: origin.height
+            )
         }
-        return s.standardized
+        let clamped = s.intersection(CGRect(origin: .zero, size: screenFrame.size))
+        return clamped.width >= 16 && clamped.height >= 16 ? clamped : s.standardized
     }
 
     private var annotationGesture: some Gesture {
@@ -952,7 +1105,6 @@ private struct SelectionContent: View {
             .onChanged { value in
                 guard let kind = state.activeKind, state.textEditingPoint == nil else { return }
                 if kind == .text {
-                    // 文字工具：点按即在落点打开输入框，不拖拽画框；点在选区外不响应
                     guard selection.contains(value.startLocation) else { return }
                     let norm = normalizedPoint(value.startLocation, current: value.location)
                     state.textEditingPoint = norm.start
@@ -978,7 +1130,6 @@ private struct SelectionContent: View {
     }
 
     private func normalizedPoint(_ startLocal: CGPoint, current: CGPoint) -> (start: CGPoint, end: CGPoint) {
-        // 手势坐标是 SwiftUI 全局坐标（屏幕内，原点左上），selection 同坐标系
         let innerStart = CGPoint(
             x: startLocal.x - selection.origin.x,
             y: startLocal.y - selection.origin.y
@@ -995,67 +1146,47 @@ private struct SelectionContent: View {
     }
 }
 
-// MARK: - 选区内部（图像预览 + 标注渲染）
+// MARK: - 选区内部（标注渲染）
 
 private struct SelectionInner: View {
-    let frozenImage: CGImage
-    let screenFrame: CGRect
     let selection: CGRect
     let state: AnnotationState
-    let imageScale: CGFloat
 
     var body: some View {
-        ZStack {
-            // 选区原图预览（selection 已是屏幕内坐标、原点左上）
-            let pxRect = CGRect(
-                x: selection.origin.x * imageScale,
-                y: selection.origin.y * imageScale,
-                width: selection.width * imageScale,
-                height: selection.height * imageScale
-            ).integral
-            if let cropped = frozenImage.cropping(to: pxRect) {
-                Image(decorative: cropped, scale: 1)
-                    .resizable()
-                    .frame(width: selection.width, height: selection.height)
-            }
-
-            // 标注层
-            Canvas { context, size in
-                let sw = size.width, sh = size.height
-                var all = state.annotations
-                if let draft = state.draft { all.append(draft) }
-                for annotation in all {
-                    let color = AnnotationPalette[annotation.colorIndex]
-                    let p1 = CGPoint(x: annotation.start.x * sw, y: annotation.start.y * sh)
-                    let p2 = CGPoint(x: annotation.end.x * sw, y: annotation.end.y * sh)
-                    let rect = CGRect(x: min(p1.x, p2.x), y: min(p1.y, p2.y),
-                                      width: abs(p2.x - p1.x), height: abs(p2.y - p1.y))
-                    let stroke = Path { path in
-                        switch annotation.kind {
-                        case .rect: path.addRect(rect)
-                        case .ellipse: path.addEllipse(in: rect)
-                        case .arrow:
-                            path.move(to: p1)
-                            path.addLine(to: p2)
-                        case .brush, .highlight: path.addRect(rect)
-                        case .mosaic: path.addRect(rect)
-                        case .text: path.addRect(rect)
-                        }
+        Canvas { context, size in
+            let sw = size.width, sh = size.height
+            var all = state.annotations
+            if let draft = state.draft { all.append(draft) }
+            for annotation in all {
+                let color = AnnotationPalette[annotation.colorIndex]
+                let p1 = CGPoint(x: annotation.start.x * sw, y: annotation.start.y * sh)
+                let p2 = CGPoint(x: annotation.end.x * sw, y: annotation.end.y * sh)
+                let rect = CGRect(x: min(p1.x, p2.x), y: min(p1.y, p2.y),
+                                  width: abs(p2.x - p1.x), height: abs(p2.y - p1.y))
+                let stroke = Path { path in
+                    switch annotation.kind {
+                    case .rect: path.addRect(rect)
+                    case .ellipse: path.addEllipse(in: rect)
+                    case .arrow:
+                        path.move(to: p1)
+                        path.addLine(to: p2)
+                    case .brush, .highlight: path.addRect(rect)
+                    case .mosaic: path.addRect(rect)
+                    case .text: path.addRect(rect)
                     }
-                    let alpha: Double = annotation.kind == .highlight ? 0.4 : 1.0
-                    if annotation.kind == .highlight {
-                        context.fill(stroke, with: .color(color.opacity(alpha)))
-                    } else if annotation.kind == .mosaic {
-                        context.fill(stroke, with: .color(.gray.opacity(0.5))) // 预览占位；导出时真马赛克
-                    } else if annotation.kind == .text {
-                        // 文字标注：画真文字（预览与导出一致）
-                        let text = Text(annotation.text)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(color)
-                        context.draw(text, at: p1, anchor: .topLeading)
-                    } else {
-                        context.stroke(stroke, with: .color(color.opacity(alpha)), lineWidth: annotation.strokeWidth)
-                    }
+                }
+                let alpha: Double = annotation.kind == .highlight ? 0.4 : 1.0
+                if annotation.kind == .highlight {
+                    context.fill(stroke, with: .color(color.opacity(alpha)))
+                } else if annotation.kind == .mosaic {
+                    context.fill(stroke, with: .color(.gray.opacity(0.5)))
+                } else if annotation.kind == .text {
+                    let text = Text(annotation.text)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(color)
+                    context.draw(text, at: p1, anchor: .topLeading)
+                } else {
+                    context.stroke(stroke, with: .color(color.opacity(alpha)), lineWidth: annotation.strokeWidth)
                 }
             }
         }
