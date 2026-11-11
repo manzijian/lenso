@@ -5,7 +5,9 @@ import AppKit
 /// 协议版本：2024-11-05 (JSON-RPC 2.0 over stdio)
 /// 外部 AI 客户端（Claude Desktop、Cursor、Antigravity、VS Code 等）可直接连接此服务，
 /// 读取最近复制的文字、截图历史、搜索剪贴板并向剪贴板写入内容。
-final class LensoMCPServer {
+final class LensoMCPServer: @unchecked Sendable {
+
+    nonisolated(unsafe) static let shared = LensoMCPServer()
 
     static func run() {
         let server = LensoMCPServer()
@@ -14,6 +16,21 @@ final class LensoMCPServer {
 
     private let store = ScreenshotStore.shared
     private let isoFormatter = ISO8601DateFormatter()
+    private let lock = NSLock()
+    private var responseCallback: (([String: Any]) -> Void)?
+
+    /// 提供给本地 HTTP / SSE 服务的请求处理入口
+    func process(json: [String: Any]) -> [String: Any]? {
+        lock.lock()
+        defer { lock.unlock() }
+        var captured: [String: Any]?
+        responseCallback = { resp in
+            captured = resp
+        }
+        handleMessage(json)
+        responseCallback = nil
+        return captured
+    }
 
     private func startStdioLoop() {
         let input = FileHandle.standardInput
@@ -67,6 +84,10 @@ final class LensoMCPServer {
     }
 
     private func sendRaw(_ dict: [String: Any]) {
+        if let callback = responseCallback {
+            callback(dict)
+            return
+        }
         guard let data = try? JSONSerialization.data(withJSONObject: dict),
               var str = String(data: data, encoding: .utf8) else { return }
         str.append("\n")

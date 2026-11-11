@@ -25,12 +25,12 @@ struct LENSOApp: App {
         // （"failed to produce diagnostic for expression"）。绑定读写同一个
         // @Observable 设置项，设置一改，菜单栏入口立刻出现/消失。
         MenuBarExtra(isInserted: Binding(
-            get: { AppSettings.shared.showMenuBarIcon },
-            set: { AppSettings.shared.showMenuBarIcon = $0 }
+            get: { settings.showMenuBarIcon },
+            set: { settings.showMenuBarIcon = $0 }
         )) {
             MenuBarPanelView()
         } label: {
-            Image(nsImage: LensoStatusIcon.image(for: AppSettings.shared.menuBarIconStyle))
+            Image(nsImage: LensoStatusIcon.image(for: settings.menuBarIconStyle))
                 .renderingMode(.template)
         }
         .menuBarExtraStyle(.window)

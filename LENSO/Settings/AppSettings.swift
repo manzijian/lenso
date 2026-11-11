@@ -4,33 +4,29 @@ import Observation
 import ServiceManagement
 import SwiftUI
 
-/// 状态栏图标候选样式
+/// 状态栏图标候选样式（精选原生无歧义、高质感图标，杜绝录屏圆点与拥挤糊块）
 enum MenuBarIconStyle: String, CaseIterable, Identifiable {
-    case pin = "悬浮贴图图钉 (推荐)"
-    case viewfinder = "极简取景框 (CleanShot风)"
-    case crop = "经典裁切框 (剪辑设计风)"
+    case crop = "极简裁切刀锋 (设计剪辑风 · 推荐)"
+    case pin = "悬浮贴图图钉 (便签置顶感)"
+    case viewfinder = "轻透四角取景框 (CleanShot风)"
+    case camera = "纤巧单反相机 (无框原生线框)"
+    case scissors = "灵动截图剪刀 (Snip裁切)"
     case squareDashed = "选区虚线框 (Marquee选框)"
-    case dotScope = "精密对焦准星 (高精度微点)"
-    case camera = "纤细单反相机 (极简线框)"
-    case aperture = "镜头机械光圈 (摄影质感)"
-    case scissors = "轻巧截图剪刀 (Snip裁切)"
-    case sparkle = "高光灵感星芒 (捕捉灵感)"
-    case window = "画中画微浮窗 (窗口截取)"
+    case sparkle = "高光灵感星芒 (轻盈极简)"
+    case dotScope = "精密微距准星 (四向对焦)"
 
     var id: String { rawValue }
 
     var systemSymbolName: String {
         switch self {
+        case .crop: return "crop"
         case .pin: return "pin"
         case .viewfinder: return "viewfinder"
-        case .crop: return "crop"
-        case .squareDashed: return "square.dashed"
-        case .dotScope: return "dot.scope"
         case .camera: return "camera"
-        case .aperture: return "camera.aperture"
         case .scissors: return "scissors"
+        case .squareDashed: return "square.dashed"
         case .sparkle: return "sparkle"
-        case .window: return "macwindow.on.rectangle"
+        case .dotScope: return "dot.scope"
         }
     }
 }
@@ -132,9 +128,9 @@ final class AppSettings {
         previewScale = storedScale >= 0.2 ? CGFloat(storedScale) : 1.0
 
         let rawIcon = defaults.string(forKey: Self.keyPrefix + "menuBarIconStyle") ?? ""
-        var loadedStyle = MenuBarIconStyle(rawValue: rawIcon) ?? .pin
-        if loadedStyle != .pin && (rawIcon.contains("取景") || rawIcon.isEmpty) {
-            loadedStyle = .pin
+        var loadedStyle = MenuBarIconStyle(rawValue: rawIcon) ?? .crop
+        if rawIcon.isEmpty || rawIcon.contains("光圈") || rawIcon.contains("画中画") {
+            loadedStyle = .crop
             defaults.set(loadedStyle.rawValue, forKey: Self.keyPrefix + "menuBarIconStyle")
         }
         menuBarIconStyle = loadedStyle

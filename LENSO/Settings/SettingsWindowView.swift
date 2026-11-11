@@ -249,8 +249,8 @@ struct SettingsWindowView: View {
                             .frame(width: 54, height: 54)
                             .shadow(color: LensoColors.kleinBlueBright.opacity(0.35), radius: 8, y: 3)
 
-                        Image(systemName: "camera.viewfinder")
-                            .font(.system(size: 26, weight: .medium))
+                        Image(systemName: "crop")
+                            .font(.system(size: 26, weight: .semibold))
                             .foregroundStyle(.white)
                     }
 
@@ -280,56 +280,143 @@ struct SettingsWindowView: View {
         }
     }
 
-    private var mcpSettingsView: some View {
-        let execPath = Bundle.main.executablePath ?? "/Applications/lenso.app/Contents/MacOS/lenso"
-        let jsonConfig = """
+    private var agentGuidePrompt: String {
+        """
+        请帮我连接并配置本地运行的 LENSO 剪贴板历史与截图服务（MCP / 本地服务）：
+
+        【本地服务信息】
+        - MCP SSE 端点: http://127.0.0.1:52888/sse
+        - MCP HTTP 端点: http://127.0.0.1:52888/mcp
+        - 剪贴板 REST API: GET http://127.0.0.1:52888/api/clipboard
+        - 最新截图 REST API: GET http://127.0.0.1:52888/api/screenshot/latest
+
+        【配置方式】
+        1. 若支持 MCP SSE（如 Cursor / Claude / Antigravity 等）：
+           在 mcpServers 中加入：
+           "lenso": { "url": "http://127.0.0.1:52888/sse" }
+        2. 纯代码或脚本调用：
+           直接请求 http://127.0.0.1:52888/api/clipboard 即可读取最近剪贴板。
+
+        请确认已就绪，并告诉我你能读取到什么。
+        """
+    }
+
+    private var sseJsonConfig: String {
+        """
         {
           "mcpServers": {
             "lenso": {
-              "command": "\(execPath)",
-              "args": ["mcp"]
+              "url": "http://127.0.0.1:52888/sse"
             }
           }
         }
         """
+    }
 
-        return VStack(alignment: .leading, spacing: 16) {
+    private var mcpSettingsView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // 服务状态卡片
             settingCard {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 8) {
                         Circle().fill(Color.green).frame(width: 8, height: 8)
-                        Text("MCP 服务已内置就绪 (stdio 驱动)")
+                        Text("本地网络服务已就绪 (127.0.0.1:52888)")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(LensoColors.kleinBlueBright)
                         Spacer()
-                        Text("Protocol 2024-11-05")
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                        Text("SSE / HTTP / MCP")
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundStyle(LensoColors.kleinBlueBright)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(LensoColors.kleinBlueSoft))
                     }
 
-                    Text("Model Context Protocol (MCP) 是开放的上下文协议标准。Claude Desktop、Cursor、Antigravity、VS Code 等 AI 客户端可直接挂载此服务，在对话中读取你的复制历史、最新截图与文字便签，或让 AI 将内容写入系统剪贴板。")
+                    Text("无需配置系统二进制复杂路径，通过本地网络端口即可让任意 AI Agent、脚本或自动化工具直接读取你的剪贴板历史与最新截图。")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .lineSpacing(3)
+
+                    Divider().opacity(0.6)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            Text("MCP SSE 地址:")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(Color.primary.opacity(0.7))
+                            Text("http://127.0.0.1:52888/sse")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(LensoColors.kleinBlueBright)
+                                .textSelection(.enabled)
+                        }
+                        HStack(spacing: 8) {
+                            Text("免协议 REST API:")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(Color.primary.opacity(0.7))
+                            Text("GET http://127.0.0.1:52888/api/clipboard")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(Color.primary.opacity(0.85))
+                                .textSelection(.enabled)
+                        }
+                    }
                 }
                 .padding(16)
             }
 
+            // 专属一键引导卡片
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("客户端配置文件代码块")
+                    Label("让 Agent 自动连接的引导命令", systemImage: "sparkles")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.primary.opacity(0.85))
                     Spacer()
                     Button {
                         let pb = NSPasteboard.general
                         pb.clearContents()
-                        pb.setString(jsonConfig, forType: .string)
-                        SaveToastController.shared.show(title: "已复制 MCP 配置", subtitle: "可直接粘贴至客户端设置中", thumbnail: nil)
+                        pb.setString(agentGuidePrompt, forType: .string)
+                        SaveToastController.shared.show(title: "已复制 Agent 引导指令", subtitle: "直接粘贴发送给任意 AI 对话框即可", thumbnail: nil)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "doc.on.doc.fill")
+                            Text("一键复制 Agent 引导指令")
+                        }
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(LensoColors.kleinBlueBright))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                settingCard {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(agentGuidePrompt)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(Color.primary.opacity(0.85))
+                            .lineSpacing(2)
+                            .textSelection(.enabled)
+                    }
+                    .padding(14)
+                }
+            }
+
+            // JSON 配置文件
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("MCP SSE 客户端配置 JSON")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.primary.opacity(0.85))
+                    Spacer()
+                    Button {
+                        let pb = NSPasteboard.general
+                        pb.clearContents()
+                        pb.setString(sseJsonConfig, forType: .string)
+                        SaveToastController.shared.show(title: "已复制 SSE 配置 JSON", subtitle: "可粘贴至 Claude / Cursor 的 mcpServers 中", thumbnail: nil)
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "doc.on.doc")
-                            Text("复制配置 JSON")
+                            Text("复制 JSON")
                         }
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(LensoColors.kleinBlueBright)
@@ -342,7 +429,7 @@ struct SettingsWindowView: View {
 
                 settingCard {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(jsonConfig)
+                        Text(sseJsonConfig)
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundStyle(Color.primary.opacity(0.85))
                             .textSelection(.enabled)
