@@ -16,18 +16,18 @@ struct ShortcutRecorderView: View {
             } label: {
                 Text(model.isRecording ? "按下快捷键…" : store.combo(for: action).displayString)
                     .font(.system(size: 13, weight: model.isRecording ? .semibold : .medium))
-                    .foregroundStyle(model.isRecording ? Color.blue : Color.primary.opacity(0.75))
+                    .foregroundStyle(model.isRecording ? LensoColors.kleinBlueBright : Color.primary.opacity(0.75))
                     .frame(minWidth: 58)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background {
                         RoundedRectangle(cornerRadius: 7)
-                            .fill(model.isRecording ? Color.blue.opacity(0.10) : Color.white.opacity(0.72))
+                            .fill(model.isRecording ? LensoColors.kleinBlueSoft : Color.white)
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: 7)
                             .stroke(
-                                model.isRecording ? Color.blue.opacity(0.55) : Color.black.opacity(0.07),
+                                model.isRecording ? LensoColors.kleinBlueBright : Color.black.opacity(0.08),
                                 lineWidth: 1
                             )
                     }
