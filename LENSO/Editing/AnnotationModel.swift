@@ -95,3 +95,138 @@ final class AnnotationState {
         textEditingPoint = nil
     }
 }
+
+/// 统一标注渲染器：供完整截图编辑器及贴图浮窗使用
+@MainActor
+enum AnnotationRenderer {
+    static func drawArrow(_ ctx: CGContext, from: CGPoint, to: CGPoint, headLen: CGFloat) {
+        ctx.move(to: from)
+        ctx.addLine(to: to)
+        ctx.strokePath()
+        let angle = atan2(to.y - from.y, to.x - from.x)
+        for delta in [2.5, -2.5] {
+            let hx = to.x - headLen * cos(angle + delta)
+            let hy = to.y - headLen * sin(angle + delta)
+            ctx.move(to: to)
+            ctx.addLine(to: CGPoint(x: hx, y: hy))
+            ctx.strokePath()
+        }
+    }
+
+    static func applyMosaic(_ ctx: CGContext, image: CGImage, rect: CGRect, scale: CGFloat = 1.0) {
+        let blockSize = max(8, Int(16 * scale) / 2)
+        let smallW = max(1, Int(rect.width) / blockSize)
+        let smallH = max(1, Int(rect.height) / blockSize)
+        guard let smallCtx = CGContext(
+            data: nil, width: smallW, height: smallH, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return }
+        smallCtx.interpolationQuality = .low
+        smallCtx.draw(image, in: CGRect(x: -rect.origin.x / CGFloat(blockSize), y: -rect.origin.y / CGFloat(blockSize),
+                                        width: CGFloat(smallW) + rect.width / CGFloat(blockSize),
+                                        height: CGFloat(smallH) + rect.height / CGFloat(blockSize)))
+        guard let small = smallCtx.makeImage() else { return }
+        ctx.saveGState()
+        ctx.clip(to: [rect])
+        ctx.interpolationQuality = .none
+        ctx.draw(small, in: rect)
+        ctx.restoreGState()
+    }
+
+    static func drawSingleAnnotation(
+        _ annotation: Annotation,
+        in ctx: CGContext,
+        size: CGSize,
+        baseImage: CGImage? = nil,
+        scale: CGFloat = 1.0
+    ) {
+        let sw = size.width
+        let sh = size.height
+        let color = NSColor(AnnotationPalette[annotation.colorIndex]).withAlphaComponent(annotation.kind == .highlight ? 0.4 : 1.0)
+        ctx.setStrokeColor(color.cgColor)
+        ctx.setFillColor(color.cgColor)
+        ctx.setLineWidth(annotation.strokeWidth * scale)
+        ctx.setLineCap(.round)
+
+        let p1 = CGPoint(x: annotation.start.x * sw, y: annotation.start.y * sh)
+        let p2 = CGPoint(x: annotation.end.x * sw, y: annotation.end.y * sh)
+        let rect = CGRect(
+            x: min(p1.x, p2.x),
+            y: min(p1.y, p2.y),
+            width: abs(p2.x - p1.x),
+            height: abs(p2.y - p1.y)
+        )
+
+        switch annotation.kind {
+        case .rect:
+            ctx.stroke(rect)
+        case .ellipse:
+            ctx.strokeEllipse(in: rect)
+        case .arrow:
+            drawArrow(ctx, from: p1, to: p2, headLen: 12 * scale)
+        case .brush:
+            ctx.move(to: p1)
+            ctx.addLine(to: p2)
+            ctx.strokePath()
+        case .highlight:
+            ctx.setFillColor(color.cgColor)
+            ctx.fill(rect)
+        case .mosaic:
+            if let baseImage {
+                applyMosaic(ctx, image: baseImage, rect: rect, scale: scale)
+            } else {
+                ctx.setFillColor(NSColor.gray.withAlphaComponent(0.5).cgColor)
+                ctx.fill(rect)
+            }
+        case .text:
+            guard !annotation.text.isEmpty else { return }
+            let fontSize = max(12, 14 * scale)
+            let font = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: NSColor(AnnotationPalette[annotation.colorIndex])
+            ]
+            let attr = NSAttributedString(string: annotation.text, attributes: attrs)
+            let topDownRect = CGRect(
+                x: min(p1.x, p2.x),
+                y: min(p1.y, p2.y),
+                width: max(1, rect.width),
+                height: max(fontSize * 1.3, rect.height)
+            )
+            let nsCtx = NSGraphicsContext(cgContext: ctx, flipped: true)
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = nsCtx
+            attr.draw(in: topDownRect)
+            NSGraphicsContext.restoreGraphicsState()
+        }
+    }
+
+    static func renderAnnotations(
+        _ annotations: [Annotation],
+        onto base: CGImage
+    ) -> CGImage {
+        guard !annotations.isEmpty else { return base }
+        let w = base.width
+        let h = base.height
+        guard let ctx = CGContext(
+            data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return base }
+
+        // CoreGraphics 默认坐标原点在左下角，绘制前先转换为左上角为原点
+        ctx.translateBy(x: 0, y: CGFloat(h))
+        ctx.scaleBy(x: 1.0, y: -1.0)
+
+        ctx.draw(base, in: CGRect(x: 0, y: 0, width: w, height: h))
+
+        let scale = max(1.0, CGFloat(w) / 600.0)
+        let size = CGSize(width: w, height: h)
+        for ann in annotations {
+            drawSingleAnnotation(ann, in: ctx, size: size, baseImage: base, scale: scale)
+        }
+
+        return ctx.makeImage() ?? base
+    }
+}

@@ -25,8 +25,8 @@ final class CaptureCoordinator: NSObject {
     private var selector: RegionSelectorController?
     private var editorPanel: NSPanel?
     private var editorHost: NSHostingView<CaptureEditorView>?
-    /// 钉图窗口集合（持有引用防止释放）
-    private var pinnedPanels: [NSPanel] = []
+    /// 钉图控制器集合（持有引用防止释放）
+    private var pinnedControllers: [PinnedScreenshotController] = []
 
     func startRegionCapture() {
         log.info("startRegionCapture triggered")
@@ -98,8 +98,7 @@ final class CaptureCoordinator: NSObject {
     private func showFullEditor(
         frozen: CGImage,
         screenFrame: CGRect,
-        initialSelection: CGRect,
-        originPinnedPanel: NSPanel? = nil
+        initialSelection: CGRect
     ) {
         let coordinator = self
         let editorView = CaptureEditorView(
@@ -108,17 +107,7 @@ final class CaptureCoordinator: NSObject {
             initialSelection: initialSelection,
             onComplete: { [weak coordinator] finalImage in
                 coordinator?.closeEditor()
-                if let finalImage {
-                    if let origin = originPinnedPanel {
-                        origin.orderOut(nil)
-                        origin.close()
-                        coordinator?.pinnedPanels.removeAll { $0 === origin }
-                    }
-                    coordinator?.handleFinish(finalImage: finalImage)
-                } else {
-                    // 取消/丢弃：如果来自贴图，重新显示贴图
-                    originPinnedPanel?.orderFrontRegardless()
-                }
+                coordinator?.handleFinish(finalImage: finalImage)
             },
             onQuickCopy: { [weak coordinator] image in
                 coordinator?.copyToClipboard(image: image)
@@ -131,11 +120,6 @@ final class CaptureCoordinator: NSObject {
             },
             onPin: { [weak coordinator] image, rect in
                 coordinator?.closeEditor()
-                if let origin = originPinnedPanel {
-                    origin.orderOut(nil)
-                    origin.close()
-                    coordinator?.pinnedPanels.removeAll { $0 === origin }
-                }
                 coordinator?.pin(image: image, initialFrame: rect)
             }
         )
@@ -157,7 +141,6 @@ final class CaptureCoordinator: NSObject {
         panel.setFrame(screenFrame, display: true)
         panel.onCancel = { [weak self] in
             self?.closeEditor()
-            originPinnedPanel?.orderFrontRegardless()
         }
         panel.orderFrontRegardless()
         panel.makeKey()
@@ -199,137 +182,13 @@ final class CaptureCoordinator: NSObject {
 
     /// 钉图：浮在所有窗口之上的可拖动图片窗
     private func pin(image: CGImage, initialFrame: NSRect? = nil) {
-        let size: NSSize
-        let origin: NSPoint
-
-        if let initialFrame {
-            size = initialFrame.size
-            origin = initialFrame.origin
-        } else {
-            let maxWidth: CGFloat = 520
-            let scale = min(1, maxWidth / CGFloat(image.width))
-            size = NSSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
-            if let screen = NSScreen.main {
-                origin = NSPoint(
-                    x: screen.frame.midX - size.width / 2,
-                    y: screen.frame.midY - size.height / 2
-                )
-            } else {
-                origin = .zero
-            }
-        }
-
-        let panel = NSPanel(
-            contentRect: NSRect(origin: origin, size: size),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        panel.level = .floating
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = true
-        panel.isMovableByWindowBackground = true
-        panel.hidesOnDeactivate = false
-
-        let view = PinnedImageView(frame: NSRect(origin: .zero, size: size), image: image)
-        view.onClose = { [weak panel, weak self] in
-            guard let panel else { return }
-            panel.orderOut(nil)
-            panel.close()
-            self?.pinnedPanels.removeAll { $0 === panel }
-        }
-        view.onEdit = { [weak panel, weak self] in
-            guard let panel, let self else { return }
-            self.editPinnedScreenshot(panel: panel, image: image)
-        }
-        panel.contentView = view
-        panel.setFrameOrigin(origin)
-        panel.orderFrontRegardless()
-        pinnedPanels.append(panel)
-        log.info("pinned image \(size.width)x\(size.height) at \(NSStringFromPoint(origin))")
+        let controller = PinnedScreenshotController(image: image, initialFrame: initialFrame, coordinator: self)
+        pinnedControllers.append(controller)
+        log.info("pinned screenshot controller created, total active: \(self.pinnedControllers.count)")
     }
 
-    /// 右键钉图唤出全功能编辑器（Snipaste 核心交互）
-    private func editPinnedScreenshot(panel: NSPanel, image: CGImage) {
-        guard editorPanel == nil else { return }
-        log.info("editPinnedScreenshot triggered for panel frame: \(NSStringFromRect(panel.frame))")
-
-        let screen = panel.screen
-            ?? NSScreen.screens.first(where: { $0.frame.intersects(panel.frame) })
-            ?? NSScreen.main
-            ?? NSScreen.screens.first
-        guard let screen else { return }
-
-        let screenFrame = screen.frame
-        let panelFrame = panel.frame
-        let displayID = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
-            ?? (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID)
-            ?? CGMainDisplayID()
-
-        let captureService = capture
-        Task { @MainActor in
-            do {
-                // 抓取当前屏幕画面（排除当前贴图面板）
-                let windowID = CGWindowID(panel.windowNumber)
-                let screenFrozen = try await captureService.captureDisplayExcluding(
-                    displayID: displayID,
-                    excludedWindowIDs: [windowID]
-                )
-                // 将高清贴图精确合成回屏幕冻结帧对应位置
-                let compositeFrozen = self.composite(
-                    image: image,
-                    onto: screenFrozen,
-                    at: panelFrame,
-                    screenFrame: screenFrame
-                )
-                panel.orderOut(nil)
-                self.showFullEditor(
-                    frozen: compositeFrozen,
-                    screenFrame: screenFrame,
-                    initialSelection: panelFrame,
-                    originPinnedPanel: panel
-                )
-            } catch {
-                log.error("capture failed for pinned edit: \(error.localizedDescription)")
-                panel.orderFrontRegardless()
-            }
-        }
-    }
-
-    /// 将贴图图像精准复合到全屏截图中对应选区位置
-    private func composite(
-        image: CGImage,
-        onto screenImage: CGImage,
-        at rect: CGRect,
-        screenFrame: CGRect
-    ) -> CGImage {
-        let scale = CGFloat(screenImage.width) / max(1, screenFrame.width)
-        let w = screenImage.width
-        let h = screenImage.height
-
-        guard let ctx = CGContext(
-            data: nil,
-            width: w,
-            height: h,
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else {
-            return screenImage
-        }
-
-        ctx.draw(screenImage, in: CGRect(x: 0, y: 0, width: w, height: h))
-
-        let destX = (rect.minX - screenFrame.minX) * scale
-        let destY = (rect.minY - screenFrame.minY) * scale
-        let destW = rect.width * scale
-        let destH = rect.height * scale
-        let destRect = CGRect(x: destX, y: destY, width: destW, height: destH)
-
-        ctx.draw(image, in: destRect)
-        return ctx.makeImage() ?? screenImage
+    func removePinnedController(_ controller: PinnedScreenshotController) {
+        pinnedControllers.removeAll { $0 === controller }
     }
 
     /// SCK 在没有屏幕录制权限时抛的错误（域 SCStreamErrorDomain / 用户取消）。
@@ -362,7 +221,7 @@ final class CaptureCoordinator: NSObject {
         }
     }
 
-    private func copyToClipboard(image: CGImage) {
+    func copyToClipboard(image: CGImage) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         if let tiff = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height)).tiffRepresentation {
@@ -384,30 +243,423 @@ final class EditorPanel: NSPanel {
     }
 }
 
-/// 钉图视图：可拖动；滚轮缩放；悬停右上角出现关闭按钮；双击关闭；右键唤出全功能编辑栏
-final class PinnedImageView: NSView {
-    var onClose: (() -> Void)?
-    var onEdit: (() -> Void)?
+// MARK: - 贴图控制器与独立浮动工具栏（专属针对贴图操作，不遮挡屏幕也不进入二次截图）
+
+@MainActor
+final class PinnedScreenshotController: NSObject {
+    weak var coordinator: CaptureCoordinator?
+    let panel: NSPanel
+    let toolbarPanel: NSPanel
+    let imageView: PinnedImageView
+    let state = AnnotationState()
+    private var isToolbarVisible = false
+
+    init(image: CGImage, initialFrame: NSRect?, coordinator: CaptureCoordinator) {
+        self.coordinator = coordinator
+
+        let size: NSSize
+        let origin: NSPoint
+
+        if let initialFrame {
+            size = initialFrame.size
+            origin = initialFrame.origin
+        } else {
+            let maxWidth: CGFloat = 520
+            let scale = min(1, maxWidth / CGFloat(image.width))
+            size = NSSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
+            if let screen = NSScreen.main {
+                origin = NSPoint(
+                    x: screen.frame.midX - size.width / 2,
+                    y: screen.frame.midY - size.height / 2
+                )
+            } else {
+                origin = .zero
+            }
+        }
+
+        // 主贴图浮窗
+        panel = NSPanel(
+            contentRect: NSRect(origin: origin, size: size),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.level = .floating
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.isMovableByWindowBackground = false
+        panel.hidesOnDeactivate = false
+
+        // 工具栏卫星浮窗（跟随主贴图）
+        toolbarPanel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 490, height: 46),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        toolbarPanel.level = .floating
+        toolbarPanel.isOpaque = false
+        toolbarPanel.backgroundColor = .clear
+        toolbarPanel.hasShadow = false
+        toolbarPanel.hidesOnDeactivate = false
+
+        imageView = PinnedImageView(frame: NSRect(origin: .zero, size: size), image: image, state: state)
+        super.init()
+
+        imageView.onClose = { [weak self] in
+            self?.close()
+        }
+        imageView.onToggleEditing = { [weak self] in
+            self?.toggleToolbar()
+        }
+        imageView.onWindowMovedOrResized = { [weak self] in
+            self?.updateToolbarPosition()
+        }
+
+        panel.contentView = imageView
+        panel.setFrameOrigin(origin)
+
+        // 配置工具栏视图
+        let toolbarView = PinnedToolbarView(
+            state: state,
+            onUndo: { [weak self] in
+                self?.state.undo()
+                self?.imageView.needsDisplay = true
+            },
+            onRedo: { [weak self] in
+                self?.state.redo()
+                self?.imageView.needsDisplay = true
+            },
+            onOCR: { [weak self] in
+                self?.runOCR()
+            },
+            onCopy: { [weak self] in
+                self?.copyImage()
+            },
+            onSave: { [weak self] in
+                self?.saveImage()
+            },
+            onClose: { [weak self] in
+                self?.close()
+            }
+        )
+        let hosting = NSHostingView(rootView: toolbarView)
+        hosting.appearance = NSAppearance(named: .aqua)
+        toolbarPanel.contentView = hosting
+
+        panel.orderFrontRegardless()
+    }
+
+    func toggleToolbar() {
+        if isToolbarVisible {
+            hideToolbar()
+        } else {
+            showToolbar()
+        }
+    }
+
+    func showToolbar() {
+        guard !isToolbarVisible else { return }
+        isToolbarVisible = true
+        updateToolbarPosition()
+        if toolbarPanel.parent != panel {
+            panel.addChildWindow(toolbarPanel, ordered: .above)
+        }
+        toolbarPanel.orderFront(nil)
+    }
+
+    func hideToolbar() {
+        guard isToolbarVisible else { return }
+        isToolbarVisible = false
+        state.activeKind = nil
+        toolbarPanel.orderOut(nil)
+        panel.removeChildWindow(toolbarPanel)
+        panel.invalidateCursorRects(for: imageView)
+        imageView.needsDisplay = true
+    }
+
+    func updateToolbarPosition() {
+        guard isToolbarVisible else { return }
+        let pFrame = panel.frame
+        let barWidth: CGFloat = 490
+        let barHeight: CGFloat = 46
+        let spacing: CGFloat = 8
+
+        let screen = panel.screen ?? NSScreen.main ?? NSScreen.screens.first
+        let visibleFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 2560, height: 1440)
+
+        var x = pFrame.midX - barWidth / 2
+        x = max(visibleFrame.minX + 8, min(x, visibleFrame.maxX - barWidth - 8))
+
+        var y = pFrame.minY - barHeight - spacing
+        if y < visibleFrame.minY + 8 {
+            // 如果贴在屏幕底部，自动吸附到贴图上方
+            y = pFrame.maxY + spacing
+        }
+
+        toolbarPanel.setFrame(NSRect(x: x, y: y, width: barWidth, height: barHeight), display: true)
+    }
+
+    func close() {
+        hideToolbar()
+        toolbarPanel.close()
+        panel.orderOut(nil)
+        panel.close()
+        coordinator?.removePinnedController(self)
+    }
+
+    func copyImage() {
+        let composited = imageView.renderCompositedImage()
+        coordinator?.copyToClipboard(image: composited)
+        if AppSettings.shared.showFloatingPreview {
+            SaveToastController.shared.show(
+                title: "已复制到剪贴板",
+                subtitle: state.annotations.isEmpty ? "贴图原始图像" : "包含 \(state.annotations.count) 处标注",
+                thumbnail: composited
+            )
+        }
+    }
+
+    func saveImage() {
+        let composited = imageView.renderCompositedImage()
+        do {
+            let record = try ScreenshotStore.shared.save(image: composited, capturedAt: Date())
+            if AppSettings.shared.autoCopyAfterCapture {
+                coordinator?.copyToClipboard(image: composited)
+            }
+            NotificationCenter.default.post(name: .screenshotSaved, object: record)
+            if AppSettings.shared.showFloatingPreview {
+                SaveToastController.shared.show(thumbnail: try? ScreenshotStore.shared.loadThumbnail(record))
+            }
+            NSSound.beep()
+        } catch {
+            NSSound.beep()
+        }
+    }
+
+    func runOCR() {
+        let composited = imageView.renderCompositedImage()
+        Task {
+            do {
+                let lines = try await ProviderRegistry.ocr.recognizeText(in: composited, languages: ["zh-Hans", "en-US"])
+                let fullText = lines.map(\.text).joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+                if !fullText.isEmpty {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(fullText, forType: .string)
+                    SaveToastController.shared.show(
+                        title: "已识别并复制文字",
+                        subtitle: String(fullText.prefix(35)) + (fullText.count > 35 ? "..." : ""),
+                        thumbnail: composited
+                    )
+                } else {
+                    SaveToastController.shared.show(
+                        title: "未识别到文字",
+                        subtitle: "请尝试放大贴图或更清晰的区域",
+                        thumbnail: composited
+                    )
+                }
+            } catch {
+                SaveToastController.shared.show(
+                    title: "文字识别失败",
+                    subtitle: error.localizedDescription,
+                    thumbnail: composited
+                )
+            }
+        }
+    }
+}
+
+// MARK: - 贴图工具栏视图（SwiftUI 高对比胶囊浮条）
+
+private struct PinnedToolbarView: View {
+    @Bindable var state: AnnotationState
+    let onUndo: () -> Void
+    let onRedo: () -> Void
+    let onOCR: () -> Void
+    let onCopy: () -> Void
+    let onSave: () -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            // 选择 / 移动工具
+            Button {
+                state.activeKind = nil
+            } label: {
+                Image(systemName: "arrow.up.left")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(state.activeKind == nil ? .white : Color.primary.opacity(0.85))
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle().fill(state.activeKind == nil ? Color(nsColor: .controlAccentColor) : .clear)
+                    )
+            }
+            .buttonStyle(.plain)
+            .help("选择与移动 (V)")
+
+            ForEach([AnnotationKind.rect, .ellipse, .arrow, .brush, .text, .mosaic, .highlight], id: \.self) { kind in
+                Button {
+                    state.activeKind = state.activeKind == kind ? nil : kind
+                } label: {
+                    Image(systemName: kind.icon)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(state.activeKind == kind ? Color(nsColor: .controlAccentColor) : Color.primary.opacity(0.85))
+                        .frame(width: 28, height: 28)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(state.activeKind == kind ? Color(nsColor: .controlAccentColor).opacity(0.15) : .clear)
+                        )
+                }
+                .buttonStyle(.plain)
+                .help(kind.label)
+            }
+
+            Divider().frame(height: 18)
+
+            // 颜色选择菜单
+            Menu {
+                ForEach(0..<AnnotationPalette.count, id: \.self) { idx in
+                    Button {
+                        state.colorIndex = idx
+                    } label: {
+                        Text(colorName(for: idx))
+                    }
+                }
+            } label: {
+                Circle()
+                    .fill(AnnotationPalette[state.colorIndex])
+                    .frame(width: 14, height: 14)
+                    .overlay(Circle().stroke(Color.primary.opacity(0.25), lineWidth: 1))
+                    .frame(width: 26, height: 26)
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 26, height: 26)
+            .help("标注颜色")
+
+            Divider().frame(height: 18)
+
+            // 撤销 / 重做
+            Button(action: onUndo) {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.primary.opacity(state.canUndo ? 0.85 : 0.35))
+                    .frame(width: 26, height: 26)
+            }
+            .buttonStyle(.plain)
+            .disabled(!state.canUndo)
+            .help("撤销 (⌘Z)")
+
+            Button(action: onRedo) {
+                Image(systemName: "arrow.uturn.forward")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.primary.opacity(state.canRedo ? 0.85 : 0.35))
+                    .frame(width: 26, height: 26)
+            }
+            .buttonStyle(.plain)
+            .disabled(!state.canRedo)
+            .help("重做 (⇧⌘Z)")
+
+            Divider().frame(height: 18)
+
+            // OCR
+            Button(action: onOCR) {
+                Image(systemName: "doc.text.viewfinder")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.primary.opacity(0.85))
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .help("识别文字 (OCR)")
+
+            // 复制
+            Button(action: onCopy) {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.primary.opacity(0.85))
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .help("复制到剪贴板 (⌘C)")
+
+            // 保存
+            Button(action: onSave) {
+                Image(systemName: "square.and.arrow.down")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.primary.opacity(0.85))
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .help("保存到历史记录 (⌘S)")
+
+            // 关闭
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.primary.opacity(0.85))
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(.primary.opacity(0.07)))
+            }
+            .buttonStyle(.plain)
+            .help("关闭贴图")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background {
+            Capsule()
+                .fill(Color(nsColor: .windowBackgroundColor))
+                .overlay(
+                    Capsule()
+                        .stroke(Color.black.opacity(0.12), lineWidth: 1)
+                )
+        }
+        .shadow(color: .black.opacity(0.22), radius: 14, y: 4)
+    }
+
+    private func colorName(for index: Int) -> String {
+        switch index {
+        case 0: return "红色"
+        case 1: return "橙色"
+        case 2: return "黄色"
+        case 3: return "蓝色"
+        case 4: return "紫色"
+        case 5: return "黑色"
+        case 6: return "白色"
+        default: return "颜色"
+        }
+    }
+}
+
+// MARK: - 贴图展示及标注交互视图
+
+final class PinnedImageView: NSView, NSTextFieldDelegate {
     let image: CGImage
-    private let imageView: NSImageView
+    let state: AnnotationState
+    var onClose: (() -> Void)?
+    var onToggleEditing: (() -> Void)?
+    var onWindowMovedOrResized: (() -> Void)?
+
     private let closeButton = NSButton()
     private var tracking: NSTrackingArea?
     private let baseSize: NSSize
     private var currentScale: CGFloat = 1.0
 
-    init(frame: NSRect, image: CGImage) {
+    // 文字标注临时输入框
+    private var activeTextField: NSTextField?
+    private var textStartNormPoint: CGPoint?
+
+    override var isFlipped: Bool { true }
+
+    init(frame: NSRect, image: CGImage, state: AnnotationState) {
         self.image = image
+        self.state = state
         self.baseSize = frame.size
-        imageView = NSImageView(frame: NSRect(origin: .zero, size: frame.size))
         super.init(frame: frame)
-        toolTip = "双击关闭 · 滚轮缩放 · 鼠标右键重新编辑"
-        imageView.image = NSImage(cgImage: image, size: frame.size)
-        imageView.imageScaling = .scaleProportionallyUpOrDown
-        imageView.autoresizingMask = [.width, .height]
-        imageView.wantsLayer = true
-        imageView.layer?.cornerRadius = 10
-        imageView.layer?.masksToBounds = true
-        addSubview(imageView)
+        toolTip = "左键拖拽移动 · 滚轮缩放 · 右键/空格唤出编辑栏 · 双击关闭"
+
+        wantsLayer = true
+        layer?.cornerRadius = 10
+        layer?.masksToBounds = true
 
         closeButton.bezelStyle = .circular
         closeButton.controlSize = .small
@@ -427,29 +679,149 @@ final class PinnedImageView: NSView {
 
     @objc private func closeClicked() { onClose?() }
 
+    override func draw(_ dirtyRect: NSRect) {
+        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+
+        // 绘制原底图
+        let nsImage = NSImage(cgImage: image, size: bounds.size)
+        nsImage.draw(in: bounds)
+
+        // 绘制所有标注及正在拉取的草稿
+        var all = state.annotations
+        if let draft = state.draft {
+            all.append(draft)
+        }
+        for ann in all {
+            AnnotationRenderer.drawSingleAnnotation(ann, in: ctx, size: bounds.size, baseImage: image, scale: 1.0)
+        }
+    }
+
+    func renderCompositedImage() -> CGImage {
+        AnnotationRenderer.renderAnnotations(state.annotations, onto: image)
+    }
+
     override func hitTest(_ point: NSPoint) -> NSView? {
-        let view = super.hitTest(point)
-        if view == closeButton { return closeButton }
+        if !closeButton.isHidden {
+            let ptInClose = closeButton.convert(point, from: self)
+            if closeButton.bounds.contains(ptInClose) {
+                return closeButton
+            }
+        }
+        if let field = activeTextField {
+            let ptInField = field.convert(point, from: self)
+            if field.bounds.contains(ptInField) {
+                return field
+            }
+        }
         return self
     }
 
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        if state.activeKind != nil {
+            addCursorRect(bounds, cursor: .crosshair)
+        } else {
+            addCursorRect(bounds, cursor: .arrow)
+        }
+    }
+
     override func mouseDown(with event: NSEvent) {
-        if event.clickCount == 2 {
-            onClose?()
+        if activeTextField != nil {
+            commitTextEditing()
+        }
+
+        // 选择 / 移动模式：拖拽移动窗口
+        if state.activeKind == nil {
+            if event.clickCount == 2 {
+                onClose?()
+                return
+            }
+            window?.performDrag(with: event)
+            onWindowMovedOrResized?()
             return
         }
-        super.mouseDown(with: event)
-        window?.performDrag(with: event)
+
+        let pt = convert(event.locationInWindow, from: nil)
+        let norm = CGPoint(
+            x: min(max(pt.x / max(1, bounds.width), 0), 1),
+            y: min(max(pt.y / max(1, bounds.height), 0), 1)
+        )
+
+        // 文字标注工具：点击位置弹出输入框
+        if state.activeKind == .text {
+            startTextEditing(at: pt, norm: norm)
+            return
+        }
+
+        // 其它标注工具：开始绘制
+        state.draft = Annotation(
+            kind: state.activeKind!,
+            start: norm,
+            end: norm,
+            colorIndex: state.colorIndex,
+            strokeWidth: state.strokeWidth
+        )
+        needsDisplay = true
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard var draft = state.draft else { return }
+        let pt = convert(event.locationInWindow, from: nil)
+        let norm = CGPoint(
+            x: min(max(pt.x / max(1, bounds.width), 0), 1),
+            y: min(max(pt.y / max(1, bounds.height), 0), 1)
+        )
+        draft.end = norm
+        state.draft = draft
+        needsDisplay = true
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard let draft = state.draft else { return }
+        let dx = abs(draft.end.x - draft.start.x) * bounds.width
+        let dy = abs(draft.end.y - draft.start.y) * bounds.height
+        if dx > 4 || dy > 4 {
+            state.push(draft)
+        }
+        state.draft = nil
+        needsDisplay = true
     }
 
     override func rightMouseDown(with event: NSEvent) {
-        onEdit?()
+        if activeTextField != nil {
+            cancelTextEditing()
+            return
+        }
+        if state.draft != nil {
+            state.draft = nil
+            needsDisplay = true
+            return
+        }
+        if state.activeKind != nil {
+            state.activeKind = nil
+            window?.invalidateCursorRects(for: self)
+            return
+        }
+        // 选择模式下右键：呼出或关闭操作工具栏
+        onToggleEditing?()
     }
 
     override func keyDown(with event: NSEvent) {
-        // 空格键快捷唤出编辑栏
-        if event.keyCode == 49 {
-            onEdit?()
+        if event.keyCode == 53 { // Esc
+            if activeTextField != nil {
+                cancelTextEditing()
+                return
+            }
+            if state.activeKind != nil {
+                state.activeKind = nil
+                window?.invalidateCursorRects(for: self)
+                return
+            }
+            onToggleEditing?()
+            return
+        }
+        if event.keyCode == 49 { // Space
+            onToggleEditing?()
             return
         }
         super.keyDown(with: event)
@@ -457,12 +829,10 @@ final class PinnedImageView: NSView {
 
     override var acceptsFirstResponder: Bool { true }
 
-    /// 鼠标滚轮放大缩小贴图（Snipaste 核心交互）
     override func scrollWheel(with event: NSEvent) {
         let delta = event.scrollingDeltaY
         guard abs(delta) > 0.05 else { return }
 
-        // 向上滚放大，向下滚缩小（缩放区间 15% ~ 500%）
         let zoomFactor: CGFloat = delta > 0 ? 1.08 : 0.92
         let newScale = min(max(currentScale * zoomFactor, 0.15), 5.0)
         guard newScale != currentScale else { return }
@@ -475,7 +845,6 @@ final class PinnedImageView: NSView {
         let newWidth = max(40, round(baseSize.width * newScale))
         let newHeight = max(40, round(baseSize.height * newScale))
 
-        // 以鼠标指针在当前窗口内的相对位置为锚点缩放
         let relX = (mouseScreen.x - oldFrame.minX) / max(1, oldFrame.width)
         let relY = (mouseScreen.y - oldFrame.minY) / max(1, oldFrame.height)
 
@@ -484,6 +853,67 @@ final class PinnedImageView: NSView {
         let newFrame = NSRect(x: newX, y: newY, width: newWidth, height: newHeight)
 
         window.setFrame(newFrame, display: true)
+        onWindowMovedOrResized?()
+    }
+
+    private func startTextEditing(at point: NSPoint, norm: CGPoint) {
+        activeTextField?.removeFromSuperview()
+        let field = NSTextField(frame: NSRect(x: max(8, point.x), y: max(8, point.y), width: 180, height: 26))
+        field.isBordered = true
+        field.bezelStyle = .roundedBezel
+        field.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.9)
+        field.textColor = AnnotationPaletteNS[state.colorIndex]
+        field.font = NSFont.systemFont(ofSize: 14, weight: .semibold)
+        field.focusRingType = .none
+        field.delegate = self
+        field.placeholderString = "输入文本并回车"
+        addSubview(field)
+        window?.makeFirstResponder(field)
+        self.activeTextField = field
+        self.textStartNormPoint = norm
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+            commitTextEditing()
+            return true
+        } else if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+            cancelTextEditing()
+            return true
+        }
+        return false
+    }
+
+    private func commitTextEditing() {
+        guard let field = activeTextField, let start = textStartNormPoint else { return }
+        let text = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.isEmpty {
+            let size = (text as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 14, weight: .semibold)])
+            let endNorm = CGPoint(
+                x: min(1, start.x + size.width / max(1, bounds.width)),
+                y: min(1, start.y + size.height / max(1, bounds.height))
+            )
+            var ann = Annotation(
+                kind: .text,
+                start: start,
+                end: endNorm,
+                colorIndex: state.colorIndex,
+                strokeWidth: state.strokeWidth
+            )
+            ann.text = text
+            state.push(ann)
+        }
+        field.removeFromSuperview()
+        activeTextField = nil
+        textStartNormPoint = nil
+        needsDisplay = true
+    }
+
+    private func cancelTextEditing() {
+        activeTextField?.removeFromSuperview()
+        activeTextField = nil
+        textStartNormPoint = nil
+        needsDisplay = true
     }
 
     override func updateTrackingAreas() {
@@ -494,6 +924,13 @@ final class PinnedImageView: NSView {
         tracking = area
     }
 
-    override func mouseEntered(with event: NSEvent) { closeButton.isHidden = false }
-    override func mouseExited(with event: NSEvent) { closeButton.isHidden = true }
+    override func mouseEntered(with event: NSEvent) {
+        if state.activeKind == nil {
+            closeButton.isHidden = false
+        }
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        closeButton.isHidden = true
+    }
 }
