@@ -131,7 +131,7 @@ struct SearchPanelView: View {
         let store = ScreenshotStore.shared
         guard let record = (try? store.list())?.first(where: { $0.id == result.id }),
               let cgImage = store.loadImage(record) else { return }
-        CaptureCoordinator.shared.pin(image: cgImage)
+        CaptureCoordinator.shared.pin(image: cgImage, isPreview: true)
     }
 
     private func updateResults() {

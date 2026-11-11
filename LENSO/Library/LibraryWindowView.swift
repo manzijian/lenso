@@ -29,7 +29,7 @@ struct LibraryWindowView: View {
         let store = ScreenshotStore.shared
         guard let record = records.first(where: { $0.id == id }),
               let cgImage = store.loadImage(record) else { return }
-        CaptureCoordinator.shared.pin(image: cgImage)
+        CaptureCoordinator.shared.pin(image: cgImage, isPreview: true)
     }
 
     private func load() {

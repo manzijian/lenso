@@ -180,15 +180,30 @@ final class CaptureCoordinator: NSObject {
         }
     }
 
+    private var previewController: PinnedScreenshotController?
+
     /// 钉图 / 浮动预览：浮在所有窗口之上的纯粹可拖动图片窗（无任何包裹窗体与黑边，回到刚截图的原汁原味）
-    func pin(image: CGImage, initialFrame: NSRect? = nil) {
+    func pin(image: CGImage, initialFrame: NSRect? = nil, isPreview: Bool = false) {
+        // 如果是图库预览，先彻底关闭已有的旧预览浮窗，杜绝连续双击产生多重相同窗口堆叠、导致“关闭一次关不掉”的问题
+        if isPreview {
+            if let existing = previewController {
+                existing.close()
+                previewController = nil
+            }
+        }
         let controller = PinnedScreenshotController(image: image, initialFrame: initialFrame, coordinator: self)
+        if isPreview {
+            previewController = controller
+        }
         pinnedControllers.append(controller)
         log.info("pinned screenshot controller created, total active: \(self.pinnedControllers.count)")
     }
 
     func removePinnedController(_ controller: PinnedScreenshotController) {
         pinnedControllers.removeAll { $0 === controller }
+        if previewController === controller {
+            previewController = nil
+        }
     }
 
     /// SCK 在没有屏幕录制权限时抛的错误（域 SCStreamErrorDomain / 用户取消）。
@@ -240,6 +255,35 @@ final class EditorPanel: NSPanel {
     }
     override func rightMouseDown(with event: NSEvent) {
         NotificationCenter.default.post(name: .editorRightClick, object: event)
+    }
+}
+
+/// 贴图/预览浮动面板：支持 Esc、⌘W 一键彻底关闭，空格切换工具栏，响应键盘事件
+final class PinnedPanel: NSPanel {
+    var onCancel: (() -> Void)?
+    var onSpace: (() -> Void)?
+
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+
+    override func cancelOperation(_ sender: Any?) {
+        onCancel?()
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 { // Esc 键立即彻底关闭
+            onCancel?()
+            return
+        }
+        if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "w" { // ⌘W
+            onCancel?()
+            return
+        }
+        if event.keyCode == 49 { // 空格键切换底部编辑栏
+            onSpace?()
+            return
+        }
+        super.keyDown(with: event)
     }
 }
 
@@ -305,18 +349,19 @@ final class PinnedScreenshotController: NSObject {
         }
 
         // 1. 主贴图浮窗
-        panel = NSPanel(
+        let pinnedPanel = PinnedPanel(
             contentRect: NSRect(origin: origin, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
-        panel.level = .floating
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = true
-        panel.isMovableByWindowBackground = false
-        panel.hidesOnDeactivate = false
+        pinnedPanel.level = .floating
+        pinnedPanel.isOpaque = false
+        pinnedPanel.backgroundColor = .clear
+        pinnedPanel.hasShadow = true
+        pinnedPanel.isMovableByWindowBackground = false
+        pinnedPanel.hidesOnDeactivate = false
+        panel = pinnedPanel
 
         // 2. 底部工具栏卫星浮窗
         toolbarPanel = NSPanel(
@@ -357,8 +402,17 @@ final class PinnedScreenshotController: NSObject {
             self?.updatePositions()
         }
 
+        (panel as? PinnedPanel)?.onCancel = { [weak self] in
+            self?.close()
+        }
+        (panel as? PinnedPanel)?.onSpace = { [weak self] in
+            self?.toggleToolbar()
+        }
+
         panel.contentView = imageView
         panel.setFrameOrigin(origin)
+        panel.orderFrontRegardless()
+        panel.makeKey()
 
         // 配置工具栏视图
         let toolbarView = PinnedToolbarView(
@@ -1132,6 +1186,11 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
     private var activeTextField: NSTextField?
     private var textStartNormPoint: CGPoint?
 
+    // 窗口平滑拖拽与双击判定（不使用阻塞的 performDrag，避免吞掉第二次点击）
+    private var initialMouseScreenLocation: NSPoint = .zero
+    private var initialWindowOrigin: NSPoint = .zero
+    private var isDraggingWindow = false
+
     override var isFlipped: Bool { true }
 
     init(frame: NSRect, image: CGImage, state: AnnotationState) {
@@ -1214,14 +1273,15 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
             commitTextEditing()
         }
 
-        // 选择 / 移动模式：拖拽移动窗口
+        // 选择 / 移动模式：双击或多次快速点击立即 100% 灵敏关闭
         if state.activeKind == nil {
-            if event.clickCount == 2 {
+            if event.clickCount >= 2 {
                 onClose?()
                 return
             }
-            window?.performDrag(with: event)
-            onWindowMovedOrResized?()
+            initialMouseScreenLocation = NSEvent.mouseLocation
+            initialWindowOrigin = window?.frame.origin ?? .zero
+            isDraggingWindow = true
             return
         }
 
@@ -1249,6 +1309,16 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        if state.activeKind == nil && isDraggingWindow {
+            guard let window else { return }
+            let currentMouse = NSEvent.mouseLocation
+            let dx = currentMouse.x - initialMouseScreenLocation.x
+            let dy = currentMouse.y - initialMouseScreenLocation.y
+            window.setFrameOrigin(NSPoint(x: initialWindowOrigin.x + dx, y: initialWindowOrigin.y + dy))
+            onWindowMovedOrResized?()
+            return
+        }
+
         guard var draft = state.draft else { return }
         let pt = convert(event.locationInWindow, from: nil)
         let norm = CGPoint(
@@ -1261,6 +1331,12 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
     }
 
     override func mouseUp(with event: NSEvent) {
+        if state.activeKind == nil {
+            isDraggingWindow = false
+            onWindowMovedOrResized?()
+            return
+        }
+
         guard let draft = state.draft else { return }
         let dx = abs(draft.end.x - draft.start.x) * bounds.width
         let dy = abs(draft.end.y - draft.start.y) * bounds.height

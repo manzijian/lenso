@@ -174,7 +174,7 @@ struct LibraryFeedView: View {
     private func openFloatingPreview(_ record: ScreenshotRecord) {
         let store = ScreenshotStore.shared
         guard let cgImage = store.loadImage(record) else { return }
-        CaptureCoordinator.shared.pin(image: cgImage)
+        CaptureCoordinator.shared.pin(image: cgImage, isPreview: true)
     }
 
     private func timeText(_ date: Date) -> String {
