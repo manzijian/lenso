@@ -22,10 +22,8 @@ struct LENSOApp: App {
         )) {
             MenuBarPanelView()
         } label: {
-            // 菜单栏状态项不能渲染自定义 Canvas 视图，使用预渲染的模板图。
-            Image(nsImage: LensoStatusIcon.image)
+            Image(nsImage: LensoStatusIcon.image(for: AppSettings.shared.menuBarIconStyle))
                 .renderingMode(.template)
-                .frame(width: 18, height: 18)
         }
         .menuBarExtraStyle(.window)
 
@@ -115,77 +113,14 @@ struct LENSOApp: App {
 /// 菜单栏上下文不会渲染 SwiftUI `Canvas`，但可以正常显示模板 NSImage。
 @MainActor
 enum LensoStatusIcon {
-    static let side: CGFloat = 18
-
-    static let image: NSImage = {
-        let pointSize = NSSize(width: side, height: side)
-        let image = NSImage(size: pointSize)
-
-        // 以 2x 位图渲染，Retina 屏幕上保持清晰。
-        let scale: CGFloat = 2
-        let pixelSize = Int(side * scale)
-        guard let rep = NSBitmapImageRep(
-            bitmapDataPlanes: nil,
-            pixelsWide: pixelSize,
-            pixelsHigh: pixelSize,
-            bitsPerSample: 8,
-            samplesPerPixel: 4,
-            hasAlpha: true,
-            isPlanar: false,
-            colorSpaceName: .deviceRGB,
-            bytesPerRow: 0,
-            bitsPerPixel: 0
-        ) else { return image }
-
-        rep.size = pointSize
-        image.addRepresentation(rep)
-
-        guard let context = NSGraphicsContext(bitmapImageRep: rep) else { return image }
-
-        NSGraphicsContext.saveGraphicsState()
-        defer { NSGraphicsContext.restoreGraphicsState() }
-        NSGraphicsContext.current = context
-
-        let cg = context.cgContext
-        // SwiftUI Canvas 使用左上角原点、y 向下的坐标系；这里做同样的翻转。
-        cg.translateBy(x: 0, y: pointSize.height)
-        cg.scaleBy(x: 1, y: -1)
-
-        let center = CGPoint(x: pointSize.width / 2, y: pointSize.height / 2)
-        let outerRadius = side * 0.34
-        let innerRadius = side * 0.13
-        let strokeWidth = side * 0.13
-
-        // 模板图只使用 alpha 通道，黑色即可适配浅色/深色菜单栏。
-        cg.setStrokeColor(NSColor.black.cgColor)
-        cg.setFillColor(NSColor.black.cgColor)
-        cg.setLineWidth(strokeWidth)
-        cg.setLineCap(.round)
-        cg.setLineJoin(.round)
-        cg.setShouldAntialias(true)
-
-        for (startAngle, endAngle) in [(100.0, 282.0), (292.0, 460.0)] {
-            let path = CGMutablePath()
-            path.addArc(
-                center: center,
-                radius: outerRadius,
-                startAngle: CGFloat(startAngle) * .pi / 180,
-                endAngle: CGFloat(endAngle) * .pi / 180,
-                clockwise: false
-            )
-            cg.addPath(path)
-            cg.strokePath()
+    static func image(for style: MenuBarIconStyle) -> NSImage {
+        let config = NSImage.SymbolConfiguration(pointSize: 14.5, weight: .medium)
+        if let img = NSImage(systemSymbolName: style.systemSymbolName, accessibilityDescription: "LENSO")?.withSymbolConfiguration(config) {
+            img.isTemplate = true
+            return img
         }
-
-        cg.fillEllipse(in: CGRect(
-            x: center.x - innerRadius,
-            y: center.y - innerRadius,
-            width: innerRadius * 2,
-            height: innerRadius * 2
-        ))
-
-        context.flushGraphics()
-        image.isTemplate = true
-        return image
-    }()
+        let fallback = NSImage(systemSymbolName: "viewfinder", accessibilityDescription: "LENSO") ?? NSImage()
+        fallback.isTemplate = true
+        return fallback
+    }
 }

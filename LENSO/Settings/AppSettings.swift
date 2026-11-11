@@ -4,6 +4,27 @@ import Observation
 import ServiceManagement
 import SwiftUI
 
+/// 状态栏图标候选样式
+enum MenuBarIconStyle: String, CaseIterable, Identifiable {
+    case viewfinder = "取景截屏 (推荐)"
+    case crop = "经典裁切框"
+    case camera = "极简小相机"
+    case aperture = "镜头光圈"
+    case window = "屏幕窗口"
+
+    var id: String { rawValue }
+
+    var systemSymbolName: String {
+        switch self {
+        case .viewfinder: return "camera.viewfinder"
+        case .crop: return "crop"
+        case .camera: return "camera"
+        case .aperture: return "camera.aperture"
+        case .window: return "macwindow.on.rectangle"
+        }
+    }
+}
+
 /// 应用设置：单一数据源，全部持久化到 UserDefaults，改完立即生效。
 /// 原则：设置页里的每个开关都必须真实起作用，不许出现点了没反应的假开关。
 @Observable
@@ -69,6 +90,13 @@ final class AppSettings {
         didSet { persist(.glassEffect, glassEffect) }
     }
 
+    /// 状态栏图标样式（可在设置中随时切换）
+    var menuBarIconStyle: MenuBarIconStyle {
+        didSet {
+            defaults.set(menuBarIconStyle.rawValue, forKey: Self.keyPrefix + "menuBarIconStyle")
+        }
+    }
+
     // MARK: - Init
 
     private init(defaults: UserDefaults = .standard) {
@@ -82,6 +110,9 @@ final class AppSettings {
         showFloatingPreview = Self.read(.showFloatingPreview, default: true, defaults: defaults)
         followSystemAppearance = Self.read(.followSystemAppearance, default: false, defaults: defaults)
         glassEffect = Self.read(.glassEffect, default: true, defaults: defaults)
+
+        let rawIcon = defaults.string(forKey: Self.keyPrefix + "menuBarIconStyle") ?? ""
+        menuBarIconStyle = MenuBarIconStyle(rawValue: rawIcon) ?? .viewfinder
         // 开机启动：按存量值静默同步一次（注册是幂等的）。
         if launchAtLogin { try? SMAppService.mainApp.register() }
         // 注意：这里不要调 applyAppearance()——SwiftUI 的 App.init() 早于

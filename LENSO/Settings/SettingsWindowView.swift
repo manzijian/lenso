@@ -178,10 +178,55 @@ struct SettingsWindowView: View {
             }
 
         case .appearance:
-            settingCard {
-                SettingToggleRow(label: "跟随系统外观", subtitle: "自动在浅色与深色模式之间智能切换", isOn: $settings.followSystemAppearance)
-                rowDivider
-                SettingToggleRow(label: "玻璃材质磨砂效果", subtitle: "窗口与浮窗启用 macOS 细腻毛玻璃质感", isOn: $settings.glassEffect)
+            VStack(alignment: .leading, spacing: 16) {
+                settingCard {
+                    SettingToggleRow(label: "跟随系统外观", subtitle: "自动在浅色与深色模式之间智能切换", isOn: $settings.followSystemAppearance)
+                    rowDivider
+                    SettingToggleRow(label: "玻璃材质磨砂效果", subtitle: "窗口与浮窗启用 macOS 细腻毛玻璃质感", isOn: $settings.glassEffect)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("状态栏图标样式")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.primary.opacity(0.85))
+
+                    settingCard {
+                        ForEach(MenuBarIconStyle.allCases) { style in
+                            HStack(spacing: 12) {
+                                Image(systemName: style.systemSymbolName)
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundStyle(settings.menuBarIconStyle == style ? LensoColors.kleinBlueBright : Color.primary.opacity(0.8))
+                                    .frame(width: 28, height: 28)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(settings.menuBarIconStyle == style ? LensoColors.kleinBlueSoft : Color.black.opacity(0.04))
+                                    )
+
+                                Text(style.rawValue)
+                                    .font(.system(size: 13, weight: settings.menuBarIconStyle == style ? .semibold : .regular))
+                                    .foregroundStyle(Color.primary.opacity(0.9))
+
+                                Spacer()
+
+                                if settings.menuBarIconStyle == style {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundStyle(LensoColors.kleinBlueBright)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 9)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                settings.menuBarIconStyle = style
+                            }
+
+                            if style != MenuBarIconStyle.allCases.last {
+                                rowDivider
+                            }
+                        }
+                    }
+                }
             }
 
         case .about:
