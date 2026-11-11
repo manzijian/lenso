@@ -82,14 +82,15 @@ struct CaptureEditorView: View {
                 .position(x: screenFrame.width / 2, y: screenFrame.height / 2)
                 .allowsHitTesting(false)
 
-            // 选区内容视图（挖空 + 手柄 + 标注渲染 + 尺寸调整）
+            // 选区内容视图（挖空 + 手柄 + 标注渲染 + 尺寸调整 + 双击确定复制）
             SelectionContent(
                 frozenImage: frozenImage,
                 screenFrame: screenFrame,
                 selection: selection,
                 state: state,
                 imageScale: imageScale,
-                onSelectionChange: { selection = $0 }
+                onSelectionChange: { selection = $0 },
+                onConfirm: { finishEditing() }
             )
 
             // 工具栏：紧贴选区下方（随选区移动），右侧属性面板紧贴选区右侧
@@ -962,6 +963,7 @@ private struct SelectionContent: View {
     let state: AnnotationState
     let imageScale: CGFloat
     let onSelectionChange: (CGRect) -> Void
+    let onConfirm: () -> Void
 
     @State private var dragOrigin: CGPoint? = nil
     @State private var selectionOrigin: CGRect? = nil
@@ -1001,6 +1003,11 @@ private struct SelectionContent: View {
                 .position(x: selection.midX, y: selection.midY)
                 .contentShape(Rectangle())
                 .gesture(moveGesture)
+                .simultaneousGesture(
+                    TapGesture(count: 2).onEnded {
+                        onConfirm()
+                    }
+                )
             }
 
             // 尺寸提示（Snipaste 风格胶囊徽标：实时显示宽度与高度）

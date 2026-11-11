@@ -162,12 +162,17 @@ final class CaptureCoordinator: NSObject {
         }
         do {
             let record = try ScreenshotStore.shared.save(image: image, capturedAt: Date())
-            if AppSettings.shared.autoCopyAfterCapture {
-                copyToClipboard(image: image)
-            }
+            // 截图确定之后：默认 100% 自动复制到剪贴板，支持所有现代 App 直接 ⌘V 粘贴
+            copyToClipboard(image: image)
+            // 记录到剪贴板历史，使唤出搜索时能立即在最顶部看到并滚到
+            _ = try? ScreenshotStore.shared.saveClipboardImage(image, sourceApp: "截图")
             NotificationCenter.default.post(name: .screenshotSaved, object: record)
             if AppSettings.shared.showFloatingPreview {
-                SaveToastController.shared.show(thumbnail: try? ScreenshotStore.shared.loadThumbnail(record))
+                SaveToastController.shared.show(
+                    title: "已复制到剪贴板",
+                    subtitle: "已自动保存到图库",
+                    thumbnail: try? ScreenshotStore.shared.loadThumbnail(record)
+                )
             }
             if AppSettings.shared.showPreviewAfterCapture {
                 NotificationCenter.default.post(name: .openPreviewForScreenshot, object: record.id)
@@ -175,6 +180,16 @@ final class CaptureCoordinator: NSObject {
             NSSound.beep()
             log.info("saved \(record.filename, privacy: .public)")
         } catch {
+            // 即使保存到磁盘出现异常，剪贴板也 100% 确保复制成功
+            copyToClipboard(image: image)
+            _ = try? ScreenshotStore.shared.saveClipboardImage(image, sourceApp: "截图")
+            if AppSettings.shared.showFloatingPreview {
+                SaveToastController.shared.show(
+                    title: "已复制到剪贴板",
+                    subtitle: "未保存到磁盘",
+                    thumbnail: image
+                )
+            }
             NSSound.beep()
             log.error("save failed: \(error.localizedDescription, privacy: .public)")
         }
@@ -267,9 +282,22 @@ final class CaptureCoordinator: NSObject {
     func copyToClipboard(image: CGImage) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        if let tiff = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height)).tiffRepresentation {
+
+        let nsImage = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
+
+        // 1. TIFF 基础数据
+        if let tiff = nsImage.tiffRepresentation {
             pasteboard.setData(tiff, forType: .tiff)
+
+            // 2. PNG 格式数据（关键：微信、飞书、现代浏览器与设计工具优先读取 PNG）
+            if let bitmap = NSBitmapImageRep(data: tiff),
+               let pngData = bitmap.representation(using: .png, properties: [:]) {
+                pasteboard.setData(pngData, forType: .png)
+            }
         }
+
+        // 3. 原生图像对象写入（支持系统级粘贴）
+        pasteboard.writeObjects([nsImage])
     }
 }
 
