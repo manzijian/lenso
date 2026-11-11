@@ -34,20 +34,9 @@ struct TextNotesView: View {
 
     private var header: some View {
         HStack {
-            Text("文字").font(.system(size: 15, weight: .semibold))
+            Text("文字收纳").font(.system(size: 15, weight: .semibold))
             Text("\(notes.count) 条").font(.system(size: 12)).foregroundStyle(.secondary)
             Spacer()
-            Button {
-                createNote()
-            } label: {
-                Label("新建", systemImage: "plus")
-                    .font(.system(size: 12, weight: .semibold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .foregroundStyle(.white)
-                    .background(Capsule().fill(LensoColors.kleinBlueBright))
-            }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 4)
     }
@@ -58,7 +47,7 @@ struct TextNotesView: View {
             ContentUnavailableView(
                 "还没有文字收纳",
                 systemImage: "text.alignleft",
-                description: Text("复制的文字可在「剪贴板历史」里收藏，或点右上角新建")
+                description: Text("复制的文字或截图 OCR 提取的内容会自动收纳到这里，无需手动新建")
             )
         } else {
             ScrollView {
@@ -143,17 +132,6 @@ struct TextNotesView: View {
 
     private func reload() {
         notes = (try? ScreenshotStore.shared.listTextNotes()) ?? []
-    }
-
-    private func createNote() {
-        guard let note = try? ScreenshotStore.shared.createTextNote(
-            content: "",
-            sourceApp: NSWorkspace.shared.frontmostApplication?.localizedName
-        ) else { return }
-        reload()
-        NotificationCenter.default.post(name: .textNotesChanged, object: nil)
-        draft = ""
-        editing = note
     }
 
     private func copy(_ note: TextNote) {
