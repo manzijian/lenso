@@ -39,6 +39,8 @@ struct CaptureEditorView: View {
     @State private var ocrTask: Task<Void, Never>?
     @State private var translationTask: Task<Void, Never>?
     @State private var justSavedNote = false
+    @State private var ocrDisplayMode = 0
+    @State private var translationDisplayMode = 0
 
     /// 冻结图与屏幕的像素比
     private var imageScale: CGFloat {
@@ -560,6 +562,15 @@ struct CaptureEditorView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("识别结果").font(.system(size: 13, weight: .semibold))
+                if !ocrLines.isEmpty {
+                    Picker("", selection: $ocrDisplayMode) {
+                        Text("全文展开").tag(0)
+                        Text("逐行对照").tag(1)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 140)
+                    .controlSize(.mini)
+                }
                 Spacer()
                 if ocrPhase == .running { ProgressView().controlSize(.small) }
             }
@@ -568,27 +579,46 @@ struct CaptureEditorView: View {
                 Text("对当前选区做文字识别（本地 Vision，不联网）。")
                     .font(.system(size: 12)).foregroundStyle(.secondary)
             case .running:
-                Text("正在识别…").font(.system(size: 12)).foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("正在识别中…").font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 20)
+                .frame(maxWidth: .infinity)
             case .empty:
                 Text("当前选区里没识别到文字。").font(.system(size: 12)).foregroundStyle(.secondary)
             case .failed:
                 Text(ocrErrorMessage ?? "识别失败").font(.system(size: 12)).foregroundStyle(.red)
             case .done:
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(ocrLines) { line in
-                            OCRLineRow(line: line) { copyText(line.text) }
+                if ocrDisplayMode == 0 {
+                    ScrollView {
+                        Text(ocrLines.map(\.text).joined(separator: "\n"))
+                            .font(.system(size: 13, weight: .regular))
+                            .lineSpacing(4)
+                            .lineLimit(nil)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .padding(10)
+                    }
+                    .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.03)))
+                    .frame(maxHeight: 280)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(ocrLines) { line in
+                                OCRLineRow(line: line) { copyText(line.text) }
+                            }
                         }
                     }
+                    .frame(maxHeight: 280)
                 }
-                .frame(maxHeight: 250)
             }
             HStack(spacing: 8) {
                 MiniButton(label: "重新识别") { runOCR() }
                 MiniButton(label: "全部复制", disabled: ocrLines.isEmpty) {
                     copyText(ocrLines.map(\.text).joined(separator: "\n"))
                 }
-                MiniButton(label: justSavedNote ? "已存入" : "存入文字收纳", disabled: ocrLines.isEmpty) {
+                MiniButton(label: justSavedNote ? "已存入" : "存入收纳", disabled: ocrLines.isEmpty) {
                     saveOCRToNotes()
                 }
             }
@@ -600,32 +630,61 @@ struct CaptureEditorView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("翻译结果").font(.system(size: 13, weight: .semibold))
+                if !translations.isEmpty {
+                    Picker("", selection: $translationDisplayMode) {
+                        Text("译文全文").tag(0)
+                        Text("逐行对照").tag(1)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 140)
+                    .controlSize(.mini)
+                }
                 Spacer()
                 if translationPhase == .running { ProgressView().controlSize(.small) }
             }
             switch translationPhase {
             case .idle:
-                Text("把识别到的文字翻成另一种语言（本地模型，不联网）。没有识别结果时会先跑 OCR。")
+                Text("把识别到的文字翻成目标语言（本地模型，不联网）。")
                     .font(.system(size: 12)).foregroundStyle(.secondary)
             case .running:
-                Text("正在翻译…").font(.system(size: 12)).foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("正在翻译中…").font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 20)
+                .frame(maxWidth: .infinity)
             case .failed:
                 Text(translationErrorMessage ?? "翻译失败").font(.system(size: 12)).foregroundStyle(.red)
             case .done:
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(ocrLines) { line in
-                            TranslationLineRow(
-                                original: line.text,
-                                translated: translations[line.id] ?? ""
-                            ) {
-                                let translated = translations[line.id] ?? ""
-                                copyText(translated.isEmpty ? line.text : translated)
+                if translationDisplayMode == 0 {
+                    ScrollView {
+                        let text = ocrLines.map { translations[$0.id] ?? "" }.filter { !$0.isEmpty }.joined(separator: "\n")
+                        Text(text)
+                            .font(.system(size: 13, weight: .regular))
+                            .lineSpacing(4)
+                            .lineLimit(nil)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .padding(10)
+                    }
+                    .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.03)))
+                    .frame(maxHeight: 280)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(ocrLines) { line in
+                                TranslationLineRow(
+                                    original: line.text,
+                                    translated: translations[line.id] ?? ""
+                                ) {
+                                    let translated = translations[line.id] ?? ""
+                                    copyText(translated.isEmpty ? line.text : translated)
+                                }
                             }
                         }
                     }
+                    .frame(maxHeight: 280)
                 }
-                .frame(maxHeight: 250)
             }
             HStack(spacing: 8) {
                 MiniButton(label: "重新翻译") { runTranslation() }
@@ -1356,17 +1415,42 @@ struct OCRLineRow: View {
     let line: RecognizedText
     let onCopy: () -> Void
 
+    @State private var copied = false
+
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            Text(line.text).font(.system(size: 13)).lineLimit(3)
+            Text(line.text)
+                .font(.system(size: 13))
+                .lineLimit(nil)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Spacer()
             Text("\(Int(line.confidence * 100))%")
                 .font(.system(size: 11)).foregroundStyle(.tertiary).monospacedDigit()
+                .padding(.top, 2)
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.04)))
         .contentShape(Rectangle())
-        .onTapGesture { onCopy() }
+        .onTapGesture {
+            onCopy()
+            copied = true
+            Task {
+                try? await Task.sleep(for: .seconds(1.2))
+                copied = false
+            }
+        }
+        .overlay(alignment: .trailing) {
+            if copied {
+                Text("已复制")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color(nsColor: .controlAccentColor))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color(nsColor: .windowBackgroundColor)))
+                    .padding(.trailing, 6)
+            }
+        }
         .help("点按复制这行")
     }
 }
@@ -1377,20 +1461,36 @@ struct TranslationLineRow: View {
     let translated: String
     let onCopy: () -> Void
 
+    @State private var copied = false
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(original).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(2)
+        VStack(alignment: .leading, spacing: 5) {
+            Text(original)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineLimit(nil)
+                .textSelection(.enabled)
             if translated.isEmpty {
                 Text("这行翻译失败").font(.system(size: 13)).foregroundStyle(.red)
             } else {
-                Text(translated).font(.system(size: 13)).lineLimit(3)
+                Text(translated)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(nil)
+                    .textSelection(.enabled)
             }
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.04)))
         .contentShape(Rectangle())
-        .onTapGesture { onCopy() }
+        .onTapGesture {
+            onCopy()
+            copied = true
+            Task {
+                try? await Task.sleep(for: .seconds(1.2))
+                copied = false
+            }
+        }
         .help("点按复制译文")
     }
 }

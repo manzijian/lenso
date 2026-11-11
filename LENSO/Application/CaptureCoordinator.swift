@@ -323,7 +323,7 @@ final class PinnedScreenshotController: NSObject {
 
         // 3. 右侧属性/OCR/翻译卡片卫星浮窗
         sidePanel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 300, height: 340),
+            contentRect: NSRect(x: 0, y: 0, width: 340, height: 420),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -520,8 +520,8 @@ final class PinnedScreenshotController: NSObject {
     func updateSidePanelPosition() {
         guard pinnedState.isSidePanelVisible else { return }
         let pFrame = panel.frame
-        let sideWidth: CGFloat = 300
-        let sideHeight: CGFloat = 340
+        let sideWidth: CGFloat = 340
+        let sideHeight: CGFloat = 420
         let spacing: CGFloat = 12
 
         let screen = panel.screen ?? NSScreen.main ?? NSScreen.screens.first
@@ -690,6 +690,9 @@ private struct PinnedSidePanelView: View {
     let onQuickCopy: () -> Void
     let onClose: () -> Void
 
+    @State private var ocrDisplayMode = 0
+    @State private var translationDisplayMode = 0
+
     var body: some View {
         VStack(spacing: 14) {
             // 顶部工具行：标注 / 翻译 / OCR / 关闭
@@ -728,7 +731,7 @@ private struct PinnedSidePanelView: View {
             }
         }
         .padding(16)
-        .frame(width: 300)
+        .frame(width: 340)
         .background {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(Color(nsColor: .windowBackgroundColor))
@@ -811,6 +814,15 @@ private struct PinnedSidePanelView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("识别结果").font(.system(size: 13, weight: .semibold))
+                if !pinnedState.ocrLines.isEmpty {
+                    Picker("", selection: $ocrDisplayMode) {
+                        Text("全文展开").tag(0)
+                        Text("逐行对照").tag(1)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 140)
+                    .controlSize(.mini)
+                }
                 Spacer()
                 if pinnedState.ocrPhase == .running { ProgressView().controlSize(.small) }
             }
@@ -819,20 +831,39 @@ private struct PinnedSidePanelView: View {
                 Text("对当前贴图做文字识别（本地 Vision，不联网）。")
                     .font(.system(size: 12)).foregroundStyle(.secondary)
             case .running:
-                Text("正在识别…").font(.system(size: 12)).foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("正在识别中…").font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 20)
+                .frame(maxWidth: .infinity)
             case .empty:
                 Text("当前贴图中没识别到文字。").font(.system(size: 12)).foregroundStyle(.secondary)
             case .failed:
                 Text(pinnedState.ocrErrorMessage ?? "识别失败").font(.system(size: 12)).foregroundStyle(.red)
             case .done:
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(pinnedState.ocrLines) { line in
-                            OCRLineRow(line: line) { onCopyText(line.text) }
+                if ocrDisplayMode == 0 {
+                    ScrollView {
+                        Text(pinnedState.ocrLines.map(\.text).joined(separator: "\n"))
+                            .font(.system(size: 13, weight: .regular))
+                            .lineSpacing(4)
+                            .lineLimit(nil)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .padding(10)
+                    }
+                    .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.03)))
+                    .frame(maxHeight: 280)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(pinnedState.ocrLines) { line in
+                                OCRLineRow(line: line) { onCopyText(line.text) }
+                            }
                         }
                     }
+                    .frame(maxHeight: 280)
                 }
-                .frame(maxHeight: 220)
             }
             HStack(spacing: 8) {
                 MiniButton(label: "重新识别") { onRunOCR() }
@@ -846,6 +877,15 @@ private struct PinnedSidePanelView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("翻译结果").font(.system(size: 13, weight: .semibold))
+                if !pinnedState.translations.isEmpty {
+                    Picker("", selection: $translationDisplayMode) {
+                        Text("译文全文").tag(0)
+                        Text("逐行对照").tag(1)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 140)
+                    .controlSize(.mini)
+                }
                 Spacer()
                 if pinnedState.translationPhase == .running { ProgressView().controlSize(.small) }
             }
@@ -854,24 +894,44 @@ private struct PinnedSidePanelView: View {
                 Text("把识别到的文字翻成目标语言（本地模型，不联网）。")
                     .font(.system(size: 12)).foregroundStyle(.secondary)
             case .running:
-                Text("正在翻译…").font(.system(size: 12)).foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("正在翻译中…").font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 20)
+                .frame(maxWidth: .infinity)
             case .failed:
                 Text(pinnedState.translationErrorMessage ?? "翻译失败").font(.system(size: 12)).foregroundStyle(.red)
             case .done:
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(pinnedState.ocrLines) { line in
-                            TranslationLineRow(
-                                original: line.text,
-                                translated: pinnedState.translations[line.id] ?? ""
-                            ) {
-                                let translated = pinnedState.translations[line.id] ?? ""
-                                onCopyText(translated.isEmpty ? line.text : translated)
+                if translationDisplayMode == 0 {
+                    ScrollView {
+                        let text = pinnedState.ocrLines.map { pinnedState.translations[$0.id] ?? "" }.filter { !$0.isEmpty }.joined(separator: "\n")
+                        Text(text)
+                            .font(.system(size: 13, weight: .regular))
+                            .lineSpacing(4)
+                            .lineLimit(nil)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .padding(10)
+                    }
+                    .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.03)))
+                    .frame(maxHeight: 280)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(pinnedState.ocrLines) { line in
+                                TranslationLineRow(
+                                    original: line.text,
+                                    translated: pinnedState.translations[line.id] ?? ""
+                                ) {
+                                    let translated = pinnedState.translations[line.id] ?? ""
+                                    onCopyText(translated.isEmpty ? line.text : translated)
+                                }
                             }
                         }
                     }
+                    .frame(maxHeight: 280)
                 }
-                .frame(maxHeight: 220)
             }
             HStack(spacing: 8) {
                 MiniButton(label: "重新翻译") { onRunTranslation() }
