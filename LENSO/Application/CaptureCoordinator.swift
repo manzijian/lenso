@@ -181,9 +181,37 @@ final class CaptureCoordinator: NSObject {
     }
 
     private var previewController: PinnedScreenshotController?
+    private var keyMonitor: Any?
+
+    private func setupKeyMonitorIfNeeded() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+            if event.keyCode == 53 { // Esc 键快速一键关闭当前浮动预览或贴图
+                if self.closeLatestPinnedOrPreview() {
+                    return nil
+                }
+            }
+            return event
+        }
+    }
+
+    @discardableResult
+    func closeLatestPinnedOrPreview() -> Bool {
+        if let preview = previewController {
+            preview.close()
+            return true
+        }
+        if let last = pinnedControllers.last {
+            last.close()
+            return true
+        }
+        return false
+    }
 
     /// 钉图 / 浮动预览：浮在所有窗口之上的纯粹可拖动图片窗（无任何包裹窗体与黑边，回到刚截图的原汁原味）
     func pin(image: CGImage, initialFrame: NSRect? = nil, isPreview: Bool = false) {
+        setupKeyMonitorIfNeeded()
         // 如果是图库预览，先彻底关闭已有的旧预览浮窗，杜绝连续双击产生多重相同窗口堆叠、导致“关闭一次关不掉”的问题
         if isPreview {
             if let existing = previewController {
@@ -412,7 +440,8 @@ final class PinnedScreenshotController: NSObject {
         panel.contentView = imageView
         panel.setFrameOrigin(origin)
         panel.orderFrontRegardless()
-        panel.makeKey()
+        panel.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
 
         // 配置工具栏视图
         let toolbarView = PinnedToolbarView(
@@ -1204,17 +1233,28 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
         layer?.cornerRadius = 10
         layer?.masksToBounds = true
 
-        closeButton.bezelStyle = .circular
-        closeButton.controlSize = .small
-        closeButton.title = "✕"
+        closeButton.isBordered = false
+        closeButton.wantsLayer = true
+        closeButton.layer?.cornerRadius = 11
+        closeButton.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.65).cgColor
+        closeButton.attributedTitle = NSAttributedString(
+            string: "✕",
+            attributes: [
+                .foregroundColor: NSColor.white,
+                .font: NSFont.systemFont(ofSize: 11, weight: .bold)
+            ]
+        )
         closeButton.target = self
         closeButton.action = #selector(closeClicked)
+        closeButton.toolTip = "关闭贴图 (Esc / ⌘W / 双击)"
         closeButton.isHidden = true
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         addSubview(closeButton)
         NSLayoutConstraint.activate([
             closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 8),
             closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            closeButton.widthAnchor.constraint(equalToConstant: 22),
+            closeButton.heightAnchor.constraint(equalToConstant: 22),
         ])
     }
 
@@ -1485,9 +1525,7 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
     }
 
     override func mouseEntered(with event: NSEvent) {
-        if state.activeKind == nil {
-            closeButton.isHidden = false
-        }
+        closeButton.isHidden = false
     }
 
     override func mouseExited(with event: NSEvent) {

@@ -38,18 +38,6 @@ struct LENSOApp: App {
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1180, height: 720)
 
-        // 预览窗口
-        WindowGroup("预览", id: "preview", for: UUID.self) { $screenshotID in
-            PreviewWindowView(screenshotID: screenshotID)
-                .background(WindowConfigurator())
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .ignoresSafeArea()
-                .frame(minWidth: 560, minHeight: 400)
-        }
-        .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 820, height: 560)
-        .restorationBehavior(.disabled)
-
         // 设置窗口（单例）
         Window("设置", id: "settings") {
             SettingsWindowView()
@@ -76,8 +64,9 @@ struct LENSOApp: App {
                 }
                 .keyboardShortcut(shortcut(for: .openLibrary))
                 Button("预览最新截图") {
-                    if let newest = try? ScreenshotStore.shared.list().first {
-                        openWindow(id: "preview", value: newest.id)
+                    if let newest = try? ScreenshotStore.shared.list().first,
+                       let cgImage = ScreenshotStore.shared.loadImage(newest) {
+                        CaptureCoordinator.shared.pin(image: cgImage, isPreview: true)
                     }
                 }
                 .keyboardShortcut(shortcut(for: .previewLatest))

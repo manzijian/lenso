@@ -504,8 +504,12 @@ struct LensoLibraryView: View {
                 .shadow(color: Color.black.opacity(0.03), radius: 3, y: 1)
         )
         .contentShape(Rectangle())
-        .onTapGesture { toggleSelection(item.id) }
-        .gesture(TapGesture(count: 2).onEnded { onOpenPreview?(item.id) })
+        .onTapGesture(count: 2) {
+            onOpenPreview?(item.id)
+        }
+        .onTapGesture(count: 1) {
+            toggleSelection(item.id)
+        }
     }
 
     // MARK: - 空状态
@@ -838,11 +842,12 @@ private struct LibraryImageCell: View {
                 Divider()
                 Button("直接删除 (不可撤销)", role: .destructive, action: onDelete)
             }
-            .gesture(
-                TapGesture(count: 2)
-                    .onEnded(onOpen)
-                    .exclusively(before: TapGesture().onEnded(onToggleSelection))
-            )
-            .help("双击预览，单击多选")
+            .onTapGesture(count: 2) {
+                onOpen()
+            }
+            .onTapGesture(count: 1) {
+                onToggleSelection()
+            }
+            .help("双击打开贴图预览，单击选中")
     }
 }

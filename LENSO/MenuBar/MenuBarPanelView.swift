@@ -36,9 +36,11 @@ struct MenuBarPanelView: View {
         .frame(width: 312)
         .lensoColorScheme()
         .onReceive(NotificationCenter.default.publisher(for: .openPreviewForScreenshot)) { note in
-            // “截图后显示预览”开着时，保存完成后自动打开预览窗口
-            guard let id = note.object as? UUID else { return }
-            openWindow(id: "preview", value: id)
+            // “截图后显示预览”开着时，使用纯粹浮动贴图浮现（回到刚截图的体验，杜绝大窗口包裹）
+            guard let id = note.object as? UUID,
+                  let record = (try? ScreenshotStore.shared.list())?.first(where: { $0.id == id }),
+                  let cgImage = ScreenshotStore.shared.loadImage(record) else { return }
+            CaptureCoordinator.shared.pin(image: cgImage, isPreview: true)
         }
     }
 
