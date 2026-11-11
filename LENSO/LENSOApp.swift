@@ -103,7 +103,7 @@ struct LENSOApp: App {
 @MainActor
 enum LensoStatusIcon {
     static func image(for style: MenuBarIconStyle) -> NSImage {
-        let config = NSImage.SymbolConfiguration(pointSize: 14.5, weight: .medium)
+        let config = NSImage.SymbolConfiguration(pointSize: 14.0, weight: .regular)
         if let img = NSImage(systemSymbolName: style.systemSymbolName, accessibilityDescription: "LENSO")?.withSymbolConfiguration(config) {
             img.isTemplate = true
             return img

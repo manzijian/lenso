@@ -6,21 +6,23 @@ import SwiftUI
 
 /// 状态栏图标候选样式
 enum MenuBarIconStyle: String, CaseIterable, Identifiable {
-    case viewfinder = "取景截屏 (推荐)"
-    case crop = "经典裁切框"
-    case camera = "极简小相机"
+    case viewfinder = "极简取景框 (推荐)"
+    case crop = "经典裁切标"
+    case camera = "纤细相机"
+    case scope = "精准对焦"
     case aperture = "镜头光圈"
-    case window = "屏幕窗口"
+    case scissors = "轻巧剪刀"
 
     var id: String { rawValue }
 
     var systemSymbolName: String {
         switch self {
-        case .viewfinder: return "camera.viewfinder"
+        case .viewfinder: return "viewfinder"
         case .crop: return "crop"
         case .camera: return "camera"
+        case .scope: return "dot.scope"
         case .aperture: return "camera.aperture"
-        case .window: return "macwindow.on.rectangle"
+        case .scissors: return "scissors"
         }
     }
 }
