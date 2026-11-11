@@ -245,13 +245,30 @@ final class EditorPanel: NSPanel {
 
 // MARK: - 贴图控制器与独立浮动工具栏（专属针对贴图操作，不遮挡屏幕也不进入二次截图）
 
+@Observable
+final class PinnedEditorState {
+    var isSidePanelVisible = false
+    var panelTab: PanelTab = .ocr
+    var ocrPhase: OCRPhase = .idle
+    var ocrLines: [RecognizedText] = []
+    var ocrErrorMessage: String? = nil
+    var translationPhase: TranslationPhase = .idle
+    var translations: [UUID: String] = [:]
+    var translationErrorMessage: String? = nil
+    var justSavedNote: Bool = false
+    @ObservationIgnored var ocrTask: Task<Void, Never>?
+    @ObservationIgnored var translationTask: Task<Void, Never>?
+}
+
 @MainActor
 final class PinnedScreenshotController: NSObject {
     weak var coordinator: CaptureCoordinator?
     let panel: NSPanel
     let toolbarPanel: NSPanel
+    let sidePanel: NSPanel
     let imageView: PinnedImageView
     let state = AnnotationState()
+    let pinnedState = PinnedEditorState()
     private var isToolbarVisible = false
 
     init(image: CGImage, initialFrame: NSRect?, coordinator: CaptureCoordinator) {
@@ -277,7 +294,7 @@ final class PinnedScreenshotController: NSObject {
             }
         }
 
-        // 主贴图浮窗
+        // 1. 主贴图浮窗
         panel = NSPanel(
             contentRect: NSRect(origin: origin, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -291,9 +308,9 @@ final class PinnedScreenshotController: NSObject {
         panel.isMovableByWindowBackground = false
         panel.hidesOnDeactivate = false
 
-        // 工具栏卫星浮窗（跟随主贴图）
+        // 2. 底部工具栏卫星浮窗
         toolbarPanel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 490, height: 46),
+            contentRect: NSRect(x: 0, y: 0, width: 510, height: 46),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -303,6 +320,19 @@ final class PinnedScreenshotController: NSObject {
         toolbarPanel.backgroundColor = .clear
         toolbarPanel.hasShadow = false
         toolbarPanel.hidesOnDeactivate = false
+
+        // 3. 右侧属性/OCR/翻译卡片卫星浮窗
+        sidePanel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 300, height: 340),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        sidePanel.level = .floating
+        sidePanel.isOpaque = false
+        sidePanel.backgroundColor = .clear
+        sidePanel.hasShadow = false
+        sidePanel.hidesOnDeactivate = false
 
         imageView = PinnedImageView(frame: NSRect(origin: .zero, size: size), image: image, state: state)
         super.init()
@@ -314,7 +344,7 @@ final class PinnedScreenshotController: NSObject {
             self?.toggleToolbar()
         }
         imageView.onWindowMovedOrResized = { [weak self] in
-            self?.updateToolbarPosition()
+            self?.updatePositions()
         }
 
         panel.contentView = imageView
@@ -323,6 +353,7 @@ final class PinnedScreenshotController: NSObject {
         // 配置工具栏视图
         let toolbarView = PinnedToolbarView(
             state: state,
+            pinnedState: pinnedState,
             onUndo: { [weak self] in
                 self?.state.undo()
                 self?.imageView.needsDisplay = true
@@ -331,8 +362,14 @@ final class PinnedScreenshotController: NSObject {
                 self?.state.redo()
                 self?.imageView.needsDisplay = true
             },
-            onOCR: { [weak self] in
-                self?.runOCR()
+            onToggleAnnotation: { [weak self] in
+                self?.toggleTab(.annotation)
+            },
+            onToggleTranslate: { [weak self] in
+                self?.toggleTab(.translate)
+            },
+            onToggleOCR: { [weak self] in
+                self?.toggleTab(.ocr)
             },
             onCopy: { [weak self] in
                 self?.copyImage()
@@ -344,45 +381,125 @@ final class PinnedScreenshotController: NSObject {
                 self?.close()
             }
         )
-        let hosting = NSHostingView(rootView: toolbarView)
-        hosting.appearance = NSAppearance(named: .aqua)
-        toolbarPanel.contentView = hosting
+        let toolbarHosting = NSHostingView(rootView: toolbarView)
+        toolbarHosting.appearance = NSAppearance(named: .aqua)
+        toolbarPanel.contentView = toolbarHosting
+
+        // 配置右侧属性/OCR/翻译面板视图
+        let sideView = PinnedSidePanelView(
+            state: state,
+            pinnedState: pinnedState,
+            onRunOCR: { [weak self] in self?.runOCR() },
+            onCopyAllOCR: { [weak self] in
+                guard let self else { return }
+                let text = self.pinnedState.ocrLines.map(\.text).joined(separator: "\n")
+                self.copyText(text)
+            },
+            onSaveOCRToNotes: { [weak self] in self?.saveOCRToNotes() },
+            onCopyText: { [weak self] text in self?.copyText(text) },
+            onRunTranslation: { [weak self] in self?.runTranslation() },
+            onCopyAllTranslations: { [weak self] in
+                guard let self else { return }
+                let text = self.pinnedState.ocrLines.map { self.pinnedState.translations[$0.id] ?? "" }.joined(separator: "\n")
+                self.copyText(text)
+            },
+            onQuickCopy: { [weak self] in self?.copyImage() },
+            onClose: { [weak self] in self?.hideSidePanel() }
+        )
+        let sideHosting = NSHostingView(rootView: sideView)
+        sideHosting.appearance = NSAppearance(named: .aqua)
+        sidePanel.contentView = sideHosting
 
         panel.orderFrontRegardless()
     }
 
     func toggleToolbar() {
         if isToolbarVisible {
-            hideToolbar()
+            hideAll()
         } else {
-            showToolbar()
+            showAll()
         }
     }
 
-    func showToolbar() {
+    func showAll() {
         guard !isToolbarVisible else { return }
         isToolbarVisible = true
-        updateToolbarPosition()
+        pinnedState.isSidePanelVisible = true
+        pinnedState.panelTab = .ocr
+
+        updatePositions()
+
         if toolbarPanel.parent != panel {
             panel.addChildWindow(toolbarPanel, ordered: .above)
         }
         toolbarPanel.orderFront(nil)
+
+        if sidePanel.parent != panel {
+            panel.addChildWindow(sidePanel, ordered: .above)
+        }
+        sidePanel.orderFront(nil)
+
+        // 默认自动运行一次 OCR 识别贴图文字
+        if pinnedState.ocrPhase == .idle {
+            runOCR()
+        }
     }
 
-    func hideToolbar() {
+    func hideAll() {
         guard isToolbarVisible else { return }
         isToolbarVisible = false
+        pinnedState.isSidePanelVisible = false
         state.activeKind = nil
+
         toolbarPanel.orderOut(nil)
         panel.removeChildWindow(toolbarPanel)
+
+        sidePanel.orderOut(nil)
+        panel.removeChildWindow(sidePanel)
+
         panel.invalidateCursorRects(for: imageView)
         imageView.needsDisplay = true
+    }
+
+    func toggleTab(_ tab: PanelTab) {
+        if pinnedState.isSidePanelVisible && pinnedState.panelTab == tab {
+            hideSidePanel()
+        } else {
+            showSidePanel(tab: tab)
+        }
+    }
+
+    func showSidePanel(tab: PanelTab) {
+        pinnedState.panelTab = tab
+        pinnedState.isSidePanelVisible = true
+        updateSidePanelPosition()
+        if sidePanel.parent != panel {
+            panel.addChildWindow(sidePanel, ordered: .above)
+        }
+        sidePanel.orderFront(nil)
+
+        if tab == .ocr && pinnedState.ocrPhase == .idle {
+            runOCR()
+        } else if tab == .translate {
+            runTranslation()
+        }
+    }
+
+    func hideSidePanel() {
+        pinnedState.isSidePanelVisible = false
+        sidePanel.orderOut(nil)
+        panel.removeChildWindow(sidePanel)
+    }
+
+    func updatePositions() {
+        updateToolbarPosition()
+        updateSidePanelPosition()
     }
 
     func updateToolbarPosition() {
         guard isToolbarVisible else { return }
         let pFrame = panel.frame
-        let barWidth: CGFloat = 490
+        let barWidth: CGFloat = 510
         let barHeight: CGFloat = 46
         let spacing: CGFloat = 8
 
@@ -394,16 +511,41 @@ final class PinnedScreenshotController: NSObject {
 
         var y = pFrame.minY - barHeight - spacing
         if y < visibleFrame.minY + 8 {
-            // 如果贴在屏幕底部，自动吸附到贴图上方
             y = pFrame.maxY + spacing
         }
 
         toolbarPanel.setFrame(NSRect(x: x, y: y, width: barWidth, height: barHeight), display: true)
     }
 
+    func updateSidePanelPosition() {
+        guard pinnedState.isSidePanelVisible else { return }
+        let pFrame = panel.frame
+        let sideWidth: CGFloat = 300
+        let sideHeight: CGFloat = 340
+        let spacing: CGFloat = 12
+
+        let screen = panel.screen ?? NSScreen.main ?? NSScreen.screens.first
+        let visibleFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 2560, height: 1440)
+
+        // 优先放在贴图右侧；若右侧超屏则放左侧
+        var x = pFrame.maxX + spacing
+        if x + sideWidth > visibleFrame.maxX - 8 {
+            x = pFrame.minX - sideWidth - spacing
+        }
+        x = max(visibleFrame.minX + 8, min(x, visibleFrame.maxX - sideWidth - 8))
+
+        var y = pFrame.maxY - sideHeight
+        y = max(visibleFrame.minY + 8, min(y, visibleFrame.maxY - sideHeight - 8))
+
+        sidePanel.setFrame(NSRect(x: x, y: y, width: sideWidth, height: sideHeight), display: true)
+    }
+
     func close() {
-        hideToolbar()
+        pinnedState.ocrTask?.cancel()
+        pinnedState.translationTask?.cancel()
+        hideAll()
         toolbarPanel.close()
+        sidePanel.close()
         panel.orderOut(nil)
         panel.close()
         coordinator?.removePinnedController(self)
@@ -438,33 +580,302 @@ final class PinnedScreenshotController: NSObject {
         }
     }
 
-    func runOCR() {
+    func runOCR(thenTranslate: Bool = false) {
+        pinnedState.ocrTask?.cancel()
+        pinnedState.ocrPhase = .running
+        pinnedState.ocrErrorMessage = nil
+        pinnedState.ocrLines = []
+        pinnedState.translations = [:]
+        pinnedState.translationPhase = .idle
+        pinnedState.justSavedNote = false
+
         let composited = imageView.renderCompositedImage()
-        Task {
+        pinnedState.ocrTask = Task {
             do {
                 let lines = try await ProviderRegistry.ocr.recognizeText(in: composited, languages: ["zh-Hans", "en-US"])
-                let fullText = lines.map(\.text).joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-                if !fullText.isEmpty {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(fullText, forType: .string)
-                    SaveToastController.shared.show(
-                        title: "已识别并复制文字",
-                        subtitle: String(fullText.prefix(35)) + (fullText.count > 35 ? "..." : ""),
-                        thumbnail: composited
-                    )
-                } else {
-                    SaveToastController.shared.show(
-                        title: "未识别到文字",
-                        subtitle: "请尝试放大贴图或更清晰的区域",
-                        thumbnail: composited
-                    )
+                guard !Task.isCancelled else { return }
+                pinnedState.ocrLines = lines
+                pinnedState.ocrPhase = lines.isEmpty ? .empty : .done
+                if thenTranslate, !lines.isEmpty {
+                    pinnedState.panelTab = .translate
+                    runTranslation()
                 }
             } catch {
-                SaveToastController.shared.show(
-                    title: "文字识别失败",
-                    subtitle: error.localizedDescription,
-                    thumbnail: composited
+                guard !Task.isCancelled else { return }
+                pinnedState.ocrPhase = .failed
+                pinnedState.ocrErrorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func runTranslation() {
+        pinnedState.panelTab = .translate
+        if pinnedState.ocrLines.isEmpty {
+            runOCR(thenTranslate: true)
+            return
+        }
+        translateLines()
+    }
+
+    private func translateLines() {
+        pinnedState.translationTask?.cancel()
+        pinnedState.translationPhase = .running
+        pinnedState.translationErrorMessage = nil
+        let lines = pinnedState.ocrLines
+        pinnedState.translationTask = Task {
+            var results: [UUID: String] = [:]
+            var firstError: String?
+            for line in lines {
+                guard !Task.isCancelled else { return }
+                do {
+                    let target = ProviderRegistry.translation.defaultTargetLanguage(for: line.text)
+                    let translated = try await ProviderRegistry.translation.translate(line.text, from: nil, to: target)
+                    results[line.id] = translated
+                } catch {
+                    if firstError == nil { firstError = error.localizedDescription }
+                    results[line.id] = ""
+                }
+            }
+            guard !Task.isCancelled else { return }
+            pinnedState.translations = results
+            if let firstError, results.values.allSatisfy({ $0.isEmpty }) {
+                pinnedState.translationPhase = .failed
+                pinnedState.translationErrorMessage = firstError
+            } else {
+                pinnedState.translationPhase = .done
+                pinnedState.translationErrorMessage = nil
+            }
+        }
+    }
+
+    func copyText(_ text: String) {
+        guard !text.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        ClipboardMonitor.shared.markSelfWrite()
+        SaveToastController.shared.show(
+            title: "已复制文本",
+            subtitle: String(text.prefix(35)) + (text.count > 35 ? "..." : ""),
+            thumbnail: nil
+        )
+    }
+
+    func saveOCRToNotes() {
+        let content = pinnedState.ocrLines.map(\.text).joined(separator: "\n")
+        guard !content.isEmpty else { return }
+        do {
+            _ = try ScreenshotStore.shared.createTextNote(content: content, sourceApp: "lenso 贴图识别")
+            pinnedState.justSavedNote = true
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                pinnedState.justSavedNote = false
+            }
+        } catch {
+            pinnedState.ocrErrorMessage = "存入失败：\(error.localizedDescription)"
+        }
+    }
+}
+
+// MARK: - 贴图右侧属性/OCR/翻译面板视图
+
+private struct PinnedSidePanelView: View {
+    @Bindable var state: AnnotationState
+    @Bindable var pinnedState: PinnedEditorState
+    let onRunOCR: () -> Void
+    let onCopyAllOCR: () -> Void
+    let onSaveOCRToNotes: () -> Void
+    let onCopyText: (String) -> Void
+    let onRunTranslation: () -> Void
+    let onCopyAllTranslations: () -> Void
+    let onQuickCopy: () -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(spacing: 14) {
+            // 顶部工具行：标注 / 翻译 / OCR / 关闭
+            HStack(spacing: 16) {
+                SideTool(icon: "highlighter", label: "标注", active: pinnedState.panelTab == .annotation) {
+                    pinnedState.panelTab = .annotation
+                    state.activeKind = .brush
+                }
+                SideTool(icon: "character.bubble", label: "翻译", active: pinnedState.panelTab == .translate) {
+                    pinnedState.panelTab = .translate
+                    onRunTranslation()
+                }
+                SideTool(icon: "doc.text.viewfinder", label: "OCR", active: pinnedState.panelTab == .ocr) {
+                    pinnedState.panelTab = .ocr
+                    if pinnedState.ocrPhase == .idle { onRunOCR() }
+                }
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 24, height: 24)
+                        .background(Circle().fill(.primary.opacity(0.06)))
+                }
+                .buttonStyle(.plain)
+                .help("关闭面板")
+            }
+
+            switch pinnedState.panelTab {
+            case .annotation:
+                annotationControls
+            case .ocr:
+                ocrResultsView
+            case .translate:
+                translationResultsView
+            }
+        }
+        .padding(16)
+        .frame(width: 300)
+        .background {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color(nsColor: .windowBackgroundColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(Color.black.opacity(0.1), lineWidth: 1)
                 )
+        }
+        .shadow(color: .black.opacity(0.22), radius: 20, y: 6)
+    }
+
+    private var annotationControls: some View {
+        Group {
+            // 颜色盘（7 色）
+            HStack(spacing: 12) {
+                ForEach(0..<AnnotationPalette.count, id: \.self) { i in
+                    Circle()
+                        .fill(AnnotationPalette[i])
+                        .frame(width: 22, height: 22)
+                        .overlay {
+                            if state.colorIndex == i {
+                                Circle().strokeBorder(Color(nsColor: .controlAccentColor), lineWidth: 2.5)
+                                    .frame(width: 30, height: 30)
+                            }
+                        }
+                        .onTapGesture { state.colorIndex = i }
+                }
+            }
+
+            // 粗细滑杆 + Npx
+            HStack(spacing: 10) {
+                Slider(value: $state.strokeWidth, in: 1...10, step: 1)
+                    .tint(Color(nsColor: .controlAccentColor))
+                Text("\(Int(state.strokeWidth))px")
+                    .font(.system(size: 13))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .frame(width: 36)
+            }
+
+            // 形状快捷行
+            HStack(spacing: 22) {
+                ShapeQuick(icon: "line.diagonal", kind: .brush, state: state) { state.activeKind = .brush }
+                ShapeQuick(icon: "arrow.right", kind: .arrow, state: state) { state.activeKind = .arrow }
+                ShapeQuick(icon: "rectangle", kind: .rect, state: state) { state.activeKind = .rect }
+                ShapeQuick(icon: "circle", kind: .ellipse, state: state) { state.activeKind = .ellipse }
+                ShapeQuick(icon: "arrow.up.right", kind: .arrow, state: state) { state.activeKind = .arrow }
+            }
+            .padding(.vertical, 10)
+            .background(RoundedRectangle(cornerRadius: 12).fill(.primary.opacity(0.04)))
+
+            // 马赛克 / 高亮 开关行
+            ToggleRow(icon: "square.grid.3x3.square", label: "马赛克", isOn: $state.mosaicEnabled) {
+                if state.mosaicEnabled { state.activeKind = .mosaic }
+            }
+            ToggleRow(icon: "drop", label: "高亮", isOn: $state.highlightEnabled) {
+                if state.highlightEnabled { state.activeKind = .highlight }
+            }
+
+            // 复制到剪贴板
+            Button {
+                onQuickCopy()
+            } label: {
+                HStack {
+                    Image(systemName: "doc.on.doc")
+                    Text("复制到剪贴板").font(.system(size: 13, weight: .medium))
+                    Spacer()
+                    Text("⌘C").font(.system(size: 11)).foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(RoundedRectangle(cornerRadius: 12).fill(.primary.opacity(0.05)))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var ocrResultsView: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("识别结果").font(.system(size: 13, weight: .semibold))
+                Spacer()
+                if pinnedState.ocrPhase == .running { ProgressView().controlSize(.small) }
+            }
+            switch pinnedState.ocrPhase {
+            case .idle:
+                Text("对当前贴图做文字识别（本地 Vision，不联网）。")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+            case .running:
+                Text("正在识别…").font(.system(size: 12)).foregroundStyle(.secondary)
+            case .empty:
+                Text("当前贴图中没识别到文字。").font(.system(size: 12)).foregroundStyle(.secondary)
+            case .failed:
+                Text(pinnedState.ocrErrorMessage ?? "识别失败").font(.system(size: 12)).foregroundStyle(.red)
+            case .done:
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(pinnedState.ocrLines) { line in
+                            OCRLineRow(line: line) { onCopyText(line.text) }
+                        }
+                    }
+                }
+                .frame(maxHeight: 220)
+            }
+            HStack(spacing: 8) {
+                MiniButton(label: "重新识别") { onRunOCR() }
+                MiniButton(label: "全部复制", disabled: pinnedState.ocrLines.isEmpty) { onCopyAllOCR() }
+                MiniButton(label: pinnedState.justSavedNote ? "已存入" : "存入收纳", disabled: pinnedState.ocrLines.isEmpty) { onSaveOCRToNotes() }
+            }
+        }
+    }
+
+    private var translationResultsView: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("翻译结果").font(.system(size: 13, weight: .semibold))
+                Spacer()
+                if pinnedState.translationPhase == .running { ProgressView().controlSize(.small) }
+            }
+            switch pinnedState.translationPhase {
+            case .idle:
+                Text("把识别到的文字翻成目标语言（本地模型，不联网）。")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+            case .running:
+                Text("正在翻译…").font(.system(size: 12)).foregroundStyle(.secondary)
+            case .failed:
+                Text(pinnedState.translationErrorMessage ?? "翻译失败").font(.system(size: 12)).foregroundStyle(.red)
+            case .done:
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(pinnedState.ocrLines) { line in
+                            TranslationLineRow(
+                                original: line.text,
+                                translated: pinnedState.translations[line.id] ?? ""
+                            ) {
+                                let translated = pinnedState.translations[line.id] ?? ""
+                                onCopyText(translated.isEmpty ? line.text : translated)
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 220)
+            }
+            HStack(spacing: 8) {
+                MiniButton(label: "重新翻译") { onRunTranslation() }
+                MiniButton(label: "全部复制译文", disabled: pinnedState.translations.isEmpty) { onCopyAllTranslations() }
             }
         }
     }
@@ -474,9 +885,12 @@ final class PinnedScreenshotController: NSObject {
 
 private struct PinnedToolbarView: View {
     @Bindable var state: AnnotationState
+    @Bindable var pinnedState: PinnedEditorState
     let onUndo: () -> Void
     let onRedo: () -> Void
-    let onOCR: () -> Void
+    let onToggleAnnotation: () -> Void
+    let onToggleTranslate: () -> Void
+    let onToggleOCR: () -> Void
     let onCopy: () -> Void
     let onSave: () -> Void
     let onClose: () -> Void
@@ -517,25 +931,20 @@ private struct PinnedToolbarView: View {
 
             Divider().frame(height: 18)
 
-            // 颜色选择菜单
-            Menu {
-                ForEach(0..<AnnotationPalette.count, id: \.self) { idx in
-                    Button {
-                        state.colorIndex = idx
-                    } label: {
-                        Text(colorName(for: idx))
-                    }
-                }
-            } label: {
+            // 标注属性面板快捷入口（点击打开标注设置卡片）
+            Button(action: onToggleAnnotation) {
                 Circle()
                     .fill(AnnotationPalette[state.colorIndex])
                     .frame(width: 14, height: 14)
                     .overlay(Circle().stroke(Color.primary.opacity(0.25), lineWidth: 1))
                     .frame(width: 26, height: 26)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(pinnedState.isSidePanelVisible && pinnedState.panelTab == .annotation ? Color(nsColor: .controlAccentColor).opacity(0.15) : .clear)
+                    )
             }
-            .menuStyle(.borderlessButton)
-            .frame(width: 26, height: 26)
-            .help("标注颜色")
+            .buttonStyle(.plain)
+            .help("标注调色盘与粗细设置")
 
             Divider().frame(height: 18)
 
@@ -562,15 +971,33 @@ private struct PinnedToolbarView: View {
 
             Divider().frame(height: 18)
 
-            // OCR
-            Button(action: onOCR) {
-                Image(systemName: "doc.text.viewfinder")
+            // 翻译
+            Button(action: onToggleTranslate) {
+                Image(systemName: "character.bubble")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.primary.opacity(0.85))
+                    .foregroundStyle(pinnedState.isSidePanelVisible && pinnedState.panelTab == .translate ? Color(nsColor: .controlAccentColor) : Color.primary.opacity(0.85))
                     .frame(width: 28, height: 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(pinnedState.isSidePanelVisible && pinnedState.panelTab == .translate ? Color(nsColor: .controlAccentColor).opacity(0.15) : .clear)
+                    )
             }
             .buttonStyle(.plain)
-            .help("识别文字 (OCR)")
+            .help("智能翻译卡片")
+
+            // OCR
+            Button(action: onToggleOCR) {
+                Image(systemName: "doc.text.viewfinder")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(pinnedState.isSidePanelVisible && pinnedState.panelTab == .ocr ? Color(nsColor: .controlAccentColor) : Color.primary.opacity(0.85))
+                    .frame(width: 28, height: 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(pinnedState.isSidePanelVisible && pinnedState.panelTab == .ocr ? Color(nsColor: .controlAccentColor).opacity(0.15) : .clear)
+                    )
+            }
+            .buttonStyle(.plain)
+            .help("文字识别 (OCR) 卡片")
 
             // 复制
             Button(action: onCopy) {
@@ -614,19 +1041,6 @@ private struct PinnedToolbarView: View {
                 )
         }
         .shadow(color: .black.opacity(0.22), radius: 14, y: 4)
-    }
-
-    private func colorName(for index: Int) -> String {
-        switch index {
-        case 0: return "红色"
-        case 1: return "橙色"
-        case 2: return "黄色"
-        case 3: return "蓝色"
-        case 4: return "紫色"
-        case 5: return "黑色"
-        case 6: return "白色"
-        default: return "颜色"
-        }
     }
 }
 

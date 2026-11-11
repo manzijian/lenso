@@ -3,13 +3,13 @@ import AppKit
 import CoreGraphics
 
 /// 右侧面板页签：标注 / OCR / 翻译
-private enum PanelTab { case annotation, ocr, translate }
+enum PanelTab { case annotation, ocr, translate }
 
 /// OCR 运行阶段
-private enum OCRPhase { case idle, running, done, empty, failed }
+enum OCRPhase { case idle, running, done, empty, failed }
 
 /// 翻译运行阶段
-private enum TranslationPhase { case idle, running, done, failed }
+enum TranslationPhase { case idle, running, done, failed }
 
 /// 完整截图编辑器（参考产品图 2）：
 /// 全屏冻结画面 + 选区（8 手柄可调整）+ 底部工具栏 + 右侧属性面板 + 完成保存
@@ -1277,7 +1277,7 @@ private struct ToolIcon: View {
     }
 }
 
-private struct SideTool: View {
+struct SideTool: View {
     let icon: String
     let label: String
     let active: Bool
@@ -1302,7 +1302,7 @@ private struct SideTool: View {
 }
 
 /// 形状快捷按钮（面板中排）
-private struct ShapeQuick: View {
+struct ShapeQuick: View {
     let icon: String
     let kind: AnnotationKind
     let state: AnnotationState
@@ -1325,7 +1325,7 @@ private struct ShapeQuick: View {
 }
 
 /// 马赛克/高亮开关行
-private struct ToggleRow: View {
+struct ToggleRow: View {
     let icon: String
     let label: String
     @Binding var isOn: Bool
@@ -1352,7 +1352,7 @@ private struct ToggleRow: View {
 }
 
 /// OCR 结果行：文字 + 置信度，点按复制这行
-private struct OCRLineRow: View {
+struct OCRLineRow: View {
     let line: RecognizedText
     let onCopy: () -> Void
 
@@ -1372,7 +1372,7 @@ private struct OCRLineRow: View {
 }
 
 /// 翻译结果行：原文（小灰）+ 译文，点按复制译文
-private struct TranslationLineRow: View {
+struct TranslationLineRow: View {
     let original: String
     let translated: String
     let onCopy: () -> Void
@@ -1396,7 +1396,7 @@ private struct TranslationLineRow: View {
 }
 
 /// 面板里的小按钮（OCR / 翻译页签用）
-private struct MiniButton: View {
+struct MiniButton: View {
     let label: String
     var disabled = false
     let action: () -> Void
