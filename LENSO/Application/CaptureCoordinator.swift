@@ -1197,6 +1197,22 @@ private struct PinnedToolbarView: View {
     }
 }
 
+// MARK: - 贴图右上角极速响应关闭按钮
+
+final class PinnedCloseButton: NSButton {
+    var onClick: (() -> Void)?
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        addCursorRect(bounds, cursor: .pointingHand)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        // 瞬间响应：鼠标按下瞬间立即触发关闭，无需等待 mouseUp，0 延迟秒关
+        onClick?()
+    }
+}
+
 // MARK: - 贴图展示及标注交互视图
 
 final class PinnedImageView: NSView, NSTextFieldDelegate {
@@ -1206,7 +1222,7 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
     var onToggleEditing: (() -> Void)?
     var onWindowMovedOrResized: (() -> Void)?
 
-    private let closeButton = NSButton()
+    private let closeButton = PinnedCloseButton()
     private var tracking: NSTrackingArea?
     private let baseSize: NSSize
     private var currentScale: CGFloat = 1.0
@@ -1227,7 +1243,7 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
         self.state = state
         self.baseSize = frame.size
         super.init(frame: frame)
-        toolTip = "左键拖拽移动 · 滚轮缩放 · 右键/空格唤出编辑栏 · 双击关闭"
+        toolTip = "左键拖拽移动 · 滚轮缩放 · 右键/空格唤出编辑栏 · 双击或点击右上角✕关闭"
 
         wantsLayer = true
         layer?.cornerRadius = 10
@@ -1235,26 +1251,28 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
 
         closeButton.isBordered = false
         closeButton.wantsLayer = true
-        closeButton.layer?.cornerRadius = 11
+        closeButton.layer?.cornerRadius = 12
         closeButton.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.65).cgColor
         closeButton.attributedTitle = NSAttributedString(
             string: "✕",
             attributes: [
                 .foregroundColor: NSColor.white,
-                .font: NSFont.systemFont(ofSize: 11, weight: .bold)
+                .font: NSFont.systemFont(ofSize: 12, weight: .bold)
             ]
         )
-        closeButton.target = self
-        closeButton.action = #selector(closeClicked)
+        closeButton.onClick = { [weak self] in
+            self?.onClose?()
+        }
         closeButton.toolTip = "关闭贴图 (Esc / ⌘W / 双击)"
-        closeButton.isHidden = true
+        closeButton.isHidden = false
+        closeButton.alphaValue = 0.85
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         addSubview(closeButton)
         NSLayoutConstraint.activate([
-            closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 8),
-            closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-            closeButton.widthAnchor.constraint(equalToConstant: 22),
-            closeButton.heightAnchor.constraint(equalToConstant: 22),
+            closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+            closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+            closeButton.widthAnchor.constraint(equalToConstant: 24),
+            closeButton.heightAnchor.constraint(equalToConstant: 24),
         ])
     }
 
@@ -1284,15 +1302,16 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        if !closeButton.isHidden {
-            let ptInClose = closeButton.convert(point, from: self)
-            if closeButton.bounds.contains(ptInClose) {
-                return closeButton
-            }
+        let localPoint = superview != nil ? convert(point, from: superview) : point
+
+        // 右上角关闭区域（扩大至 44x44 超舒适命中区）：无论点到圆圈还是圆圈周围几像素，100% 命中关闭按钮
+        let closeHitRect = closeButton.frame.insetBy(dx: -8, dy: -8)
+        if closeHitRect.contains(localPoint) || (localPoint.x >= bounds.width - 44 && localPoint.y <= 44) {
+            return closeButton
         }
+
         if let field = activeTextField {
-            let ptInField = field.convert(point, from: self)
-            if field.bounds.contains(ptInField) {
+            if field.frame.contains(localPoint) {
                 return field
             }
         }
@@ -1306,11 +1325,22 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
         } else {
             addCursorRect(bounds, cursor: .arrow)
         }
+        // 右上角关闭区域悬停显示手型指针
+        let closeHoverRect = NSRect(x: bounds.width - 44, y: 0, width: 44, height: 44)
+        addCursorRect(closeHoverRect, cursor: .pointingHand)
     }
 
     override func mouseDown(with event: NSEvent) {
         if activeTextField != nil {
             commitTextEditing()
+        }
+
+        let pt = convert(event.locationInWindow, from: nil)
+
+        // 双重保障：只要在右上角 44x44 区域按下，瞬间彻底关闭
+        if pt.x >= bounds.width - 44 && pt.y <= 44 {
+            onClose?()
+            return
         }
 
         // 选择 / 移动模式：双击或多次快速点击立即 100% 灵敏关闭
@@ -1325,7 +1355,6 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
             return
         }
 
-        let pt = convert(event.locationInWindow, from: nil)
         let norm = CGPoint(
             x: min(max(pt.x / max(1, bounds.width), 0), 1),
             y: min(max(pt.y / max(1, bounds.height), 0), 1)
@@ -1525,10 +1554,10 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
     }
 
     override func mouseEntered(with event: NSEvent) {
-        closeButton.isHidden = false
+        closeButton.alphaValue = 1.0
     }
 
     override func mouseExited(with event: NSEvent) {
-        closeButton.isHidden = true
+        closeButton.alphaValue = 0.85
     }
 }
