@@ -6,11 +6,11 @@ import SwiftUI
 
 /// 状态栏图标候选样式
 enum MenuBarIconStyle: String, CaseIterable, Identifiable {
+    case pin = "悬浮贴图图钉 (推荐)"
     case viewfinder = "极简取景框 (CleanShot风)"
     case crop = "经典裁切框 (剪辑设计风)"
     case squareDashed = "选区虚线框 (Marquee选框)"
     case dotScope = "精密对焦准星 (高精度微点)"
-    case pin = "悬浮贴图图钉 (Snipaste风)"
     case camera = "纤细单反相机 (极简线框)"
     case aperture = "镜头机械光圈 (摄影质感)"
     case scissors = "轻巧截图剪刀 (Snip裁切)"
@@ -21,11 +21,11 @@ enum MenuBarIconStyle: String, CaseIterable, Identifiable {
 
     var systemSymbolName: String {
         switch self {
+        case .pin: return "pin"
         case .viewfinder: return "viewfinder"
         case .crop: return "crop"
         case .squareDashed: return "square.dashed"
         case .dotScope: return "dot.scope"
-        case .pin: return "pin"
         case .camera: return "camera"
         case .aperture: return "camera.aperture"
         case .scissors: return "scissors"
@@ -122,7 +122,12 @@ final class AppSettings {
         glassEffect = Self.read(.glassEffect, default: true, defaults: defaults)
 
         let rawIcon = defaults.string(forKey: Self.keyPrefix + "menuBarIconStyle") ?? ""
-        menuBarIconStyle = MenuBarIconStyle(rawValue: rawIcon) ?? .viewfinder
+        var loadedStyle = MenuBarIconStyle(rawValue: rawIcon) ?? .pin
+        if loadedStyle != .pin && (rawIcon.contains("取景") || rawIcon.isEmpty) {
+            loadedStyle = .pin
+            defaults.set(loadedStyle.rawValue, forKey: Self.keyPrefix + "menuBarIconStyle")
+        }
+        menuBarIconStyle = loadedStyle
         // 开机启动：按存量值静默同步一次（注册是幂等的）。
         if launchAtLogin { try? SMAppService.mainApp.register() }
         // 注意：这里不要调 applyAppearance()——SwiftUI 的 App.init() 早于

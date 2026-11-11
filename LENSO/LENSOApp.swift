@@ -108,7 +108,7 @@ enum LensoStatusIcon {
             img.isTemplate = true
             return img
         }
-        let fallback = NSImage(systemSymbolName: "viewfinder", accessibilityDescription: "LENSO") ?? NSImage()
+        let fallback = NSImage(systemSymbolName: "pin", accessibilityDescription: "LENSO") ?? NSImage()
         fallback.isTemplate = true
         return fallback
     }
