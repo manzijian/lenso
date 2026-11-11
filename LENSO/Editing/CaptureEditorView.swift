@@ -368,7 +368,7 @@ struct CaptureEditorView: View {
                     .frame(width: 30, height: 30)
                 Image(systemName: "arrow.up.left")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(state.activeKind == nil ? .white : Color.primary.opacity(0.85))
+                    .foregroundStyle(state.activeKind == nil ? .white : Color(red: 0.18, green: 0.18, blue: 0.22))
             }
             .frame(width: 34, height: 34)
             .contentShape(Rectangle())
@@ -402,7 +402,7 @@ struct CaptureEditorView: View {
             // 钉图：把当前合成结果钉在屏幕最上层
             Image(systemName: "pin.fill")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color.primary.opacity(0.85))
+                .foregroundStyle(Color(red: 0.18, green: 0.18, blue: 0.22))
                 .frame(width: 30, height: 30)
                 .contentShape(Rectangle())
                 .onTapGesture { pinImage() }
@@ -419,9 +419,9 @@ struct CaptureEditorView: View {
             // 丢弃本次截图（不保存）
             Image(systemName: "xmark")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.primary.opacity(0.85))
+                .foregroundStyle(Color(red: 0.18, green: 0.18, blue: 0.22))
                 .frame(width: 30, height: 30)
-                .background(Circle().fill(.primary.opacity(0.07)))
+                .background(Circle().fill(Color.black.opacity(0.06)))
                 .contentShape(Rectangle())
                 .onTapGesture { discard() }
                 .help("取消截图（Esc）")
@@ -429,8 +429,9 @@ struct CaptureEditorView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background {
+            // 实体高亮白底（不透底），无论在多么黑的终端或壁纸上都始终清晰高亮
             Capsule()
-                .fill(Color(nsColor: .windowBackgroundColor))
+                .fill(Color(red: 0.985, green: 0.988, blue: 1.0))
                 .overlay(
                     Capsule()
                         .stroke(Color.black.opacity(0.12), lineWidth: 1)
@@ -478,7 +479,7 @@ struct CaptureEditorView: View {
         .padding(16)
         .background {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor))
+                .fill(Color(red: 0.985, green: 0.988, blue: 1.0))
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
                         .stroke(Color.black.opacity(0.1), lineWidth: 1)
@@ -1320,14 +1321,14 @@ private struct ToolIcon: View {
     var body: some View {
         Image(systemName: icon)
             .font(.system(size: 15, weight: .medium))
-            .foregroundStyle(isActive ? Color(nsColor: .controlAccentColor) : (hovering ? .primary : Color.primary.opacity(0.85)))
+            .foregroundStyle(isActive ? Color(nsColor: .controlAccentColor) : (hovering ? .black : Color(red: 0.18, green: 0.18, blue: 0.22)))
             .opacity(disabled ? 0.35 : 1)
             .frame(width: 32, height: 32)
             .background {
                 if isActive {
                     RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .controlAccentColor).opacity(0.15))
                 } else if hovering {
-                    RoundedRectangle(cornerRadius: 8).fill(.primary.opacity(0.08))
+                    RoundedRectangle(cornerRadius: 8).fill(Color.black.opacity(0.06))
                 }
             }
             .onHover { hovering = $0 }

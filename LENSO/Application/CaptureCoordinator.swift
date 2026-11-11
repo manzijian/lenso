@@ -734,7 +734,7 @@ private struct PinnedSidePanelView: View {
         .frame(width: 340)
         .background {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor))
+                .fill(Color(red: 0.985, green: 0.988, blue: 1.0))
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
                         .stroke(Color.black.opacity(0.1), lineWidth: 1)
@@ -963,7 +963,7 @@ private struct PinnedToolbarView: View {
             } label: {
                 Image(systemName: "arrow.up.left")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(state.activeKind == nil ? .white : Color.primary.opacity(0.85))
+                    .foregroundStyle(state.activeKind == nil ? .white : Color(red: 0.18, green: 0.18, blue: 0.22))
                     .frame(width: 28, height: 28)
                     .background(
                         Circle().fill(state.activeKind == nil ? Color(nsColor: .controlAccentColor) : .clear)
@@ -978,7 +978,7 @@ private struct PinnedToolbarView: View {
                 } label: {
                     Image(systemName: kind.icon)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(state.activeKind == kind ? Color(nsColor: .controlAccentColor) : Color.primary.opacity(0.85))
+                        .foregroundStyle(state.activeKind == kind ? Color(nsColor: .controlAccentColor) : Color(red: 0.18, green: 0.18, blue: 0.22))
                         .frame(width: 28, height: 28)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
@@ -996,7 +996,7 @@ private struct PinnedToolbarView: View {
                 Circle()
                     .fill(AnnotationPalette[state.colorIndex])
                     .frame(width: 14, height: 14)
-                    .overlay(Circle().stroke(Color.primary.opacity(0.25), lineWidth: 1))
+                    .overlay(Circle().stroke(Color.black.opacity(0.18), lineWidth: 1))
                     .frame(width: 26, height: 26)
                     .background(
                         RoundedRectangle(cornerRadius: 6)
@@ -1012,7 +1012,7 @@ private struct PinnedToolbarView: View {
             Button(action: onUndo) {
                 Image(systemName: "arrow.uturn.backward")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.primary.opacity(state.canUndo ? 0.85 : 0.35))
+                    .foregroundStyle(Color(red: 0.18, green: 0.18, blue: 0.22).opacity(state.canUndo ? 1.0 : 0.35))
                     .frame(width: 26, height: 26)
             }
             .buttonStyle(.plain)
@@ -1022,7 +1022,7 @@ private struct PinnedToolbarView: View {
             Button(action: onRedo) {
                 Image(systemName: "arrow.uturn.forward")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.primary.opacity(state.canRedo ? 0.85 : 0.35))
+                    .foregroundStyle(Color(red: 0.18, green: 0.18, blue: 0.22).opacity(state.canRedo ? 1.0 : 0.35))
                     .frame(width: 26, height: 26)
             }
             .buttonStyle(.plain)
@@ -1035,7 +1035,7 @@ private struct PinnedToolbarView: View {
             Button(action: onToggleTranslate) {
                 Image(systemName: "character.bubble")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(pinnedState.isSidePanelVisible && pinnedState.panelTab == .translate ? Color(nsColor: .controlAccentColor) : Color.primary.opacity(0.85))
+                    .foregroundStyle(pinnedState.isSidePanelVisible && pinnedState.panelTab == .translate ? Color(nsColor: .controlAccentColor) : Color(red: 0.18, green: 0.18, blue: 0.22))
                     .frame(width: 28, height: 28)
                     .background(
                         RoundedRectangle(cornerRadius: 6)
@@ -1049,7 +1049,7 @@ private struct PinnedToolbarView: View {
             Button(action: onToggleOCR) {
                 Image(systemName: "doc.text.viewfinder")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(pinnedState.isSidePanelVisible && pinnedState.panelTab == .ocr ? Color(nsColor: .controlAccentColor) : Color.primary.opacity(0.85))
+                    .foregroundStyle(pinnedState.isSidePanelVisible && pinnedState.panelTab == .ocr ? Color(nsColor: .controlAccentColor) : Color(red: 0.18, green: 0.18, blue: 0.22))
                     .frame(width: 28, height: 28)
                     .background(
                         RoundedRectangle(cornerRadius: 6)
@@ -1063,7 +1063,7 @@ private struct PinnedToolbarView: View {
             Button(action: onCopy) {
                 Image(systemName: "doc.on.doc")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.primary.opacity(0.85))
+                    .foregroundStyle(Color(red: 0.18, green: 0.18, blue: 0.22))
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
@@ -1073,7 +1073,7 @@ private struct PinnedToolbarView: View {
             Button(action: onSave) {
                 Image(systemName: "square.and.arrow.down")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.primary.opacity(0.85))
+                    .foregroundStyle(Color(red: 0.18, green: 0.18, blue: 0.22))
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
@@ -1083,9 +1083,9 @@ private struct PinnedToolbarView: View {
             Button(action: onClose) {
                 Image(systemName: "xmark")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.primary.opacity(0.85))
+                    .foregroundStyle(Color(red: 0.18, green: 0.18, blue: 0.22))
                     .frame(width: 26, height: 26)
-                    .background(Circle().fill(.primary.opacity(0.07)))
+                    .background(Circle().fill(Color.black.opacity(0.06)))
             }
             .buttonStyle(.plain)
             .help("关闭贴图")
@@ -1094,7 +1094,7 @@ private struct PinnedToolbarView: View {
         .padding(.vertical, 6)
         .background {
             Capsule()
-                .fill(Color(nsColor: .windowBackgroundColor))
+                .fill(Color(red: 0.985, green: 0.988, blue: 1.0))
                 .overlay(
                     Capsule()
                         .stroke(Color.black.opacity(0.12), lineWidth: 1)
