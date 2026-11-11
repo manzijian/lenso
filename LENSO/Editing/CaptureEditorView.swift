@@ -19,7 +19,7 @@ struct CaptureEditorView: View {
     var initialSelection: CGRect  // 全局逻辑坐标
     let onComplete: (CGImage?) -> Void   // 完成时回传最终图像（nil = 取消）
     let onQuickCopy: (CGImage) -> Void
-    let onPin: (CGImage) -> Void
+    let onPin: (CGImage, CGRect) -> Void
 
     @State private var state = AnnotationState()
     @State private var selection: CGRect
@@ -48,7 +48,7 @@ struct CaptureEditorView: View {
     init(frozenImage: CGImage, screenFrame: CGRect, initialSelection: CGRect,
          onComplete: @escaping (CGImage?) -> Void,
          onQuickCopy: @escaping (CGImage) -> Void,
-         onPin: @escaping (CGImage) -> Void) {
+         onPin: @escaping (CGImage, CGRect) -> Void) {
         self.frozenImage = frozenImage
         self.screenFrame = screenFrame
         self.initialSelection = initialSelection
@@ -130,6 +130,15 @@ struct CaptureEditorView: View {
         .onReceive(NotificationCenter.default.publisher(for: .editorScrollWheel)) { note in
             guard let event = note.object as? NSEvent else { return }
             handleScrollWheel(event)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .editorRightClick)) { _ in
+            if state.textEditingPoint != nil {
+                state.textEditingPoint = nil
+            } else if state.activeKind != nil {
+                state.activeKind = nil
+            } else {
+                discard()
+            }
         }
     }
 
@@ -216,7 +225,14 @@ struct CaptureEditorView: View {
     /// 钉图：合成后交给 Coordinator 浮在屏幕上
     private func pinImage() {
         guard let composited = renderFinalImage() else { return }
-        onPin(composited)
+        // 转换当前选区为 AppKit 全局坐标，使贴图浮窗直接定格在当前选区位置
+        let globalRect = CGRect(
+            x: screenFrame.minX + selection.minX,
+            y: screenFrame.maxY - selection.maxY,
+            width: selection.width,
+            height: selection.height
+        )
+        onPin(composited, globalRect)
     }
 
     // MARK: - 布局计算与避免遮挡

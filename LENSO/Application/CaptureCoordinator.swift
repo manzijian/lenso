@@ -9,6 +9,8 @@ extension Notification.Name {
     static let openPreviewForScreenshot = Notification.Name("com.lenso.openPreviewForScreenshot")
     /// 编辑器滚轮事件通知
     static let editorScrollWheel = Notification.Name("com.lenso.editorScrollWheel")
+    /// 编辑器鼠标右键事件通知
+    static let editorRightClick = Notification.Name("com.lenso.editorRightClick")
 }
 
 private let log = Logger(subsystem: "com.lenso.app", category: "capture")
@@ -93,7 +95,12 @@ final class CaptureCoordinator: NSObject {
         }
     }
 
-    private func showFullEditor(frozen: CGImage, screenFrame: CGRect, initialSelection: CGRect) {
+    private func showFullEditor(
+        frozen: CGImage,
+        screenFrame: CGRect,
+        initialSelection: CGRect,
+        originPinnedPanel: NSPanel? = nil
+    ) {
         let coordinator = self
         let editorView = CaptureEditorView(
             frozenImage: frozen,
@@ -101,7 +108,17 @@ final class CaptureCoordinator: NSObject {
             initialSelection: initialSelection,
             onComplete: { [weak coordinator] finalImage in
                 coordinator?.closeEditor()
-                coordinator?.handleFinish(finalImage: finalImage)
+                if let finalImage {
+                    if let origin = originPinnedPanel {
+                        origin.orderOut(nil)
+                        origin.close()
+                        coordinator?.pinnedPanels.removeAll { $0 === origin }
+                    }
+                    coordinator?.handleFinish(finalImage: finalImage)
+                } else {
+                    // 取消/丢弃：如果来自贴图，重新显示贴图
+                    originPinnedPanel?.orderFrontRegardless()
+                }
             },
             onQuickCopy: { [weak coordinator] image in
                 coordinator?.copyToClipboard(image: image)
@@ -112,9 +129,14 @@ final class CaptureCoordinator: NSObject {
                     )
                 }
             },
-            onPin: { [weak coordinator] image in
+            onPin: { [weak coordinator] image, rect in
                 coordinator?.closeEditor()
-                coordinator?.pin(image: image)
+                if let origin = originPinnedPanel {
+                    origin.orderOut(nil)
+                    origin.close()
+                    coordinator?.pinnedPanels.removeAll { $0 === origin }
+                }
+                coordinator?.pin(image: image, initialFrame: rect)
             }
         )
         let hosting = NSHostingView(rootView: editorView)
@@ -135,6 +157,7 @@ final class CaptureCoordinator: NSObject {
         panel.setFrame(screenFrame, display: true)
         panel.onCancel = { [weak self] in
             self?.closeEditor()
+            originPinnedPanel?.orderFrontRegardless()
         }
         panel.orderFrontRegardless()
         panel.makeKey()
@@ -175,13 +198,29 @@ final class CaptureCoordinator: NSObject {
     }
 
     /// 钉图：浮在所有窗口之上的可拖动图片窗
-    private func pin(image: CGImage) {
-        let maxWidth: CGFloat = 520
-        let scale = min(1, maxWidth / CGFloat(image.width))
-        let size = NSSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
+    private func pin(image: CGImage, initialFrame: NSRect? = nil) {
+        let size: NSSize
+        let origin: NSPoint
+
+        if let initialFrame {
+            size = initialFrame.size
+            origin = initialFrame.origin
+        } else {
+            let maxWidth: CGFloat = 520
+            let scale = min(1, maxWidth / CGFloat(image.width))
+            size = NSSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
+            if let screen = NSScreen.main {
+                origin = NSPoint(
+                    x: screen.frame.midX - size.width / 2,
+                    y: screen.frame.midY - size.height / 2
+                )
+            } else {
+                origin = .zero
+            }
+        }
 
         let panel = NSPanel(
-            contentRect: NSRect(origin: .zero, size: size),
+            contentRect: NSRect(origin: origin, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -194,20 +233,103 @@ final class CaptureCoordinator: NSObject {
         panel.hidesOnDeactivate = false
 
         let view = PinnedImageView(frame: NSRect(origin: .zero, size: size), image: image)
-        view.onClose = { [weak panel] in
-            panel?.orderOut(nil)
-            panel?.close()
+        view.onClose = { [weak panel, weak self] in
+            guard let panel else { return }
+            panel.orderOut(nil)
+            panel.close()
+            self?.pinnedPanels.removeAll { $0 === panel }
+        }
+        view.onEdit = { [weak panel, weak self] in
+            guard let panel, let self else { return }
+            self.editPinnedScreenshot(panel: panel, image: image)
         }
         panel.contentView = view
-        if let screen = NSScreen.main {
-            panel.setFrameOrigin(NSPoint(
-                x: screen.frame.midX - size.width / 2,
-                y: screen.frame.midY - size.height / 2
-            ))
-        }
+        panel.setFrameOrigin(origin)
         panel.orderFrontRegardless()
         pinnedPanels.append(panel)
-        log.info("pinned image \(size.width)x\(size.height)")
+        log.info("pinned image \(size.width)x\(size.height) at \(NSStringFromPoint(origin))")
+    }
+
+    /// 右键钉图唤出全功能编辑器（Snipaste 核心交互）
+    private func editPinnedScreenshot(panel: NSPanel, image: CGImage) {
+        guard editorPanel == nil else { return }
+        log.info("editPinnedScreenshot triggered for panel frame: \(NSStringFromRect(panel.frame))")
+
+        let screen = panel.screen
+            ?? NSScreen.screens.first(where: { $0.frame.intersects(panel.frame) })
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
+        guard let screen else { return }
+
+        let screenFrame = screen.frame
+        let panelFrame = panel.frame
+        let displayID = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+            ?? (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID)
+            ?? CGMainDisplayID()
+
+        let captureService = capture
+        Task { @MainActor in
+            do {
+                // 抓取当前屏幕画面（排除当前贴图面板）
+                let windowID = CGWindowID(panel.windowNumber)
+                let screenFrozen = try await captureService.captureDisplayExcluding(
+                    displayID: displayID,
+                    excludedWindowIDs: [windowID]
+                )
+                // 将高清贴图精确合成回屏幕冻结帧对应位置
+                let compositeFrozen = self.composite(
+                    image: image,
+                    onto: screenFrozen,
+                    at: panelFrame,
+                    screenFrame: screenFrame
+                )
+                panel.orderOut(nil)
+                self.showFullEditor(
+                    frozen: compositeFrozen,
+                    screenFrame: screenFrame,
+                    initialSelection: panelFrame,
+                    originPinnedPanel: panel
+                )
+            } catch {
+                log.error("capture failed for pinned edit: \(error.localizedDescription)")
+                panel.orderFrontRegardless()
+            }
+        }
+    }
+
+    /// 将贴图图像精准复合到全屏截图中对应选区位置
+    private func composite(
+        image: CGImage,
+        onto screenImage: CGImage,
+        at rect: CGRect,
+        screenFrame: CGRect
+    ) -> CGImage {
+        let scale = CGFloat(screenImage.width) / max(1, screenFrame.width)
+        let w = screenImage.width
+        let h = screenImage.height
+
+        guard let ctx = CGContext(
+            data: nil,
+            width: w,
+            height: h,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return screenImage
+        }
+
+        ctx.draw(screenImage, in: CGRect(x: 0, y: 0, width: w, height: h))
+
+        let destX = (rect.minX - screenFrame.minX) * scale
+        let destY = (rect.minY - screenFrame.minY) * scale
+        let destW = rect.width * scale
+        let destH = rect.height * scale
+        let destRect = CGRect(x: destX, y: destY, width: destW, height: destH)
+
+        ctx.draw(image, in: destRect)
+        return ctx.makeImage() ?? screenImage
     }
 
     /// SCK 在没有屏幕录制权限时抛的错误（域 SCStreamErrorDomain / 用户取消）。
@@ -249,7 +371,7 @@ final class CaptureCoordinator: NSObject {
     }
 }
 
-/// 编辑器覆盖面板：Esc 取消，滚轮缩放选区
+/// 编辑器覆盖面板：Esc 取消，滚轮缩放选区，右键取消/退回上一级
 final class EditorPanel: NSPanel {
     var onCancel: (() -> Void)?
     override var canBecomeKey: Bool { true }
@@ -257,11 +379,16 @@ final class EditorPanel: NSPanel {
     override func scrollWheel(with event: NSEvent) {
         NotificationCenter.default.post(name: .editorScrollWheel, object: event)
     }
+    override func rightMouseDown(with event: NSEvent) {
+        NotificationCenter.default.post(name: .editorRightClick, object: event)
+    }
 }
 
-/// 钉图视图：可拖动；滚轮以鼠标为中心缩放；悬停右上角出现关闭按钮；双击关闭
+/// 钉图视图：可拖动；滚轮缩放；悬停右上角出现关闭按钮；双击关闭；右键唤出全功能编辑栏
 final class PinnedImageView: NSView {
     var onClose: (() -> Void)?
+    var onEdit: (() -> Void)?
+    let image: CGImage
     private let imageView: NSImageView
     private let closeButton = NSButton()
     private var tracking: NSTrackingArea?
@@ -269,9 +396,11 @@ final class PinnedImageView: NSView {
     private var currentScale: CGFloat = 1.0
 
     init(frame: NSRect, image: CGImage) {
+        self.image = image
         self.baseSize = frame.size
         imageView = NSImageView(frame: NSRect(origin: .zero, size: frame.size))
         super.init(frame: frame)
+        toolTip = "双击关闭 · 滚轮缩放 · 鼠标右键重新编辑"
         imageView.image = NSImage(cgImage: image, size: frame.size)
         imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.autoresizingMask = [.width, .height]
@@ -298,6 +427,12 @@ final class PinnedImageView: NSView {
 
     @objc private func closeClicked() { onClose?() }
 
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let view = super.hitTest(point)
+        if view == closeButton { return closeButton }
+        return self
+    }
+
     override func mouseDown(with event: NSEvent) {
         if event.clickCount == 2 {
             onClose?()
@@ -306,6 +441,21 @@ final class PinnedImageView: NSView {
         super.mouseDown(with: event)
         window?.performDrag(with: event)
     }
+
+    override func rightMouseDown(with event: NSEvent) {
+        onEdit?()
+    }
+
+    override func keyDown(with event: NSEvent) {
+        // 空格键快捷唤出编辑栏
+        if event.keyCode == 49 {
+            onEdit?()
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    override var acceptsFirstResponder: Bool { true }
 
     /// 鼠标滚轮放大缩小贴图（Snipaste 核心交互）
     override func scrollWheel(with event: NSEvent) {
