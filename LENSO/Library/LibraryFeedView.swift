@@ -56,7 +56,7 @@ struct LibraryFeedView: View {
     private func screenshotRow(_ entry: LibraryEntry, record: ScreenshotRecord) -> some View {
         HStack(spacing: 12) {
             Button {
-                openWindow(id: "preview", value: record.id)
+                openFloatingPreview(record)
             } label: {
                 HStack(spacing: 12) {
                     Group {
@@ -170,6 +170,12 @@ struct LibraryFeedView: View {
     }
 
     // MARK: - Actions
+
+    private func openFloatingPreview(_ record: ScreenshotRecord) {
+        let store = ScreenshotStore.shared
+        guard let cgImage = store.loadImage(record) else { return }
+        CaptureCoordinator.shared.pin(image: cgImage)
+    }
 
     private func timeText(_ date: Date) -> String {
         date.formatted(date: .abbreviated, time: .shortened)

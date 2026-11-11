@@ -180,8 +180,8 @@ final class CaptureCoordinator: NSObject {
         }
     }
 
-    /// 钉图：浮在所有窗口之上的可拖动图片窗
-    private func pin(image: CGImage, initialFrame: NSRect? = nil) {
+    /// 钉图 / 浮动预览：浮在所有窗口之上的纯粹可拖动图片窗（无任何包裹窗体与黑边，回到刚截图的原汁原味）
+    func pin(image: CGImage, initialFrame: NSRect? = nil) {
         let controller = PinnedScreenshotController(image: image, initialFrame: initialFrame, coordinator: self)
         pinnedControllers.append(controller)
         log.info("pinned screenshot controller created, total active: \(self.pinnedControllers.count)")
@@ -281,13 +281,23 @@ final class PinnedScreenshotController: NSObject {
             size = initialFrame.size
             origin = initialFrame.origin
         } else {
-            let maxWidth: CGFloat = 520
-            let scale = min(1, maxWidth / CGFloat(image.width))
-            size = NSSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
-            if let screen = NSScreen.main {
+            let screen = NSScreen.main
+            let backingScale = screen?.backingScaleFactor ?? 2.0
+            var w = CGFloat(image.width) / backingScale
+            var h = CGFloat(image.height) / backingScale
+
+            // 限制在屏幕可视区的 85% 以内，超大截图按比例缩小；中小型截图保持 1:1 原尺寸高清显示
+            let maxW = (screen?.visibleFrame.width ?? 1200) * 0.85
+            let maxH = (screen?.visibleFrame.height ?? 800) * 0.85
+            let fitScale = min(1.0, min(maxW / max(1, w), maxH / max(1, h)))
+            w = round(w * fitScale)
+            h = round(h * fitScale)
+            size = NSSize(width: max(80, w), height: max(60, h))
+
+            if let screen {
                 origin = NSPoint(
-                    x: screen.frame.midX - size.width / 2,
-                    y: screen.frame.midY - size.height / 2
+                    x: screen.visibleFrame.midX - size.width / 2,
+                    y: screen.visibleFrame.midY - size.height / 2
                 )
             } else {
                 origin = .zero

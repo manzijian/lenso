@@ -14,7 +14,7 @@ struct LibraryWindowView: View {
             records: records,
             notes: notes,
             onOpenPreview: { id in
-                openWindow(id: "preview", value: id)
+                openFloatingPreview(id)
             }
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -22,6 +22,14 @@ struct LibraryWindowView: View {
         .onReceive(NotificationCenter.default.publisher(for: .screenshotSaved)) { _ in load() }
         .onReceive(NotificationCenter.default.publisher(for: .textNotesChanged)) { _ in load() }
         .onReceive(NotificationCenter.default.publisher(for: .libraryChanged)) { _ in load() }
+    }
+
+    /// 双击图片：以原生刚截图时的纯粹贴图形式浮现，告别被大窗口包裹的压抑感
+    private func openFloatingPreview(_ id: UUID) {
+        let store = ScreenshotStore.shared
+        guard let record = records.first(where: { $0.id == id }),
+              let cgImage = store.loadImage(record) else { return }
+        CaptureCoordinator.shared.pin(image: cgImage)
     }
 
     private func load() {

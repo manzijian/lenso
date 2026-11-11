@@ -92,7 +92,7 @@ struct SearchPanelView: View {
                                     .frame(width: 28, height: 24)
                             } else {
                                 ResultAction(icon: "eye", label: "查看") {
-                                    openWindow(id: "preview", value: result.id)
+                                    openFloatingPreview(result)
                                     onDismiss()
                                 }
                             }
@@ -125,6 +125,13 @@ struct SearchPanelView: View {
         .onChange(of: searchText) { _ in updateResults() }
         .onExitCommand { onDismiss() }
         .lensoColorScheme()
+    }
+
+    private func openFloatingPreview(_ result: SearchResult) {
+        let store = ScreenshotStore.shared
+        guard let record = (try? store.list())?.first(where: { $0.id == result.id }),
+              let cgImage = store.loadImage(record) else { return }
+        CaptureCoordinator.shared.pin(image: cgImage)
     }
 
     private func updateResults() {
