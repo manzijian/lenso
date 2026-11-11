@@ -8,6 +8,14 @@ struct LENSOApp: App {
     @State private var shortcutStore = ShortcutStore.shared
     @State private var settings = AppSettings.shared
 
+    init() {
+        // MCP (Model Context Protocol) 模式：命令行带 mcp 参数时，以非 GUI 纯协议模式运行
+        if CommandLine.arguments.contains("mcp") || CommandLine.arguments.contains("--mcp") {
+            LensoMCPServer.run()
+            exit(0)
+        }
+    }
+
     var body: some Scene {
         // 菜单栏图标 → 玻璃快捷面板（参考图 4 右上），使用品牌光圈图标。
         // 设置里关掉后入口消失，用 Dock 图标点开图库再进设置。

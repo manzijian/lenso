@@ -445,8 +445,17 @@ final class ScreenshotStore: @unchecked Sendable {
     }
 
     func loadClipboardImage(_ item: ClipboardItem) -> CGImage? {
+        guard let url = clipboardImageURL(item) else { return nil }
+        return Self.loadImage(at: url)
+    }
+
+    func clipboardImageURL(_ item: ClipboardItem) -> URL? {
         guard let filename = item.filename else { return nil }
-        return Self.loadImage(at: baseDir.appendingPathComponent("Clipboard").appendingPathComponent(filename))
+        return baseDir.appendingPathComponent("Clipboard").appendingPathComponent(filename)
+    }
+
+    func screenshotOriginalURL(_ record: ScreenshotRecord) -> URL? {
+        return baseDir.appendingPathComponent("Original").appendingPathComponent(record.filename)
     }
 
     func deleteClipboardItem(id: UUID) throws {

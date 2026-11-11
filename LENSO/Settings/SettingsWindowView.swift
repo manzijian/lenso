@@ -12,6 +12,7 @@ struct SettingsWindowView: View {
         case capture = "截图"
         case shortcuts = "快捷键"
         case appearance = "外观"
+        case mcp = "MCP 服务"
         case about = "关于"
         var id: String { rawValue }
 
@@ -21,6 +22,7 @@ struct SettingsWindowView: View {
             case .capture: "viewfinder"
             case .shortcuts: "keyboard.fill"
             case .appearance: "paintpalette.fill"
+            case .mcp: "cpu"
             case .about: "info.circle.fill"
             }
         }
@@ -229,6 +231,9 @@ struct SettingsWindowView: View {
                 }
             }
 
+        case .mcp:
+            mcpSettingsView
+
         case .about:
             settingCard {
                 HStack(spacing: 16) {
@@ -273,6 +278,121 @@ struct SettingsWindowView: View {
                 .padding(16)
             }
         }
+    }
+
+    private var mcpSettingsView: some View {
+        let execPath = Bundle.main.executablePath ?? "/Applications/lenso.app/Contents/MacOS/lenso"
+        let jsonConfig = """
+        {
+          "mcpServers": {
+            "lenso": {
+              "command": "\(execPath)",
+              "args": ["mcp"]
+            }
+          }
+        }
+        """
+
+        return VStack(alignment: .leading, spacing: 16) {
+            settingCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Circle().fill(Color.green).frame(width: 8, height: 8)
+                        Text("MCP 服务已内置就绪 (stdio 驱动)")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(LensoColors.kleinBlueBright)
+                        Spacer()
+                        Text("Protocol 2024-11-05")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Text("Model Context Protocol (MCP) 是开放的上下文协议标准。Claude Desktop、Cursor、Antigravity、VS Code 等 AI 客户端可直接挂载此服务，在对话中读取你的复制历史、最新截图与文字便签，或让 AI 将内容写入系统剪贴板。")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(3)
+                }
+                .padding(16)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("客户端配置文件代码块")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.primary.opacity(0.85))
+                    Spacer()
+                    Button {
+                        let pb = NSPasteboard.general
+                        pb.clearContents()
+                        pb.setString(jsonConfig, forType: .string)
+                        SaveToastController.shared.show(title: "已复制 MCP 配置", subtitle: "可直接粘贴至客户端设置中", thumbnail: nil)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "doc.on.doc")
+                            Text("复制配置 JSON")
+                        }
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(LensoColors.kleinBlueBright)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(LensoColors.kleinBlueSoft))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                settingCard {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(jsonConfig)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(Color.primary.opacity(0.85))
+                            .textSelection(.enabled)
+                    }
+                    .padding(14)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("已开放的 MCP 工具列表 (Tools)")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.primary.opacity(0.85))
+
+                settingCard {
+                    VStack(spacing: 0) {
+                        mcpToolRow(name: "lenso_get_recent_clipboard", desc: "读取最近复制的图文记录 (支持条数与类型过滤)")
+                        rowDivider
+                        mcpToolRow(name: "lenso_search_history", desc: "全局检索剪贴板内容、截图记录与文字收纳")
+                        rowDivider
+                        mcpToolRow(name: "lenso_get_latest_screenshot", desc: "获取最新一张截图的元数据与本地文件绝对路径")
+                        rowDivider
+                        mcpToolRow(name: "lenso_copy_text", desc: "写入文本至系统剪贴板并归集到 LENSO 历史")
+                        rowDivider
+                        mcpToolRow(name: "lenso_add_text_note", desc: "向文字收纳库保存一条新便签")
+                    }
+                }
+            }
+        }
+    }
+
+    private func mcpToolRow(name: String, desc: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "wrench.and.screwdriver.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(LensoColors.kleinBlueBright)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(LensoColors.kleinBlueSoft))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(Color.primary.opacity(0.9))
+                Text(desc)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
     }
 
     private func settingCard<V: View>(@ViewBuilder content: () -> V) -> some View {
