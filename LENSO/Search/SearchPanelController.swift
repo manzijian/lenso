@@ -27,11 +27,11 @@ final class SearchPanelController {
         }
         let hosting = NSHostingView(rootView: view)
         hosting.appearance = NSAppearance(named: .aqua)
-        let size = NSSize(width: 760, height: 420)
+        let size = NSSize(width: 780, height: 580)
         guard let screen = NSScreen.main else { return }
         let frame = NSRect(
             x: screen.frame.midX - size.width / 2,
-            y: screen.frame.maxY - size.height - 120,
+            y: screen.frame.maxY - size.height - 80,
             width: size.width,
             height: size.height
         )

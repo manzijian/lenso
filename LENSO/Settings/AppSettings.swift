@@ -107,6 +107,13 @@ final class AppSettings {
         }
     }
 
+    /// 贴图/预览记忆的缩放比例（放大后下次打开或打开其他照片自动保持那么大，不会太小）
+    var previewScale: CGFloat {
+        didSet {
+            defaults.set(Double(previewScale), forKey: Self.keyPrefix + "previewScale")
+        }
+    }
+
     // MARK: - Init
 
     private init(defaults: UserDefaults = .standard) {
@@ -120,6 +127,9 @@ final class AppSettings {
         showFloatingPreview = Self.read(.showFloatingPreview, default: true, defaults: defaults)
         followSystemAppearance = Self.read(.followSystemAppearance, default: false, defaults: defaults)
         glassEffect = Self.read(.glassEffect, default: true, defaults: defaults)
+
+        let storedScale = defaults.double(forKey: Self.keyPrefix + "previewScale")
+        previewScale = storedScale >= 0.2 ? CGFloat(storedScale) : 1.0
 
         let rawIcon = defaults.string(forKey: Self.keyPrefix + "menuBarIconStyle") ?? ""
         var loadedStyle = MenuBarIconStyle(rawValue: rawIcon) ?? .pin

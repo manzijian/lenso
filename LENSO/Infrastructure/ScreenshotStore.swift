@@ -449,6 +449,32 @@ final class ScreenshotStore: @unchecked Sendable {
         return Self.loadImage(at: baseDir.appendingPathComponent("Clipboard").appendingPathComponent(filename))
     }
 
+    func deleteClipboardItem(id: UUID) throws {
+        try queue.sync {
+            var filename: String?
+            let querySql = "SELECT filename FROM clipboard_items WHERE id = ? LIMIT 1;"
+            var queryStmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, querySql, -1, &queryStmt, nil) == SQLITE_OK {
+                Self.bind(queryStmt, 1, id.uuidString)
+                if sqlite3_step(queryStmt) == SQLITE_ROW {
+                    filename = sqlite3_column_text(queryStmt, 0).map { String(cString: $0) }
+                }
+                sqlite3_finalize(queryStmt)
+            }
+            if let filename {
+                let fileUrl = baseDir.appendingPathComponent("Clipboard").appendingPathComponent(filename)
+                try? FileManager.default.removeItem(at: fileUrl)
+            }
+
+            let deleteSql = "DELETE FROM clipboard_items WHERE id = ?;"
+            var deleteStmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, deleteSql, -1, &deleteStmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
+            defer { sqlite3_finalize(deleteStmt) }
+            Self.bind(deleteStmt, 1, id.uuidString)
+            guard sqlite3_step(deleteStmt) == SQLITE_DONE else { throw StoreError.dbFailed }
+        }
+    }
+
     func clearClipboardHistory() throws {
         try queue.sync {
             sqlite3_exec(db, "DELETE FROM clipboard_items;", nil, nil, nil)

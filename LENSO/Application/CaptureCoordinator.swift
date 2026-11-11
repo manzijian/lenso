@@ -358,13 +358,32 @@ final class PinnedScreenshotController: NSObject {
             var w = CGFloat(image.width) / backingScale
             var h = CGFloat(image.height) / backingScale
 
-            // 限制在屏幕可视区的 85% 以内，超大截图按比例缩小；中小型截图保持 1:1 原尺寸高清显示
-            let maxW = (screen?.visibleFrame.width ?? 1200) * 0.85
-            let maxH = (screen?.visibleFrame.height ?? 800) * 0.85
+            // 1. 确保小图具有舒适清晰的最小预览尺寸（避免只有几十像素导致太小找不到）
+            let minComfortableWidth: CGFloat = 460
+            let minComfortableHeight: CGFloat = 300
+            let aspect = w / max(1, h)
+            if w < minComfortableWidth && h < minComfortableHeight {
+                if aspect >= 1 {
+                    w = minComfortableWidth
+                    h = round(w / aspect)
+                } else {
+                    h = minComfortableHeight
+                    w = round(h * aspect)
+                }
+            }
+
+            // 2. 应用用户放大/记忆的缩放比例（放大过某张照片后，再次打开或其他照片都自动保持那么大）
+            let userScale = max(0.4, min(AppSettings.shared.previewScale, 4.0))
+            w = round(w * userScale)
+            h = round(h * userScale)
+
+            // 3. 限制在屏幕可视区的 88% 以内，防止超出显示器屏幕
+            let maxW = (screen?.visibleFrame.width ?? 1200) * 0.88
+            let maxH = (screen?.visibleFrame.height ?? 800) * 0.88
             let fitScale = min(1.0, min(maxW / max(1, w), maxH / max(1, h)))
             w = round(w * fitScale)
             h = round(h * fitScale)
-            size = NSSize(width: max(80, w), height: max(60, h))
+            size = NSSize(width: max(160, w), height: max(100, h))
 
             if let screen {
                 origin = NSPoint(
@@ -1225,7 +1244,7 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
     private let closeButton = PinnedCloseButton()
     private var tracking: NSTrackingArea?
     private let baseSize: NSSize
-    private var currentScale: CGFloat = 1.0
+    private var currentScale: CGFloat = max(0.4, min(AppSettings.shared.previewScale, 5.0))
 
     // 文字标注临时输入框
     private var activeTextField: NSTextField?
@@ -1463,15 +1482,16 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
         guard abs(delta) > 0.05 else { return }
 
         let zoomFactor: CGFloat = delta > 0 ? 1.08 : 0.92
-        let newScale = min(max(currentScale * zoomFactor, 0.15), 5.0)
+        let newScale = min(max(currentScale * zoomFactor, 0.2), 5.0)
         guard newScale != currentScale else { return }
 
         currentScale = newScale
+        AppSettings.shared.previewScale = newScale
         guard let window else { return }
 
         let mouseScreen = NSEvent.mouseLocation
         let oldFrame = window.frame
-        let newWidth = max(40, round(baseSize.width * newScale))
+        let newWidth = max(60, round(baseSize.width * newScale))
         let newHeight = max(40, round(baseSize.height * newScale))
 
         let relX = (mouseScreen.x - oldFrame.minX) / max(1, oldFrame.width)
@@ -1482,6 +1502,29 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
         let newFrame = NSRect(x: newX, y: newY, width: newWidth, height: newHeight)
 
         window.setFrame(newFrame, display: true)
+        onWindowMovedOrResized?()
+    }
+
+    override func magnify(with event: NSEvent) {
+        let zoomFactor = 1.0 + event.magnification
+        let newScale = min(max(currentScale * zoomFactor, 0.2), 5.0)
+        guard newScale != currentScale else { return }
+
+        currentScale = newScale
+        AppSettings.shared.previewScale = newScale
+
+        guard let window else { return }
+        let mouseScreen = NSEvent.mouseLocation
+        let oldFrame = window.frame
+        let newWidth = max(60, round(baseSize.width * newScale))
+        let newHeight = max(40, round(baseSize.height * newScale))
+
+        let relX = (mouseScreen.x - oldFrame.minX) / max(1, oldFrame.width)
+        let relY = (mouseScreen.y - oldFrame.minY) / max(1, oldFrame.height)
+
+        let newX = mouseScreen.x - newWidth * relX
+        let newY = mouseScreen.y - newHeight * relY
+        window.setFrame(NSRect(x: newX, y: newY, width: newWidth, height: newHeight), display: true)
         onWindowMovedOrResized?()
     }
 
