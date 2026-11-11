@@ -1,15 +1,24 @@
 import SwiftUI
 
-/// 颜色令牌。蓝紫系柔和氛围；图片区域保持中性，不上色。
+/// 颜色令牌。Apple 设计风格 + 经典克莱因蓝（International Klein Blue）高对比白底搭配。
 enum LensoColors {
-    /// 主强调色 — 蓝（系统蓝基准，略偏紫以呼应玻璃氛围）
-    static let accent = Color(red: 0.28, green: 0.46, blue: 1.00)
+    /// 经典克莱因蓝（International Klein Blue / IKB #002FA7，纯粹、浓郁、科技与艺术感）
+    static let kleinBlue = Color(red: 0.00, green: 0.184, blue: 0.655)
 
-    /// 渐变氛围 — 蓝到紫，仅用于背景光晕与选中态，不用于正文
+    /// 鲜亮电光克莱因蓝（用于高亮态、选中徽标与核心主按钮）
+    static let kleinBlueBright = Color(red: 0.02, green: 0.22, blue: 0.88)
+
+    /// 极浅克莱因蓝底色（用于选中项背景、悬停胶囊等）
+    static let kleinBlueSoft = Color(red: 0.02, green: 0.22, blue: 0.88).opacity(0.08)
+
+    /// 主强调色（使用克莱因蓝）
+    static let accent = kleinBlueBright
+
+    /// 渐变氛围 — 克莱因蓝微光微透，极简 Apple 原生感，不滥用渐变
     static let accentGradient = LinearGradient(
         colors: [
-            Color(red: 0.28, green: 0.46, blue: 1.00),
-            Color(red: 0.62, green: 0.44, blue: 1.00),
+            kleinBlueBright,
+            Color(red: 0.00, green: 0.28, blue: 0.95),
         ],
         startPoint: .topLeading, endPoint: .bottomTrailing
     )
@@ -17,9 +26,9 @@ enum LensoColors {
     static let textPrimary = Color.primary
     static let textSecondary = Color.secondary
 
-    /// 选中描边
-    static let selectionRing = Color.white.opacity(0.9)
+    /// 选中描边（克莱因蓝高光光环）
+    static let selectionRing = kleinBlueBright
 
-    /// 危险操作（删除）
-    static let danger = Color.red
+    /// 危险操作（直接永久删除）
+    static let danger = Color(red: 0.92, green: 0.24, blue: 0.24)
 }

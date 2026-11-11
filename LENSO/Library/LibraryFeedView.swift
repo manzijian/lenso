@@ -144,11 +144,12 @@ struct LibraryFeedView: View {
 
     private var rowBackground: some View {
         RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .fill(.white.opacity(0.68))
+            .fill(Color.white)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(.black.opacity(0.06), lineWidth: 1)
+                    .strokeBorder(Color.black.opacity(0.06), lineWidth: 1)
             )
+            .shadow(color: Color.black.opacity(0.03), radius: 4, y: 1)
     }
 
     private func actionButton(

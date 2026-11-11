@@ -43,18 +43,19 @@ struct LibraryWindowView: View {
     }
 }
 
-/// 环境背景 — 蓝紫柔和光晕
+/// 环境背景 — Apple 设计风格，纯净质感 + 微妙克莱因蓝光晕
 struct LensoAmbientBackground: View {
     var body: some View {
         ZStack {
-            Rectangle().fill(.background)
-            LinearGradient(
+            Rectangle().fill(Color(nsColor: .windowBackgroundColor))
+            RadialGradient(
                 colors: [
-                    LensoColors.accent.opacity(0.10),
-                    Color.clear,
-                    Color(red: 0.62, green: 0.44, blue: 1.00).opacity(0.08),
+                    LensoColors.kleinBlueBright.opacity(0.05),
+                    Color.clear
                 ],
-                startPoint: .topLeading, endPoint: .bottomTrailing
+                center: .topTrailing,
+                startRadius: 0,
+                endRadius: 600
             )
         }
     }

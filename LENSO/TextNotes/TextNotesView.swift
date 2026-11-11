@@ -41,11 +41,11 @@ struct TextNotesView: View {
                 createNote()
             } label: {
                 Label("新建", systemImage: "plus")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 12, weight: .semibold))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .foregroundStyle(.white)
-                    .background(Capsule().fill(Color(nsColor: .controlAccentColor)))
+                    .background(Capsule().fill(LensoColors.kleinBlueBright))
             }
             .buttonStyle(.plain)
         }
@@ -111,14 +111,15 @@ struct TextNotesView: View {
                 cardAction("trash", "删除", danger: true) { delete(note) }
             }
         }
-        .padding(12)
+        .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(.white.opacity(0.68))
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(.black.opacity(0.06), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Color.black.opacity(0.06), lineWidth: 1)
                 )
+                .shadow(color: Color.black.opacity(0.03), radius: 4, y: 1)
         )
     }
 
