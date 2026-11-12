@@ -119,11 +119,27 @@ final class ScreenshotStore: @unchecked Sendable {
         formatter.dateFormat = "yyyyMMdd_HHmmss"
         let timestamp = formatter.string(from: Date())
         let corruptURL = url.deletingLastPathComponent().appendingPathComponent("lenso.corrupt.\(timestamp).sqlite")
-        try? FileManager.default.moveItem(at: url, to: corruptURL)
+        do {
+            try FileManager.default.moveItem(at: url, to: corruptURL)
+        } catch {
+            storeLog.error("Failed to move corrupt SQLite database: \(error.localizedDescription)")
+        }
         let walURL = URL(fileURLWithPath: url.path + "-wal")
         let shmURL = URL(fileURLWithPath: url.path + "-shm")
-        try? FileManager.default.removeItem(at: walURL)
-        try? FileManager.default.removeItem(at: shmURL)
+        do {
+            if FileManager.default.fileExists(atPath: walURL.path) {
+                try FileManager.default.removeItem(at: walURL)
+            }
+        } catch {
+            storeLog.error("Failed to remove WAL file during recovery: \(error.localizedDescription)")
+        }
+        do {
+            if FileManager.default.fileExists(atPath: shmURL.path) {
+                try FileManager.default.removeItem(at: shmURL)
+            }
+        } catch {
+            storeLog.error("Failed to remove SHM file during recovery: \(error.localizedDescription)")
+        }
 
         var newDB: OpaquePointer?
         guard sqlite3_open_v2(url.path, &newDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK else {
