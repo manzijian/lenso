@@ -14,6 +14,7 @@
 		20F723F27026817794C9859C /* RegionSelectorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86C78002C2F37CAB9153ED45 /* RegionSelectorWindow.swift */; };
 		21B69121FFF44550CD4586A0 /* CaptureCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D784B50D6B7F67CC9AB3338 /* CaptureCoordinator.swift */; };
 		2509AA1345F0E0D358BF382B /* LensoGlassPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61C53C1056E410CBBE9267DC /* LensoGlassPanel.swift */; };
+		262EC4CDBA3F5ACC06A7D167 /* SelectionOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61FA2619E357175E925D798D /* SelectionOverlayView.swift */; };
 		296D82716BB78111AC67F889 /* NoteEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFB662904840CB9F5885D0C1 /* NoteEditorSheet.swift */; };
 		2D5A9F058D3292FB5411D7F4 /* LensoLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C9500803224317D40B6EF66 /* LensoLibraryView.swift */; };
 		300D741CE9EEC54FF811A750 /* LibraryImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27A12E562F3E75E7654448B1 /* LibraryImage.swift */; };
@@ -113,6 +114,7 @@
 		61852D60891BBD9485F0A630 /* SaveToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveToast.swift; sourceTree = "<group>"; };
 		61C53C1056E410CBBE9267DC /* LensoGlassPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoGlassPanel.swift; sourceTree = "<group>"; };
 		61EDF15A8E03284FE7451DBE /* LensoSpacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoSpacing.swift; sourceTree = "<group>"; };
+		61FA2619E357175E925D798D /* SelectionOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionOverlayView.swift; sourceTree = "<group>"; };
 		63F18A5427F062C7DE80D80B /* PinnedPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedPanel.swift; sourceTree = "<group>"; };
 		6629E0A218BB4F749B26F653 /* LensoRadius.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoRadius.swift; sourceTree = "<group>"; };
 		6D3AF7C7AB4090B43A75631B /* ScreenshotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotStore.swift; sourceTree = "<group>"; };
@@ -161,6 +163,7 @@
 				FEA52E5DA6BB4A0D1D863A96 /* AnnotationModel.swift */,
 				51F18440E25048F21350866B /* CaptureEditorView.swift */,
 				41222AD41C09728906A0315C /* EditingComponents.swift */,
+				61FA2619E357175E925D798D /* SelectionOverlayView.swift */,
 			);
 			path = Editing;
 			sourceTree = "<group>";
@@ -525,6 +528,7 @@
 				A0A0C969EDE1C8AE41F7FA07 /* ScreenshotStore.swift in Sources */,
 				0AF1DFAA4D092400748BC9E4 /* SearchPanelController.swift in Sources */,
 				3F8B2F39F47F8C1AC0BBF278 /* SearchPanelView.swift in Sources */,
+				262EC4CDBA3F5ACC06A7D167 /* SelectionOverlayView.swift in Sources */,
 				6C52F17E00DF4F32CDE7BD4F /* SettingsWindowView.swift in Sources */,
 				530DF77AF207713354D20F23 /* ShortcutAction.swift in Sources */,
 				661D01C08BED132025D4E5E0 /* ShortcutCombo.swift in Sources */,
