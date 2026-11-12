@@ -92,9 +92,45 @@ final class ScreenshotStore: @unchecked Sendable {
         guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK else {
             return nil
         }
-        // 启用 WAL 模式提高并发读写性能与抗断电崩溃能力
+        // 1. 启用 WAL 模式提高并发读写性能与抗断电崩溃能力
         sqlite3_exec(db, "PRAGMA journal_mode = WAL;", nil, nil, nil)
-        return db
+
+        // 2. PRAGMA integrity_check 启动自检
+        var isIntegrityOK = false
+        var checkStmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, "PRAGMA integrity_check;", -1, &checkStmt, nil) == SQLITE_OK {
+            if sqlite3_step(checkStmt) == SQLITE_ROW,
+               let text = sqlite3_column_text(checkStmt, 0) {
+                let resultStr = String(cString: text)
+                isIntegrityOK = (resultStr == "ok")
+            }
+            sqlite3_finalize(checkStmt)
+        }
+
+        if isIntegrityOK {
+            return db
+        }
+
+        // 3. 自检失败：备份已损坏文件并自动重建空白数据库
+        storeLog.error("SQLite integrity check failed at \(url.path)! Backing up corrupt DB and recreating.")
+        sqlite3_close(db)
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd_HHmmss"
+        let timestamp = formatter.string(from: Date())
+        let corruptURL = url.deletingLastPathComponent().appendingPathComponent("lenso.corrupt.\(timestamp).sqlite")
+        try? FileManager.default.moveItem(at: url, to: corruptURL)
+        let walURL = URL(fileURLWithPath: url.path + "-wal")
+        let shmURL = URL(fileURLWithPath: url.path + "-shm")
+        try? FileManager.default.removeItem(at: walURL)
+        try? FileManager.default.removeItem(at: shmURL)
+
+        var newDB: OpaquePointer?
+        guard sqlite3_open_v2(url.path, &newDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK else {
+            return nil
+        }
+        sqlite3_exec(newDB, "PRAGMA journal_mode = WAL;", nil, nil, nil)
+        return newDB
     }
 
     static func migrate(db: OpaquePointer?) {
@@ -198,10 +234,22 @@ final class ScreenshotStore: @unchecked Sendable {
             fileSize = 0
         }
 
-        // 缩略图（宽 480，保持比例）
-        let thumbSize = thumbnailSize(for: image)
-        guard let thumb = image.resized(to: thumbSize) else { throw StoreError.thumbnailFailed }
+        // 缩略图（使用 ImageIO 降采样控制内存峰值，长边最大 480 像素）
         let thumbURL = baseDir.appendingPathComponent("Thumbnails").appendingPathComponent(filename)
+        let thumbImage: CGImage?
+        if let source = CGImageSourceCreateWithURL(imageURL as CFURL, nil) {
+            let options: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 480
+            ]
+            thumbImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+        } else {
+            let thumbSize = thumbnailSize(for: image)
+            thumbImage = image.resized(to: thumbSize)
+        }
+        guard let thumb = thumbImage else { throw StoreError.thumbnailFailed }
+
         guard let thumbDest = CGImageDestinationCreateWithURL(thumbURL as CFURL, UTType.png.identifier as CFString, 1, nil) else {
             throw StoreError.thumbnailFailed
         }
@@ -347,7 +395,7 @@ final class ScreenshotStore: @unchecked Sendable {
 
     func loadThumbnail(_ record: ScreenshotRecord) -> CGImage? {
         let url = baseDir.appendingPathComponent("Thumbnails").appendingPathComponent(record.filename)
-        return Self.loadImage(at: url)
+        return Self.loadThumbnail(at: url, maxPixelSize: 480)
     }
 
     func thumbnailURL(_ record: ScreenshotRecord) -> URL? {
@@ -357,6 +405,17 @@ final class ScreenshotStore: @unchecked Sendable {
     static func loadImage(at url: URL) -> CGImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
         return CGImageSourceCreateImageAtIndex(source, 0, nil)
+    }
+
+    static func loadThumbnail(at url: URL, maxPixelSize: Int = 480) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 
     private func thumbnailSize(for image: CGImage) -> CGSize {

@@ -14,6 +14,57 @@ final class LensoLocalService: @unchecked Sendable {
     private(set) var currentPort: UInt16 = defaultPort
     private(set) var lastError: String?
 
+    private(set) var authToken: String = {
+        let key = "lenso.localservice.auth_token"
+        if let existing = UserDefaults.standard.string(forKey: key), !existing.isEmpty {
+            return existing
+        }
+        let generated = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+        UserDefaults.standard.set(generated, forKey: key)
+        return generated
+    }()
+
+    func validateAuth(headers: [String: String], queryItems: [String: String]) -> Bool {
+        if let auth = headers["authorization"] {
+            let parts = auth.components(separatedBy: " ")
+            if parts.count == 2 && parts[0].lowercased() == "bearer" && parts[1] == authToken {
+                return true
+            }
+        }
+        if let token = queryItems["token"], token == authToken {
+            return true
+        }
+        return false
+    }
+
+    /// 生成 Claude Desktop 配置片段 (一键复制)
+    func claudeDesktopConfig() -> String {
+        let appPath = Bundle.main.bundlePath
+        let execPath = Bundle.main.executablePath ?? (appPath + "/Contents/MacOS/lenso")
+        return """
+        {
+          "mcpServers": {
+            "lenso": {
+              "command": "\(execPath)",
+              "args": ["--mcp"]
+            }
+          }
+        }
+        """
+    }
+
+    /// 生成 Claude Code CLI 启动指令 (一键复制)
+    func claudeCodeCommand() -> String {
+        let appPath = Bundle.main.bundlePath
+        let execPath = Bundle.main.executablePath ?? (appPath + "/Contents/MacOS/lenso")
+        return "claude mcp add lenso -- \"\(execPath)\" --mcp"
+    }
+
+    /// 生成 SSE 模式配置（带回环端口与 token）
+    func sseConfigSnippet() -> String {
+        return "http://127.0.0.1:\(currentPort)/sse?token=\(authToken)"
+    }
+
     private var listener: NWListener?
     private let queue = DispatchQueue(label: "com.lenso.localservice", qos: .userInitiated)
     private let isoFormatter = ISO8601DateFormatter()
@@ -127,8 +178,7 @@ final class LensoLocalService: @unchecked Sendable {
 
                 // 完整收到请求，分发路由
                 self.dispatchRequest(
-                    method: info.method,
-                    fullPath: info.fullPath,
+                    info: info,
                     bodyData: bodyData.prefix(info.contentLength),
                     connection: connection
                 )
@@ -143,23 +193,27 @@ final class LensoLocalService: @unchecked Sendable {
 
     // MARK: - HTTP Router
 
-    private func dispatchRequest(method: String, fullPath: String, bodyData: Data, connection: NWConnection) {
+    private func dispatchRequest(info: MCPMessageCodec.HTTPHeaderInfo, bodyData: Data, connection: NWConnection) {
         // CORS 预检
-        if method == "OPTIONS" {
+        if info.method == "OPTIONS" {
             sendCORSPreflightResponse(connection: connection)
             return
         }
 
-        let urlComponents = URLComponents(string: fullPath)
-        let path = urlComponents?.path ?? fullPath
-        let queryItems = urlComponents?.queryItems ?? []
-
-        switch (method, path) {
+        switch (info.method, info.path) {
         case ("GET", "/sse"):
+            guard validateAuth(headers: info.headers, queryItems: info.queryItems) else {
+                sendUnauthorizedResponse(connection: connection)
+                return
+            }
             handleSSEConnection(connection: connection)
 
         case ("POST", "/message"):
-            let sessionId = queryItems.first(where: { $0.name == "sessionId" })?.value ?? ""
+            guard validateAuth(headers: info.headers, queryItems: info.queryItems) else {
+                sendUnauthorizedResponse(connection: connection)
+                return
+            }
+            let sessionId = info.queryItems["sessionId"] ?? ""
             handleMessagePost(sessionId: sessionId, bodyData: bodyData, connection: connection)
 
         case ("GET", "/status"), ("GET", "/"):
@@ -170,9 +224,21 @@ final class LensoLocalService: @unchecked Sendable {
                 connection: connection,
                 statusCode: 404,
                 statusText: "Not Found",
-                payload: ["error": "Endpoint not found", "path": path]
+                payload: ["error": "Endpoint not found", "path": info.path]
             )
         }
+    }
+
+    private func sendUnauthorizedResponse(connection: NWConnection) {
+        sendJSONResponse(
+            connection: connection,
+            statusCode: 401,
+            statusText: "Unauthorized",
+            payload: [
+                "error": "Unauthorized: valid token required in Authorization header or query parameter 'token'",
+                "token_required": true
+            ]
+        )
     }
 
     // MARK: - Route Handlers

@@ -142,8 +142,25 @@ public enum MCPMessageCodec: Sendable {
         public let method: String
         public let fullPath: String
         public let path: String
+        public let headers: [String: String]
         public let queryItems: [String: String]
         public let contentLength: Int
+
+        public init(
+            method: String,
+            fullPath: String,
+            path: String,
+            headers: [String: String] = [:],
+            queryItems: [String: String] = [:],
+            contentLength: Int = 0
+        ) {
+            self.method = method
+            self.fullPath = fullPath
+            self.path = path
+            self.headers = headers
+            self.queryItems = queryItems
+            self.contentLength = contentLength
+        }
     }
 
     public static func parseHTTPHeader(_ headerString: String) -> HTTPHeaderInfo? {
@@ -157,10 +174,16 @@ public enum MCPMessageCodec: Sendable {
         let fullPath = requestParts[1]
 
         var contentLength = 0
+        var headerDict: [String: String] = [:]
         for line in lines.dropFirst() {
             let parts = line.split(separator: ":", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
-            if parts.count == 2 && parts[0].lowercased() == "content-length" {
-                contentLength = Int(parts[1]) ?? 0
+            if parts.count == 2 {
+                let key = parts[0].lowercased()
+                let val = parts[1]
+                headerDict[key] = val
+                if key == "content-length" {
+                    contentLength = Int(val) ?? 0
+                }
             }
         }
 
@@ -177,6 +200,7 @@ public enum MCPMessageCodec: Sendable {
             method: method,
             fullPath: fullPath,
             path: path,
+            headers: headerDict,
             queryItems: queries,
             contentLength: contentLength
         )

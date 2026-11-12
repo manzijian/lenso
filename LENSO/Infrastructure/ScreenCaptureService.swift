@@ -22,10 +22,18 @@ enum CaptureError: LocalizedError {
 final class ScreenCaptureService: ScreenCapturing, Sendable {
     /// 抓指定显示器的全屏图（物理像素），排除给定的窗口（选区面板）。
     func captureDisplayExcluding(displayID: CGDirectDisplayID, excludedWindowIDs: [CGWindowID]) async throws -> CGImage {
+        // 睡眠唤醒或多显示器热插拔后，重新拉取 SCShareableContent 刷新失效的 Stream 与上下文
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
+
+        // 多显示器边界处理：若目标 displayID 已失效（如拔出外接显示器），降级选取主显示器，兼容负坐标与拔插边界
+        let matchedDisplay = content.displays.first(where: { $0.displayID == displayID })
+            ?? content.displays.first(where: { $0.frame.origin == .zero })
+            ?? content.displays.first
+
+        guard let display = matchedDisplay else {
             throw CaptureError.displayNotFound(displayID)
         }
+        let targetID = display.displayID
         let excluded = content.windows.filter { excludedWindowIDs.contains($0.windowID) }
         let filter = SCContentFilter(display: display, excludingWindows: excluded)
         let config = SCStreamConfiguration()
@@ -33,8 +41,8 @@ final class ScreenCaptureService: ScreenCapturing, Sendable {
         // 注意不能用 CGDisplayPixelsWide：HiDPI 缩放模式下它返回的是逻辑宽度
         // （本机 1800），不是物理宽度（3600），用它的结果是半分辨率的糊图。
         // 正确来源是显示模式的 pixelWidth/pixelHeight。
-        config.width = Int(Self.physicalPixelWidth(displayID))
-        config.height = Int(Self.physicalPixelHeight(displayID))
+        config.width = max(1, Int(Self.physicalPixelWidth(targetID)))
+        config.height = max(1, Int(Self.physicalPixelHeight(targetID)))
         config.showsCursor = false
         config.captureResolution = .best
         return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
