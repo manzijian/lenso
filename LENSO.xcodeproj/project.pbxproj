@@ -64,6 +64,7 @@
 		D153AE7F6D916F17FAB9F757 /* LensoTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B7699807F95B1D64ECCC681 /* LensoTypography.swift */; };
 		D4592AF8F65F6735302F596D /* LENSOApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B044ADEB2AF234FFA798A8B5 /* LENSOApp.swift */; };
 		D4A8DB495A663DE80C331A4D /* EditorPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3031C0220EE701B03107A142 /* EditorPanel.swift */; };
+		D56366CAE97F29BC4080CCDD /* EditingComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41222AD41C09728906A0315C /* EditingComponents.swift */; };
 		D5B91F2ED5C521F4E15D0686 /* ShortcutStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 135EF660F9BA9A889666F34B /* ShortcutStore.swift */; };
 		DE568699012109BCB32B82B4 /* ClipboardMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BDA7F5691661D2318B5AB81 /* ClipboardMonitor.swift */; };
 		E8A1E10D92154E1F0DDD271E /* PreviewWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD209F1E73612BFE09EF7A77 /* PreviewWindowView.swift */; };
@@ -102,6 +103,7 @@
 		3031C0220EE701B03107A142 /* EditorPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorPanel.swift; sourceTree = "<group>"; };
 		31069BB5B89E8C5FB8247AD7 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		3326A48E064867C956689606 /* CapturePermissionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapturePermissionService.swift; sourceTree = "<group>"; };
+		41222AD41C09728906A0315C /* EditingComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditingComponents.swift; sourceTree = "<group>"; };
 		4C9500803224317D40B6EF66 /* LensoLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoLibraryView.swift; sourceTree = "<group>"; };
 		4F74640FE4B2B2190F58163E /* LensoShadows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoShadows.swift; sourceTree = "<group>"; };
 		51F18440E25048F21350866B /* CaptureEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureEditorView.swift; sourceTree = "<group>"; };
@@ -158,6 +160,7 @@
 			children = (
 				FEA52E5DA6BB4A0D1D863A96 /* AnnotationModel.swift */,
 				51F18440E25048F21350866B /* CaptureEditorView.swift */,
+				41222AD41C09728906A0315C /* EditingComponents.swift */,
 			);
 			path = Editing;
 			sourceTree = "<group>";
@@ -481,6 +484,7 @@
 				DE568699012109BCB32B82B4 /* ClipboardMonitor.swift in Sources */,
 				949F2379957DF484D0042FC9 /* ClipboardPanelController.swift in Sources */,
 				F95E22C0B2CC82BD6181E284 /* ClipboardPanelView.swift in Sources */,
+				D56366CAE97F29BC4080CCDD /* EditingComponents.swift in Sources */,
 				D4A8DB495A663DE80C331A4D /* EditorPanel.swift in Sources */,
 				38908F3A26EEC219937ED342 /* FavoriteStarButton.swift in Sources */,
 				CAB5A40D1F356E29BD3679D4 /* GlobalHotKeyManager.swift in Sources */,
