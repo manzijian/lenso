@@ -58,6 +58,8 @@ struct SearchPanelView: View {
     @State private var selectedCategory: FilterCategory = .all
     @State private var items: [FeedItem] = []
     @State private var copiedID: UUID?
+    @State private var inspectingItem: FeedItem?
+    @ObservedObject private var webStore = WebMetadataStore.shared
     @FocusState private var focused: Bool
 
     // 方块形网格布局：自适应列宽（185~230pt），如同相册照片墙铺满整个界面
@@ -103,6 +105,16 @@ struct SearchPanelView: View {
         .onChange(of: searchText) { _ in reloadFeed() }
         .onChange(of: selectedCategory) { _ in reloadFeed() }
         .onExitCommand { onDismiss() }
+        .sheet(item: $inspectingItem) { item in
+            if case .text(let content) = item.kind {
+                TextDetailInspectorSheet(
+                    rawContent: content,
+                    sourceApp: item.sourceApp,
+                    createdAt: item.createdAt,
+                    onDismiss: { inspectingItem = nil }
+                )
+            }
+        }
         .lensoColorScheme()
     }
 
@@ -392,11 +404,12 @@ struct SearchPanelView: View {
         .onTapGesture { copyItem(item) }
     }
 
-    // MARK: - 文字方块卡片（便签式排版 + 年月日时分秒）
+    // MARK: - 智能文字方块卡片（支持网址识别富卡片、代码/JSON美化、长文本查看与年月日时分秒）
 
     @ViewBuilder
     private func textTile(for item: FeedItem, content: String) -> some View {
         let isCopied = copiedID == item.id
+        let smartType = TextIntelligence.detect(content)
 
         ZStack(alignment: .topLeading) {
             // 便签卡片底板
@@ -405,11 +418,47 @@ struct SearchPanelView: View {
                 .shadow(color: Color.black.opacity(0.04), radius: 6, y: 2)
 
             VStack(alignment: .leading, spacing: 8) {
-                // 顶部：引用标志 + 来源应用 + 字符数 + 复制
+                // 顶部：类型标签 + 来源应用 + 查看/格式化 + 复制
                 HStack(spacing: 5) {
-                    Image(systemName: "text.quote")
-                        .font(.system(size: 11, weight: .bold))
+                    switch smartType {
+                    case .url:
+                        HStack(spacing: 3) {
+                            Image(systemName: "globe")
+                            Text("网址")
+                        }
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(LensoColors.kleinBlueBright)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(LensoColors.kleinBlueSoft))
+
+                    case .json:
+                        HStack(spacing: 3) {
+                            Image(systemName: "curlybraces")
+                            Text("JSON")
+                        }
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(LensoColors.kleinBlueBright)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(LensoColors.kleinBlueSoft))
+
+                    case .code(let lang, _):
+                        HStack(spacing: 3) {
+                            Image(systemName: "chevron.left.forwardslash.chevron.right")
+                            Text(lang)
+                        }
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(LensoColors.kleinBlueBright)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(LensoColors.kleinBlueSoft))
+
+                    case .plainText:
+                        Image(systemName: "text.quote")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(LensoColors.kleinBlueBright)
+                    }
 
                     if let app = item.sourceApp, !app.isEmpty {
                         Text(app)
@@ -417,15 +466,26 @@ struct SearchPanelView: View {
                             .foregroundStyle(Color.primary.opacity(0.75))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Capsule().fill(LensoColors.kleinBlueSoft))
+                            .background(Capsule().fill(Color.black.opacity(0.04)))
+                            .lineLimit(1)
                     }
 
                     Spacer()
 
-                    Text("\(content.count) 字")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                    // 查看全文 / 格式化按钮
+                    Button {
+                        inspectingItem = item
+                    } label: {
+                        Image(systemName: "eye.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(LensoColors.kleinBlueBright)
+                            .frame(width: 22, height: 22)
+                            .background(Circle().fill(LensoColors.kleinBlueSoft))
+                    }
+                    .buttonStyle(.plain)
+                    .help(smartType != .plainText ? "查看详情与代码美化格式化" : "查看全文并排版")
 
+                    // 复制按钮
                     Button {
                         copyItem(item)
                     } label: {
@@ -438,13 +498,71 @@ struct SearchPanelView: View {
                     .help("复制文本")
                 }
 
-                // 核心文本内容：居中方块式多行自然排版
-                Text(content)
-                    .font(.system(size: 12.5, weight: .regular))
-                    .foregroundStyle(Color.primary.opacity(0.88))
-                    .lineSpacing(3)
-                    .lineLimit(5)
+                // 核心卡片正文区域
+                switch smartType {
+                case .url(let url, let origStr):
+                    let title = webStore.title(for: origStr) ?? url.host ?? origStr
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(title)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Color.primary.opacity(0.92))
+                            .lineLimit(2)
+
+                        if let host = url.host {
+                            Text(host)
+                                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                                .foregroundStyle(LensoColors.kleinBlueBright)
+                                .lineLimit(1)
+                        }
+
+                        Spacer()
+
+                        Button {
+                            NSWorkspace.shared.open(url)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text("打开网页")
+                                Image(systemName: "arrow.up.right")
+                            }
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(LensoColors.kleinBlueBright))
+                        }
+                        .buttonStyle(.plain)
+                        .help("在默认浏览器中打开此网页")
+                    }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .onAppear {
+                        webStore.fetchTitleIfNeeded(for: origStr)
+                    }
+
+                case .json(let pretty, _):
+                    Text(pretty)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(Color(red: 0.15, green: 0.2, blue: 0.3))
+                        .lineSpacing(2)
+                        .lineLimit(5)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+                case .code(_, let formatted):
+                    Text(formatted)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(Color(red: 0.15, green: 0.2, blue: 0.3))
+                        .lineSpacing(2)
+                        .lineLimit(5)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+                case .plainText:
+                    Text(content)
+                        .font(.system(size: 12.5, weight: .regular))
+                        .foregroundStyle(Color.primary.opacity(0.88))
+                        .lineSpacing(3)
+                        .lineLimit(5)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }
 
                 Divider().opacity(0.5)
 
@@ -454,6 +572,9 @@ struct SearchPanelView: View {
                         .font(.system(size: 10, weight: .regular, design: .monospaced))
                         .foregroundStyle(.secondary)
                     Spacer()
+                    Text("\(content.count) 字")
+                        .font(.system(size: 9.5, design: .monospaced))
+                        .foregroundStyle(.secondary.opacity(0.7))
                 }
             }
             .padding(12)
