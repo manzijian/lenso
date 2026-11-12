@@ -63,24 +63,11 @@ final class LensoMCPServer: @unchecked Sendable {
     }
 
     private func sendResponse(id: Any?, result: Any) {
-        let response: [String: Any] = [
-            "jsonrpc": "2.0",
-            "id": id ?? NSNull(),
-            "result": result
-        ]
-        sendRaw(response)
+        sendRaw(MCPMessageCodec.makeResponse(id: id, result: result))
     }
 
     private func sendError(id: Any?, code: Int, message: String) {
-        let response: [String: Any] = [
-            "jsonrpc": "2.0",
-            "id": id ?? NSNull(),
-            "error": [
-                "code": code,
-                "message": message
-            ]
-        ]
-        sendRaw(response)
+        sendRaw(MCPMessageCodec.makeErrorResponse(id: id, code: code, message: message))
     }
 
     private func sendRaw(_ dict: [String: Any]) {
@@ -483,25 +470,10 @@ final class LensoMCPServer: @unchecked Sendable {
     }
 
     private func sendToolTextResult(id: Any?, text: String) {
-        sendResponse(id: id, result: [
-            "content": [
-                [
-                    "type": "text",
-                    "text": text
-                ]
-            ]
-        ])
+        sendResponse(id: id, result: MCPMessageCodec.makeToolTextContent(text: text))
     }
 
     private func sendToolError(id: Any?, message: String) {
-        sendResponse(id: id, result: [
-            "content": [
-                [
-                    "type": "text",
-                    "text": "Error: \(message)"
-                ]
-            ],
-            "isError": true
-        ])
+        sendResponse(id: id, result: MCPMessageCodec.makeToolTextContent(text: "Error: \(message)", isError: true))
     }
 }

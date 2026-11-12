@@ -113,36 +113,13 @@ final class LensoLocalService: @unchecked Sendable {
                 let headerData = data.subdata(in: 0..<range.lowerBound)
                 let bodyData = data.subdata(in: range.upperBound..<data.count)
 
-                guard let headerString = String(data: headerData, encoding: .utf8) else {
+                guard let headerString = String(data: headerData, encoding: .utf8),
+                      let info = MCPMessageCodec.parseHTTPHeader(headerString) else {
                     connection.cancel()
                     return
                 }
 
-                let lines = headerString.components(separatedBy: "\r\n")
-                guard let requestLine = lines.first else {
-                    connection.cancel()
-                    return
-                }
-
-                let requestParts = requestLine.components(separatedBy: " ")
-                guard requestParts.count >= 2 else {
-                    connection.cancel()
-                    return
-                }
-
-                let method = requestParts[0].uppercased()
-                let fullPath = requestParts[1]
-
-                // 解析 Content-Length
-                var contentLength = 0
-                for line in lines.dropFirst() {
-                    let parts = line.split(separator: ":", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
-                    if parts.count == 2 && parts[0].lowercased() == "content-length" {
-                        contentLength = Int(parts[1]) ?? 0
-                    }
-                }
-
-                if bodyData.count < contentLength {
+                if bodyData.count < info.contentLength {
                     // Body 还没收全，继续接收
                     self.readHTTPRequest(connection: connection, accumulatedData: data)
                     return
@@ -150,9 +127,9 @@ final class LensoLocalService: @unchecked Sendable {
 
                 // 完整收到请求，分发路由
                 self.dispatchRequest(
-                    method: method,
-                    fullPath: fullPath,
-                    bodyData: bodyData.prefix(contentLength),
+                    method: info.method,
+                    fullPath: info.fullPath,
+                    bodyData: bodyData.prefix(info.contentLength),
                     connection: connection
                 )
             } else if !isComplete {
@@ -227,7 +204,7 @@ final class LensoLocalService: @unchecked Sendable {
         sendRawString(connection: connection, string: headers, closeAfter: false)
 
         // 发送 MCP SSE 握手 endpoint 消息
-        let endpointEvent = "event: endpoint\r\ndata: /message?sessionId=\(sessionId)\r\n\r\n"
+        let endpointEvent = MCPMessageCodec.formatSSEEndpoint(sessionId: sessionId)
         sendRawString(connection: connection, string: endpointEvent, closeAfter: false)
 
         sseLock.lock()
@@ -261,7 +238,7 @@ final class LensoLocalService: @unchecked Sendable {
                let resData = try? JSONSerialization.data(withJSONObject: result),
                let resStr = String(data: resData, encoding: .utf8) {
                 // 通过 SSE 发送
-                let sseMessage = "event: message\r\ndata: \(resStr)\r\n\r\n"
+                let sseMessage = MCPMessageCodec.formatSSEMessage(jsonString: resStr)
                 sendRawString(connection: sseConn, string: sseMessage, closeAfter: false)
 
                 // 对 POST 连接回复 202 Accepted

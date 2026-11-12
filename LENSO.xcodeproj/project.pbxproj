@@ -71,6 +71,7 @@
 		D56366CAE97F29BC4080CCDD /* EditingComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41222AD41C09728906A0315C /* EditingComponents.swift */; };
 		D5B91F2ED5C521F4E15D0686 /* ShortcutStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 135EF660F9BA9A889666F34B /* ShortcutStore.swift */; };
 		DE568699012109BCB32B82B4 /* ClipboardMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BDA7F5691661D2318B5AB81 /* ClipboardMonitor.swift */; };
+		E71287CEB3C2A6436ECFC0D8 /* MCPMessageCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A106FF95B8D7E0291F155A9 /* MCPMessageCodec.swift */; };
 		E8A1E10D92154E1F0DDD271E /* PreviewWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD209F1E73612BFE09EF7A77 /* PreviewWindowView.swift */; };
 		EA8F47115E3516693BF94D72 /* CaptureEditorLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DC6F3181397AE48FCB7B45C /* CaptureEditorLayout.swift */; };
 		ED62A1057DA2F03880318F1A /* CaptureEditorSidePanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02DA93EC1B0CA6699CFA7072 /* CaptureEditorSidePanelView.swift */; };
@@ -136,6 +137,7 @@
 		877A569F97194ADB3A26C379 /* TranslationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationProvider.swift; sourceTree = "<group>"; };
 		884BB61BBEFEE7928E2EC72B /* FavoriteStarButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteStarButton.swift; sourceTree = "<group>"; };
 		8966A9C2B7950A921AB8608A /* ShortcutCombo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutCombo.swift; sourceTree = "<group>"; };
+		8A106FF95B8D7E0291F155A9 /* MCPMessageCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPMessageCodec.swift; sourceTree = "<group>"; };
 		8B7699807F95B1D64ECCC681 /* LensoTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoTypography.swift; sourceTree = "<group>"; };
 		8D784B50D6B7F67CC9AB3338 /* CaptureCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureCoordinator.swift; sourceTree = "<group>"; };
 		8F27A5A1C366022DF7397C5F /* SearchPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchPanelController.swift; sourceTree = "<group>"; };
@@ -191,6 +193,7 @@
 				5080262241D8FE4DC09C334E /* CaptureProtocols.swift */,
 				C126297582173D0BA7E950D0 /* LensoLocalService.swift */,
 				17B81EF42D2A3A0FDE2294D3 /* LensoMCPServer.swift */,
+				8A106FF95B8D7E0291F155A9 /* MCPMessageCodec.swift */,
 				ABC9A216CFCB35B3DC4B5132 /* NotificationNames.swift */,
 				61852D60891BBD9485F0A630 /* SaveToast.swift */,
 				3C0CAAD004DEA8412D7C1178 /* Pinned */,
@@ -533,6 +536,7 @@
 				6F1AD5DBC077F820272B7CCC /* LibraryViewModel.swift in Sources */,
 				8A053A317CB5D595422AA5CF /* LibraryWindowView.swift in Sources */,
 				6487CCF571CF67B5D891A7B6 /* LocalTranslationProvider.swift in Sources */,
+				E71287CEB3C2A6436ECFC0D8 /* MCPMessageCodec.swift in Sources */,
 				322C57EFEFC8BCAA7849DD5F /* MenuBarPanelView.swift in Sources */,
 				296D82716BB78111AC67F889 /* NoteEditorSheet.swift in Sources */,
 				4514A59D53168D0443A7C291 /* NotificationNames.swift in Sources */,
