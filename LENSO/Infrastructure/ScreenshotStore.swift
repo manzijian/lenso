@@ -3,9 +3,11 @@ import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
 import SQLite3
-import CryptoKit
+import os
 
-struct ScreenshotRecord: Identifiable, Hashable {
+let storeLog = Logger(subsystem: "com.lenso.app", category: "store")
+
+struct ScreenshotRecord: Identifiable, Hashable, Sendable {
     let id: UUID
     let filename: String
     let width: Int
@@ -17,7 +19,7 @@ struct ScreenshotRecord: Identifiable, Hashable {
 }
 
 /// 文字收纳条目
-struct TextNote: Identifiable {
+struct TextNote: Identifiable, Sendable {
     let id: UUID
     var content: String
     let sourceApp: String?
@@ -28,8 +30,8 @@ struct TextNote: Identifiable {
 }
 
 /// 剪贴板历史条目（图片或文字），记录来源应用
-struct ClipboardItem: Identifiable {
-    enum Kind: String { case image, text }
+struct ClipboardItem: Identifiable, Sendable {
+    enum Kind: String, Sendable { case image, text }
     let id: UUID
     let kind: Kind
     let filename: String?
@@ -38,24 +40,45 @@ struct ClipboardItem: Identifiable {
     let createdAt: Date
 }
 
-/// MVP 持久层：原图/缩略图文件存储 + SQLite 索引（规范第九章简化版）
+/// MVP 持久层：原图/缩略图文件存储 + SQLite 索引
 /// 目录结构：~/Library/Application Support/LENSO/{Original,Thumbnails,lenso.sqlite}
 final class ScreenshotStore: @unchecked Sendable {
-    static let shared = ScreenshotStore()
+    static let shared: ScreenshotStore = {
+        do {
+            return try ScreenshotStore()
+        } catch {
+            fatalError("Failed to initialize ScreenshotStore.shared: \(error)")
+        }
+    }()
 
-    private let db: OpaquePointer?
-    private let baseDir: URL
-    private let queue = DispatchQueue(label: "com.lenso.store", qos: .userInitiated)
+    let db: OpaquePointer?
+    let baseDir: URL
+    let queue = DispatchQueue(label: "com.lenso.store", qos: .userInitiated)
 
-    init(baseDirectory: URL? = nil) {
-        baseDir = baseDirectory
+    init(baseDirectory: URL? = nil) throws {
+        let dir = baseDirectory
             ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
                 .appendingPathComponent("LENSO", isDirectory: true)
+        baseDir = dir
+
         for sub in ["Original", "Thumbnails", "Clipboard"] {
-            try? FileManager.default.createDirectory(at: baseDir.appendingPathComponent(sub), withIntermediateDirectories: true)
+            let subURL = dir.appendingPathComponent(sub)
+            do {
+                try FileManager.default.createDirectory(at: subURL, withIntermediateDirectories: true)
+            } catch {
+                storeLog.error("Failed to create store directory at \(subURL.path): \(error.localizedDescription)")
+                throw StoreError.directoryCreationFailed(subURL, error.localizedDescription)
+            }
         }
-        db = Self.openDB(at: baseDir.appendingPathComponent("lenso.sqlite"))
-        Self.migrate(db: db)
+
+        let dbURL = dir.appendingPathComponent("lenso.sqlite")
+        guard let openedDB = Self.openDB(at: dbURL) else {
+            let msg = String(cString: sqlite3_errmsg(nil) ?? UnsafePointer("Unknown SQLite error"))
+            storeLog.error("Failed to open SQLite database at \(dbURL.path): \(msg)")
+            throw StoreError.dbOpenFailed(dbURL, msg)
+        }
+        db = openedDB
+        Self.migrate(db: openedDB)
     }
 
     deinit {
@@ -64,15 +87,17 @@ final class ScreenshotStore: @unchecked Sendable {
 
     // MARK: - Database setup
 
-    private static func openDB(at url: URL) -> OpaquePointer? {
+    static func openDB(at url: URL) -> OpaquePointer? {
         var db: OpaquePointer?
         guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK else {
             return nil
         }
+        // 启用 WAL 模式提高并发读写性能与抗断电崩溃能力
+        sqlite3_exec(db, "PRAGMA journal_mode = WAL;", nil, nil, nil)
         return db
     }
 
-    private static func migrate(db: OpaquePointer?) {
+    static func migrate(db: OpaquePointer?) {
         let sql = """
         CREATE TABLE IF NOT EXISTS screenshots (
             id TEXT PRIMARY KEY NOT NULL,
@@ -103,15 +128,14 @@ final class ScreenshotStore: @unchecked Sendable {
             is_favorite INTEGER NOT NULL DEFAULT 0,
             favorited_at REAL
         );
-        CREATE INDEX IF NOT EXISTS idx_note_created ON text_notes(created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_notes_updated ON text_notes(updated_at DESC);
         """
         sqlite3_exec(db, sql, nil, nil, nil)
-        // 旧表升级：补充 source_app 列（已存在则忽略错误）
+
+        // 幂等补充列
         sqlite3_exec(db, "ALTER TABLE clipboard_items ADD COLUMN source_app TEXT;", nil, nil, nil)
-        // 旧表升级：补充 content_hash 列用于内容指纹去重并节省磁盘空间
         sqlite3_exec(db, "ALTER TABLE clipboard_items ADD COLUMN content_hash TEXT;", nil, nil, nil)
         sqlite3_exec(db, "CREATE INDEX IF NOT EXISTS idx_clip_hash ON clipboard_items(content_hash);", nil, nil, nil)
-        // 旧表升级：收藏列
         sqlite3_exec(db, "ALTER TABLE screenshots ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0;", nil, nil, nil)
         sqlite3_exec(db, "ALTER TABLE screenshots ADD COLUMN favorited_at REAL;", nil, nil, nil)
         sqlite3_exec(db, "ALTER TABLE text_notes ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0;", nil, nil, nil)
@@ -131,9 +155,9 @@ final class ScreenshotStore: @unchecked Sendable {
         """, nil, nil, nil)
     }
 
-    private static let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+    static let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-    private static func bind(_ stmt: OpaquePointer?, _ index: Int32, _ text: String) {
+    static func bind(_ stmt: OpaquePointer?, _ index: Int32, _ text: String) {
         sqlite3_bind_text(stmt, index, (text as NSString).utf8String, -1, SQLITE_TRANSIENT)
     }
 
@@ -154,12 +178,25 @@ final class ScreenshotStore: @unchecked Sendable {
         }
         CGImageDestinationAddImage(dest, image, nil)
         guard CGImageDestinationFinalize(dest) else {
-            try? FileManager.default.removeItem(at: tempURL)
+            if FileManager.default.fileExists(atPath: tempURL.path) {
+                do {
+                    try FileManager.default.removeItem(at: tempURL)
+                } catch {
+                    storeLog.error("Failed to remove temp file at \(tempURL.path): \(error.localizedDescription)")
+                }
+            }
             throw StoreError.imageEncodeFailed
         }
         _ = try FileManager.default.replaceItemAt(imageURL, withItemAt: tempURL)
 
-        let fileSize = (try? FileManager.default.attributesOfItem(atPath: imageURL.path)[.size] as? Int) ?? 0
+        let fileSize: Int
+        do {
+            let attrs = try FileManager.default.attributesOfItem(atPath: imageURL.path)
+            fileSize = (attrs[.size] as? Int) ?? 0
+        } catch {
+            storeLog.error("Failed to read file size for \(imageURL.path): \(error.localizedDescription)")
+            fileSize = 0
+        }
 
         // 缩略图（宽 480，保持比例）
         let thumbSize = thumbnailSize(for: image)
@@ -173,84 +210,71 @@ final class ScreenshotStore: @unchecked Sendable {
             throw StoreError.thumbnailFailed
         }
 
-        // INSERT
-        let sql = "INSERT INTO screenshots (id, filename, width, height, file_size, captured_at) VALUES (?,?,?,?,?,?);"
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
-        defer { sqlite3_finalize(stmt) }
-        Self.bind(stmt, 1, id.uuidString)
-        Self.bind(stmt, 2, filename)
-        sqlite3_bind_int(stmt, 3, Int32(image.width))
-        sqlite3_bind_int(stmt, 4, Int32(image.height))
-        sqlite3_bind_int64(stmt, 5, Int64(fileSize))
-        sqlite3_bind_double(stmt, 6, capturedAt.timeIntervalSince1970)
-        guard sqlite3_step(stmt) == SQLITE_DONE else { throw StoreError.dbFailed }
+        try queue.sync {
+            let sql = "INSERT INTO screenshots (id, filename, width, height, file_size, captured_at) VALUES (?,?,?,?,?,?);"
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
+            defer { sqlite3_finalize(stmt) }
+            Self.bind(stmt, 1, id.uuidString)
+            Self.bind(stmt, 2, filename)
+            sqlite3_bind_int(stmt, 3, Int32(image.width))
+            sqlite3_bind_int(stmt, 4, Int32(image.height))
+            sqlite3_bind_int(stmt, 5, Int32(fileSize))
+            sqlite3_bind_double(stmt, 6, capturedAt.timeIntervalSince1970)
+            guard sqlite3_step(stmt) == SQLITE_DONE else { throw StoreError.dbFailed }
+        }
 
         return ScreenshotRecord(
-            id: id, filename: filename,
-            width: image.width, height: image.height,
-            fileSize: fileSize, capturedAt: capturedAt,
-            isFavorite: false, favoritedAt: nil
+            id: id,
+            filename: filename,
+            width: image.width,
+            height: image.height,
+            fileSize: fileSize,
+            capturedAt: capturedAt,
+            isFavorite: false,
+            favoritedAt: nil
         )
-    }
-
-    private func thumbnailSize(for image: CGImage) -> CGSize {
-        let targetWidth: CGFloat = 480
-        let ratio = CGFloat(image.width) / CGFloat(image.height)
-        return CGSize(width: targetWidth, height: targetWidth / ratio)
     }
 
     // MARK: - Query
 
-    func list() throws -> [ScreenshotRecord] {
-        try queue.sync { try listUnlocked() }
-    }
+    func list(limit: Int = 100) throws -> [ScreenshotRecord] {
+        try queue.sync {
+            let sql = "SELECT id, filename, width, height, file_size, captured_at, is_favorite, favorited_at FROM screenshots ORDER BY captured_at DESC LIMIT ?;"
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
+            defer { sqlite3_finalize(stmt) }
+            sqlite3_bind_int(stmt, 1, Int32(limit))
 
-    private func listUnlocked() throws -> [ScreenshotRecord] {
-        let sql = "SELECT id, filename, width, height, file_size, captured_at, is_favorite, favorited_at FROM screenshots ORDER BY captured_at DESC;"
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
-        defer { sqlite3_finalize(stmt) }
-
-        var records: [ScreenshotRecord] = []
-        while sqlite3_step(stmt) == SQLITE_ROW {
-            let idString = String(cString: sqlite3_column_text(stmt, 0))
-            let filename = String(cString: sqlite3_column_text(stmt, 1))
-            let width = Int(sqlite3_column_int(stmt, 2))
-            let height = Int(sqlite3_column_int(stmt, 3))
-            let fileSize = Int(sqlite3_column_int64(stmt, 4))
-            let capturedAt = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 5))
-            let isFavorite = sqlite3_column_int(stmt, 6) != 0
-            let favoritedAt: Date? = sqlite3_column_type(stmt, 7) == SQLITE_NULL
-                ? nil
-                : Date(timeIntervalSince1970: sqlite3_column_double(stmt, 7))
-            if let id = UUID(uuidString: idString) {
+            var records: [ScreenshotRecord] = []
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                guard let idText = sqlite3_column_text(stmt, 0),
+                      let id = UUID(uuidString: String(cString: idText)),
+                      let fnText = sqlite3_column_text(stmt, 1)
+                else { continue }
+                let filename = String(cString: fnText)
+                let width = Int(sqlite3_column_int(stmt, 2))
+                let height = Int(sqlite3_column_int(stmt, 3))
+                let size = Int(sqlite3_column_int(stmt, 4))
+                let capturedAt = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 5))
+                let isFavorite = sqlite3_column_int(stmt, 6) != 0
+                let favoritedAt: Date? = sqlite3_column_type(stmt, 7) == SQLITE_NULL
+                    ? nil
+                    : Date(timeIntervalSince1970: sqlite3_column_double(stmt, 7))
                 records.append(ScreenshotRecord(
-                    id: id, filename: filename, width: width, height: height,
-                    fileSize: fileSize, capturedAt: capturedAt,
-                    isFavorite: isFavorite, favoritedAt: favoritedAt
+                    id: id,
+                    filename: filename,
+                    width: width,
+                    height: height,
+                    fileSize: size,
+                    capturedAt: capturedAt,
+                    isFavorite: isFavorite,
+                    favoritedAt: favoritedAt
                 ))
             }
+            return records
         }
-        return records
     }
-
-    // MARK: - Image loading
-
-    func loadImage(_ record: ScreenshotRecord) -> CGImage? {
-        Self.loadImage(at: baseDir.appendingPathComponent("Original").appendingPathComponent(record.filename))
-    }
-
-    func loadThumbnail(_ record: ScreenshotRecord) -> CGImage? {
-        Self.loadImage(at: baseDir.appendingPathComponent("Thumbnails").appendingPathComponent(record.filename))
-    }
-
-    private static func loadImage(at url: URL) -> CGImage? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-        return CGImageSourceCreateImageAtIndex(source, 0, nil)
-    }
-
-    // MARK: - Delete
 
     func delete(_ record: ScreenshotRecord) throws {
         try queue.sync {
@@ -263,7 +287,13 @@ final class ScreenshotStore: @unchecked Sendable {
 
             for sub in ["Original", "Thumbnails"] {
                 let url = baseDir.appendingPathComponent(sub).appendingPathComponent(record.filename)
-                try? FileManager.default.removeItem(at: url)
+                if FileManager.default.fileExists(atPath: url.path) {
+                    do {
+                        try FileManager.default.removeItem(at: url)
+                    } catch {
+                        storeLog.error("Failed to remove image file at \(url.path): \(error.localizedDescription)")
+                    }
+                }
             }
         }
     }
@@ -304,625 +334,50 @@ final class ScreenshotStore: @unchecked Sendable {
         }
     }
 
-    // MARK: - Text notes（文字收纳）
+    // MARK: - Loading
 
-    @discardableResult
-    func createTextNote(content: String, sourceApp: String? = nil) throws -> TextNote {
-        let id = UUID()
-        let now = Date()
-        try queue.sync {
-            let sql = "INSERT INTO text_notes (id, content, source_app, created_at, updated_at) VALUES (?,?,?,?,?);"
-            var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
-            defer { sqlite3_finalize(stmt) }
-            Self.bind(stmt, 1, id.uuidString)
-            Self.bind(stmt, 2, content)
-            if let sourceApp { Self.bind(stmt, 3, sourceApp) } else { sqlite3_bind_null(stmt, 3) }
-            sqlite3_bind_double(stmt, 4, now.timeIntervalSince1970)
-            sqlite3_bind_double(stmt, 5, now.timeIntervalSince1970)
-            guard sqlite3_step(stmt) == SQLITE_DONE else { throw StoreError.dbFailed }
-        }
-        return TextNote(id: id, content: content, sourceApp: sourceApp,
-                        createdAt: now, updatedAt: now,
-                        isFavorite: false, favoritedAt: nil)
-    }
-
-    func listTextNotes() throws -> [TextNote] {
-        try queue.sync {
-            let sql = "SELECT id, content, source_app, created_at, updated_at, is_favorite, favorited_at FROM text_notes ORDER BY updated_at DESC;"
-            var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
-            defer { sqlite3_finalize(stmt) }
-            var notes: [TextNote] = []
-            while sqlite3_step(stmt) == SQLITE_ROW {
-                guard let idText = sqlite3_column_text(stmt, 0),
-                      let id = UUID(uuidString: String(cString: idText)),
-                      let contentText = sqlite3_column_text(stmt, 1)
-                else { continue }
-                let sourceApp = sqlite3_column_text(stmt, 2).map { String(cString: $0) }
-                let createdAt = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 3))
-                let updatedAt = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 4))
-                let isFavorite = sqlite3_column_int(stmt, 5) != 0
-                let favoritedAt: Date? = sqlite3_column_type(stmt, 6) == SQLITE_NULL
-                    ? nil
-                    : Date(timeIntervalSince1970: sqlite3_column_double(stmt, 6))
-                notes.append(TextNote(id: id, content: String(cString: contentText),
-                                      sourceApp: sourceApp, createdAt: createdAt, updatedAt: updatedAt,
-                                      isFavorite: isFavorite, favoritedAt: favoritedAt))
-            }
-            return notes
-        }
-    }
-
-    func updateTextNote(id: UUID, content: String) throws {
-        try queue.sync {
-            let sql = "UPDATE text_notes SET content = ?, updated_at = ? WHERE id = ?;"
-            var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
-            defer { sqlite3_finalize(stmt) }
-            Self.bind(stmt, 1, content)
-            sqlite3_bind_double(stmt, 2, Date().timeIntervalSince1970)
-            Self.bind(stmt, 3, id.uuidString)
-            guard sqlite3_step(stmt) == SQLITE_DONE else { throw StoreError.dbFailed }
-        }
-    }
-
-    /// 重新触碰便签，更新 updated_at 为当前时间，让再次复制或使用的内容立即跃升到时间倒序的最顶部
-    func touchTextNote(id: UUID) throws {
-        try queue.sync {
-            let sql = "UPDATE text_notes SET updated_at = ? WHERE id = ?;"
-            var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
-            defer { sqlite3_finalize(stmt) }
-            sqlite3_bind_double(stmt, 1, Date().timeIntervalSince1970)
-            Self.bind(stmt, 2, id.uuidString)
-            guard sqlite3_step(stmt) == SQLITE_DONE else { throw StoreError.dbFailed }
-        }
-    }
-
-    func deleteTextNote(id: UUID) throws {
-        try queue.sync {
-            let sql = "DELETE FROM text_notes WHERE id = ?;"
-            var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
-            defer { sqlite3_finalize(stmt) }
-            Self.bind(stmt, 1, id.uuidString)
-            guard sqlite3_step(stmt) == SQLITE_DONE else { throw StoreError.dbFailed }
-        }
-    }
-
-    func textNoteCount() -> Int {
-        (try? queue.sync {
-            var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM text_notes;", -1, &stmt, nil) == SQLITE_OK else { return 0 }
-            defer { sqlite3_finalize(stmt) }
-            return sqlite3_step(stmt) == SQLITE_ROW ? Int(sqlite3_column_int(stmt, 0)) : 0
-        }) ?? 0
-    }
-
-    // MARK: - Hashing & Deduplication
-
-    /// 计算图片的确定性特征指纹（用于去重与磁盘空间优化）
-    static func computeImageHash(_ image: CGImage) -> String {
-        if let provider = image.dataProvider, let cfData = provider.data {
-            let digest = SHA256.hash(data: cfData as Data)
-            return "\(image.width)x\(image.height):" + digest.map { String(format: "%02x", $0) }.joined()
-        }
-        let mutableData = NSMutableData()
-        if let dest = CGImageDestinationCreateWithData(mutableData as CFMutableData, UTType.png.identifier as CFString, 1, nil) {
-            CGImageDestinationAddImage(dest, image, nil)
-            if CGImageDestinationFinalize(dest) {
-                let digest = SHA256.hash(data: mutableData as Data)
-                return "\(image.width)x\(image.height):" + digest.map { String(format: "%02x", $0) }.joined()
-            }
-        }
-        return "\(image.width)x\(image.height)"
-    }
-
-    /// 计算纯文本的 SHA256 哈希
-    static func computeTextHash(_ text: String) -> String {
-        let digest = SHA256.hash(data: Data(text.utf8))
-        return digest.map { String(format: "%02x", $0) }.joined()
-    }
-
-    // MARK: - Clipboard history
-
-    @discardableResult
-    func saveClipboardImage(_ image: CGImage, sourceApp: String?) throws -> ClipboardItem {
-        let now = Date()
-        let hash = Self.computeImageHash(image)
-
-        // 1. 查找是否已存在相同指纹的图片记录
-        var matched: (id: UUID, filename: String)?
-        try queue.sync {
-            let sql = "SELECT id, filename FROM clipboard_items WHERE kind = 'image' AND content_hash = ? LIMIT 1;"
-            var stmt: OpaquePointer?
-            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-                defer { sqlite3_finalize(stmt) }
-                Self.bind(stmt, 1, hash)
-                if sqlite3_step(stmt) == SQLITE_ROW,
-                   let idStr = sqlite3_column_text(stmt, 0),
-                   let id = UUID(uuidString: String(cString: idStr)),
-                   let fnStr = sqlite3_column_text(stmt, 1) {
-                    matched = (id, String(cString: fnStr))
-                }
-            }
-        }
-
-        if let matched {
-            let fileUrl = baseDir.appendingPathComponent("Clipboard").appendingPathComponent(matched.filename)
-            if FileManager.default.fileExists(atPath: fileUrl.path) {
-                // 文件依然完好：无需重复编码写入磁盘（节省宝贵空间），直接更新时间为最新秒数，排在最前面！
-                try queue.sync {
-                    let sql = "UPDATE clipboard_items SET created_at = ?, source_app = ? WHERE id = ?;"
-                    var stmt: OpaquePointer?
-                    guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
-                    defer { sqlite3_finalize(stmt) }
-                    sqlite3_bind_double(stmt, 1, now.timeIntervalSince1970)
-                    if let sourceApp { Self.bind(stmt, 2, sourceApp) } else { sqlite3_bind_null(stmt, 2) }
-                    Self.bind(stmt, 3, matched.id.uuidString)
-                    guard sqlite3_step(stmt) == SQLITE_DONE else { throw StoreError.dbFailed }
-                }
-                return ClipboardItem(id: matched.id, kind: .image, filename: matched.filename, text: nil, sourceApp: sourceApp, createdAt: now)
-            }
-        }
-
-        // 2. 不存在或文件丢失：编码写入新 PNG
-        let id = UUID()
-        let filename = "\(id.uuidString).png"
-        let url = baseDir.appendingPathComponent("Clipboard").appendingPathComponent(filename)
-        guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
-            throw StoreError.imageEncodeFailed
-        }
-        CGImageDestinationAddImage(dest, image, nil)
-        guard CGImageDestinationFinalize(dest) else { throw StoreError.imageEncodeFailed }
-
-        try insertClipboard(id: id, kind: .image, filename: filename, text: nil, sourceApp: sourceApp, createdAt: now, contentHash: hash)
-        return ClipboardItem(id: id, kind: .image, filename: filename, text: nil, sourceApp: sourceApp, createdAt: now)
-    }
-
-    @discardableResult
-    func saveClipboardText(_ text: String, sourceApp: String?) throws -> ClipboardItem {
-        let now = Date()
-        let hash = Self.computeTextHash(text)
-
-        // 1. 查找是否已存在相同文本的记录
-        var matchedID: UUID?
-        try queue.sync {
-            let sql = "SELECT id FROM clipboard_items WHERE kind = 'text' AND (content_hash = ? OR text = ?) LIMIT 1;"
-            var stmt: OpaquePointer?
-            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-                defer { sqlite3_finalize(stmt) }
-                Self.bind(stmt, 1, hash)
-                Self.bind(stmt, 2, text)
-                if sqlite3_step(stmt) == SQLITE_ROW,
-                   let idStr = sqlite3_column_text(stmt, 0),
-                   let id = UUID(uuidString: String(cString: idStr)) {
-                    matchedID = id
-                }
-            }
-        }
-
-        if let matchedID {
-            // 已存在：直接更新时间戳为当前最新时间，并更新 content_hash，不再插入重复记录！
-            try queue.sync {
-                let sql = "UPDATE clipboard_items SET created_at = ?, source_app = ?, content_hash = ? WHERE id = ?;"
-                var stmt: OpaquePointer?
-                guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
-                defer { sqlite3_finalize(stmt) }
-                sqlite3_bind_double(stmt, 1, now.timeIntervalSince1970)
-                if let sourceApp { Self.bind(stmt, 2, sourceApp) } else { sqlite3_bind_null(stmt, 2) }
-                Self.bind(stmt, 3, hash)
-                Self.bind(stmt, 4, matchedID.uuidString)
-                guard sqlite3_step(stmt) == SQLITE_DONE else { throw StoreError.dbFailed }
-            }
-            return ClipboardItem(id: matchedID, kind: .text, filename: nil, text: text, sourceApp: sourceApp, createdAt: now)
-        }
-
-        // 2. 不存在：插入新记录
-        let id = UUID()
-        try insertClipboard(id: id, kind: .text, filename: nil, text: text, sourceApp: sourceApp, createdAt: now, contentHash: hash)
-        return ClipboardItem(id: id, kind: .text, filename: nil, text: text, sourceApp: sourceApp, createdAt: now)
-    }
-
-    private func insertClipboard(id: UUID, kind: ClipboardItem.Kind, filename: String?, text: String?, sourceApp: String?, createdAt: Date, contentHash: String? = nil) throws {
-        try queue.sync {
-            let sql = "INSERT INTO clipboard_items (id, kind, filename, text, source_app, created_at, content_hash) VALUES (?,?,?,?,?,?,?);"
-            var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
-            defer { sqlite3_finalize(stmt) }
-            Self.bind(stmt, 1, id.uuidString)
-            Self.bind(stmt, 2, kind.rawValue)
-            if let filename { Self.bind(stmt, 3, filename) } else { sqlite3_bind_null(stmt, 3) }
-            if let text { Self.bind(stmt, 4, text) } else { sqlite3_bind_null(stmt, 4) }
-            if let sourceApp { Self.bind(stmt, 5, sourceApp) } else { sqlite3_bind_null(stmt, 5) }
-            sqlite3_bind_double(stmt, 6, createdAt.timeIntervalSince1970)
-            if let contentHash { Self.bind(stmt, 7, contentHash) } else { sqlite3_bind_null(stmt, 7) }
-            guard sqlite3_step(stmt) == SQLITE_DONE else { throw StoreError.dbFailed }
-
-            // 保留最近 200 条，超出的删除并清理文件
-            sqlite3_exec(db, """
-                DELETE FROM clipboard_items WHERE id NOT IN (
-                    SELECT id FROM clipboard_items ORDER BY created_at DESC LIMIT 200
-                );
-                """, nil, nil, nil)
-        }
-    }
-
-    func listClipboard(limit: Int = 60) throws -> [ClipboardItem] {
-        try queue.sync {
-            let sql = "SELECT id, kind, filename, text, source_app, created_at FROM clipboard_items ORDER BY created_at DESC LIMIT ?;"
-            var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
-            defer { sqlite3_finalize(stmt) }
-            sqlite3_bind_int(stmt, 1, Int32(limit))
-
-            var items: [ClipboardItem] = []
-            while sqlite3_step(stmt) == SQLITE_ROW {
-                guard let idText = sqlite3_column_text(stmt, 0),
-                      let id = UUID(uuidString: String(cString: idText)),
-                      let kindText = sqlite3_column_text(stmt, 1),
-                      let kind = ClipboardItem.Kind(rawValue: String(cString: kindText))
-                else { continue }
-                let filename = sqlite3_column_text(stmt, 2).map { String(cString: $0) }
-                let text = sqlite3_column_text(stmt, 3).map { String(cString: $0) }
-                let sourceApp = sqlite3_column_text(stmt, 4).map { String(cString: $0) }
-                let createdAt = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 5))
-                items.append(ClipboardItem(id: id, kind: kind, filename: filename, text: text, sourceApp: sourceApp, createdAt: createdAt))
-            }
-            return items
-        }
-    }
-
-    func loadClipboardImage(_ item: ClipboardItem) -> CGImage? {
-        guard let url = clipboardImageURL(item) else { return nil }
+    func loadImage(_ record: ScreenshotRecord) -> CGImage? {
+        let url = baseDir.appendingPathComponent("Original").appendingPathComponent(record.filename)
         return Self.loadImage(at: url)
-    }
-
-    func clipboardImageURL(_ item: ClipboardItem) -> URL? {
-        guard let filename = item.filename else { return nil }
-        return baseDir.appendingPathComponent("Clipboard").appendingPathComponent(filename)
     }
 
     func screenshotOriginalURL(_ record: ScreenshotRecord) -> URL? {
         return baseDir.appendingPathComponent("Original").appendingPathComponent(record.filename)
     }
 
-    func deleteClipboardItem(id: UUID) throws {
-        try queue.sync {
-            var filename: String?
-            let querySql = "SELECT filename FROM clipboard_items WHERE id = ? LIMIT 1;"
-            var queryStmt: OpaquePointer?
-            if sqlite3_prepare_v2(db, querySql, -1, &queryStmt, nil) == SQLITE_OK {
-                Self.bind(queryStmt, 1, id.uuidString)
-                if sqlite3_step(queryStmt) == SQLITE_ROW {
-                    filename = sqlite3_column_text(queryStmt, 0).map { String(cString: $0) }
-                }
-                sqlite3_finalize(queryStmt)
-            }
-            if let filename {
-                let fileUrl = baseDir.appendingPathComponent("Clipboard").appendingPathComponent(filename)
-                try? FileManager.default.removeItem(at: fileUrl)
-            }
-
-            let deleteSql = "DELETE FROM clipboard_items WHERE id = ?;"
-            var deleteStmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, deleteSql, -1, &deleteStmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
-            defer { sqlite3_finalize(deleteStmt) }
-            Self.bind(deleteStmt, 1, id.uuidString)
-            guard sqlite3_step(deleteStmt) == SQLITE_DONE else { throw StoreError.dbFailed }
-        }
+    func loadThumbnail(_ record: ScreenshotRecord) -> CGImage? {
+        let url = baseDir.appendingPathComponent("Thumbnails").appendingPathComponent(record.filename)
+        return Self.loadImage(at: url)
     }
 
-    func clearClipboardHistory() throws {
-        try queue.sync {
-            sqlite3_exec(db, "DELETE FROM clipboard_items;", nil, nil, nil)
-            let dir = baseDir.appendingPathComponent("Clipboard")
-            if let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) {
-                for file in files { try? FileManager.default.removeItem(at: file) }
-            }
-        }
+    func thumbnailURL(_ record: ScreenshotRecord) -> URL? {
+        return baseDir.appendingPathComponent("Thumbnails").appendingPathComponent(record.filename)
     }
 
-    // MARK: - Auto Cleanup (过期自动删除)
-
-    struct CleanupResult {
-        let deletedScreenshots: Int
-        let deletedClipboardItems: Int
-        let deletedTextNotes: Int
-        var totalDeleted: Int { deletedScreenshots + deletedClipboardItems + deletedTextNotes }
+    static func loadImage(at url: URL) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        return CGImageSourceCreateImageAtIndex(source, 0, nil)
     }
 
-    @discardableResult
-    func cleanupOlderThan(cutoff: Date, preserveFavorites: Bool = true) -> CleanupResult {
-        var countScreenshots = 0
-        var countClips = 0
-        var countNotes = 0
-
-        queue.sync {
-            let cutoffSec = cutoff.timeIntervalSince1970
-
-            // 1. 清理过期截图
-            let favClause = preserveFavorites ? "AND is_favorite = 0" : ""
-            let selScreenshots = "SELECT id, filename FROM screenshots WHERE captured_at < ? \(favClause);"
-            var stmt: OpaquePointer?
-            if sqlite3_prepare_v2(db, selScreenshots, -1, &stmt, nil) == SQLITE_OK {
-                sqlite3_bind_double(stmt, 1, cutoffSec)
-                var toDelete: [(String, String)] = []
-                while sqlite3_step(stmt) == SQLITE_ROW {
-                    if let idStr = sqlite3_column_text(stmt, 0).map({ String(cString: $0) }),
-                       let fn = sqlite3_column_text(stmt, 1).map({ String(cString: $0) }) {
-                        toDelete.append((idStr, fn))
-                    }
-                }
-                sqlite3_finalize(stmt)
-
-                for (idStr, fn) in toDelete {
-                    let delSql = "DELETE FROM screenshots WHERE id = ?;"
-                    var delStmt: OpaquePointer?
-                    if sqlite3_prepare_v2(db, delSql, -1, &delStmt, nil) == SQLITE_OK {
-                        Self.bind(delStmt, 1, idStr)
-                        if sqlite3_step(delStmt) == SQLITE_DONE {
-                            countScreenshots += 1
-                            for sub in ["Original", "Thumbnails"] {
-                                let u = baseDir.appendingPathComponent(sub).appendingPathComponent(fn)
-                                try? FileManager.default.removeItem(at: u)
-                            }
-                        }
-                        sqlite3_finalize(delStmt)
-                    }
-                }
-            }
-
-            // 2. 清理过期剪贴板数据
-            let selClips = "SELECT id, filename FROM clipboard_items WHERE created_at < ?;"
-            var clipStmt: OpaquePointer?
-            if sqlite3_prepare_v2(db, selClips, -1, &clipStmt, nil) == SQLITE_OK {
-                sqlite3_bind_double(clipStmt, 1, cutoffSec)
-                var clipsToDelete: [(String, String?)] = []
-                while sqlite3_step(clipStmt) == SQLITE_ROW {
-                    if let idStr = sqlite3_column_text(clipStmt, 0).map({ String(cString: $0) }) {
-                        let fn = sqlite3_column_text(clipStmt, 1).map({ String(cString: $0) })
-                        clipsToDelete.append((idStr, fn))
-                    }
-                }
-                sqlite3_finalize(clipStmt)
-
-                for (idStr, fn) in clipsToDelete {
-                    let delSql = "DELETE FROM clipboard_items WHERE id = ?;"
-                    var delStmt: OpaquePointer?
-                    if sqlite3_prepare_v2(db, delSql, -1, &delStmt, nil) == SQLITE_OK {
-                        Self.bind(delStmt, 1, idStr)
-                        if sqlite3_step(delStmt) == SQLITE_DONE {
-                            countClips += 1
-                            if let fn {
-                                let u = baseDir.appendingPathComponent("Clipboard").appendingPathComponent(fn)
-                                try? FileManager.default.removeItem(at: u)
-                            }
-                        }
-                        sqlite3_finalize(delStmt)
-                    }
-                }
-            }
-
-            // 3. 清理过期便签
-            let noteFavClause = preserveFavorites ? "AND is_favorite = 0" : ""
-            let selNotes = "SELECT id FROM text_notes WHERE created_at < ? \(noteFavClause);"
-            var noteStmt: OpaquePointer?
-            if sqlite3_prepare_v2(db, selNotes, -1, &noteStmt, nil) == SQLITE_OK {
-                sqlite3_bind_double(noteStmt, 1, cutoffSec)
-                var notesToDelete: [String] = []
-                while sqlite3_step(noteStmt) == SQLITE_ROW {
-                    if let idStr = sqlite3_column_text(noteStmt, 0).map({ String(cString: $0) }) {
-                        notesToDelete.append(idStr)
-                    }
-                }
-                sqlite3_finalize(noteStmt)
-
-                for idStr in notesToDelete {
-                    let delSql = "DELETE FROM text_notes WHERE id = ?;"
-                    var delStmt: OpaquePointer?
-                    if sqlite3_prepare_v2(db, delSql, -1, &delStmt, nil) == SQLITE_OK {
-                        Self.bind(delStmt, 1, idStr)
-                        if sqlite3_step(delStmt) == SQLITE_DONE {
-                            countNotes += 1
-                        }
-                        sqlite3_finalize(delStmt)
-                    }
-                }
-            }
-        }
-
-        let res = CleanupResult(
-            deletedScreenshots: countScreenshots,
-            deletedClipboardItems: countClips,
-            deletedTextNotes: countNotes
-        )
-
-        if res.totalDeleted > 0 {
-            DispatchQueue.main.async {
-                NotificationCenter.default.post(name: .libraryChanged, object: nil)
-            }
-        }
-        return res
+    private func thumbnailSize(for image: CGImage) -> CGSize {
+        let targetWidth: CGFloat = 480
+        let scale = targetWidth / CGFloat(image.width)
+        return CGSize(width: targetWidth, height: CGFloat(image.height) * scale)
     }
 
-    // MARK: - Analytics (统计看板数据)
-
-    struct AnalyticsData {
-        struct DailyStat: Identifiable {
-            var id: String { dateString }
-            let date: Date
-            let dateString: String // "MM-dd"
-            let fullDateString: String // "yyyy-MM-dd"
-            let screenshotsCount: Int
-            let textCount: Int
-            var totalCount: Int { screenshotsCount + textCount }
-        }
-
-        struct HourlyStat: Identifiable {
-            var id: Int { hour }
-            let hour: Int // 0..23
-            let screenshotsCount: Int
-            let textCount: Int
-            var totalCount: Int { screenshotsCount + textCount }
-        }
-
-        struct AppStat: Identifiable {
-            var id: String { appName }
-            let appName: String
-            let count: Int
-            let percentage: Double
-        }
-
-        let totalScreenshots: Int
-        let totalTextClips: Int
-        let totalNotes: Int
-        let todayScreenshots: Int
-        let todayTextClips: Int
-        let totalDiskBytes: Int64
-        let peakHour: Int
-        let dailyStats: [DailyStat]
-        let hourlyStats: [HourlyStat]
-        let topApps: [AppStat]
-    }
-
-    func fetchAnalyticsData(scopeDays: Int = 14) -> AnalyticsData {
-        let calendar = Calendar.current
-        let now = Date()
-
-        let allRecords = (try? list()) ?? []
-        let allClips = (try? listClipboard(limit: 1000)) ?? []
-        let allNotes = (try? listTextNotes()) ?? []
-
-        var totalBytes: Int64 = 0
-        for r in allRecords { totalBytes += Int64(r.fileSize) }
-
-        var todayScreenshots = 0
-        for r in allRecords where calendar.isDateInToday(r.capturedAt) {
-            todayScreenshots += 1
-        }
-
-        var todayText = 0
-        for c in allClips where c.kind == .text && calendar.isDateInToday(c.createdAt) {
-            todayText += 1
-        }
-
-        // 1. 每日统计 (Daily)
-        let dfShort = DateFormatter()
-        dfShort.dateFormat = "MM-dd"
-        let dfFull = DateFormatter()
-        dfFull.dateFormat = "yyyy-MM-dd"
-
-        var dailyMap: [String: (date: Date, shots: Int, texts: Int)] = [:]
-        for i in 0..<scopeDays {
-            if let d = calendar.date(byAdding: .day, value: -(scopeDays - 1 - i), to: now) {
-                let key = dfFull.string(from: d)
-                dailyMap[key] = (d, 0, 0)
-            }
-        }
-
-        for r in allRecords {
-            let key = dfFull.string(from: r.capturedAt)
-            if var entry = dailyMap[key] {
-                entry.shots += 1
-                dailyMap[key] = entry
-            }
-        }
-        for c in allClips where c.kind == .text {
-            let key = dfFull.string(from: c.createdAt)
-            if var entry = dailyMap[key] {
-                entry.texts += 1
-                dailyMap[key] = entry
-            }
-        }
-
-        let sortedDailyKeys = dailyMap.keys.sorted()
-        let dailyStats: [AnalyticsData.DailyStat] = sortedDailyKeys.compactMap { key in
-            guard let entry = dailyMap[key] else { return nil }
-            return AnalyticsData.DailyStat(
-                date: entry.date,
-                dateString: dfShort.string(from: entry.date),
-                fullDateString: key,
-                screenshotsCount: entry.shots,
-                textCount: entry.texts
-            )
-        }
-
-        // 2. 24小时分布统计 (Hourly 00:00 - 23:00)
-        var hourlyShots = Array(repeating: 0, count: 24)
-        var hourlyTexts = Array(repeating: 0, count: 24)
-
-        for r in allRecords {
-            let h = calendar.component(.hour, from: r.capturedAt)
-            if h >= 0 && h < 24 { hourlyShots[h] += 1 }
-        }
-        for c in allClips where c.kind == .text {
-            let h = calendar.component(.hour, from: c.createdAt)
-            if h >= 0 && h < 24 { hourlyTexts[h] += 1 }
-        }
-
-        var peakH = 14
-        var maxTotalInHour = -1
-        var hourlyStats: [AnalyticsData.HourlyStat] = []
-        for h in 0..<24 {
-            let sCount = hourlyShots[h]
-            let tCount = hourlyTexts[h]
-            let sum = sCount + tCount
-            if sum > maxTotalInHour {
-                maxTotalInHour = sum
-                peakH = h
-            }
-            hourlyStats.append(AnalyticsData.HourlyStat(
-                hour: h,
-                screenshotsCount: sCount,
-                textCount: tCount
-            ))
-        }
-
-        // 3. 来源应用排行 Top 5
-        var appCounts: [String: Int] = [:]
-        for c in allClips {
-            let app = c.sourceApp?.trimmingCharacters(in: .whitespaces) ?? "未知应用"
-            if !app.isEmpty { appCounts[app, default: 0] += 1 }
-        }
-        for n in allNotes {
-            let app = n.sourceApp?.trimmingCharacters(in: .whitespaces) ?? "文字收纳"
-            if !app.isEmpty { appCounts[app, default: 0] += 1 }
-        }
-        appCounts["截图", default: 0] += allRecords.count
-
-        let totalAppActions = max(1, appCounts.values.reduce(0, +))
-        let sortedApps = appCounts.sorted { $0.value > $1.value }.prefix(6)
-        let topApps: [AnalyticsData.AppStat] = sortedApps.map { (k, v) in
-            AnalyticsData.AppStat(
-                appName: k,
-                count: v,
-                percentage: Double(v) / Double(totalAppActions)
-            )
-        }
-
-        return AnalyticsData(
-            totalScreenshots: allRecords.count,
-            totalTextClips: allClips.filter { $0.kind == .text }.count,
-            totalNotes: allNotes.count,
-            todayScreenshots: todayScreenshots,
-            todayTextClips: todayText,
-            totalDiskBytes: totalBytes,
-            peakHour: peakH,
-            dailyStats: dailyStats,
-            hourlyStats: hourlyStats,
-            topApps: topApps
-        )
-    }
-
-    enum StoreError: LocalizedError {
+    enum StoreError: LocalizedError, Equatable {
+        case directoryCreationFailed(URL, String)
+        case dbOpenFailed(URL, String)
         case imageEncodeFailed
         case thumbnailFailed
         case dbFailed
 
         var errorDescription: String? {
             switch self {
+            case .directoryCreationFailed(let url, let reason):
+                "目录创建失败 (\(url.path)): \(reason)"
+            case .dbOpenFailed(let url, let reason):
+                "数据库打开失败 (\(url.path)): \(reason)"
             case .imageEncodeFailed: "图片编码失败"
             case .thumbnailFailed: "缩略图生成失败"
             case .dbFailed: "数据库操作失败"

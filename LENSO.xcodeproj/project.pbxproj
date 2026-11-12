@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0611E384B3B1B1F988A25A3C /* ScreenshotStore+Analytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DA52241CE3AECDAA44DA665 /* ScreenshotStore+Analytics.swift */; };
 		0AF1DFAA4D092400748BC9E4 /* SearchPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F27A5A1C366022DF7397C5F /* SearchPanelController.swift */; };
 		0BA61594A08EF380AA38A1E0 /* TranslationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 877A569F97194ADB3A26C379 /* TranslationProvider.swift */; };
 		1A9A8DE9E043C4E325009F7C /* TextNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3C18A26380F00F9ED01AAC3 /* TextNotesView.swift */; };
@@ -17,6 +18,7 @@
 		262EC4CDBA3F5ACC06A7D167 /* SelectionOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61FA2619E357175E925D798D /* SelectionOverlayView.swift */; };
 		296D82716BB78111AC67F889 /* NoteEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFB662904840CB9F5885D0C1 /* NoteEditorSheet.swift */; };
 		2D5A9F058D3292FB5411D7F4 /* LensoLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C9500803224317D40B6EF66 /* LensoLibraryView.swift */; };
+		2D7249ACB8A8F2988126FD79 /* LensoMCPServer+Tools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BFE90DC05F8B3F2B9CC7173 /* LensoMCPServer+Tools.swift */; };
 		300D741CE9EEC54FF811A750 /* LibraryImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27A12E562F3E75E7654448B1 /* LibraryImage.swift */; };
 		308025B66ECD2E6CA69FC9AB /* ProviderRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DDFCE770C2C6B4A17F5FBEF /* ProviderRegistry.swift */; };
 		310AC41A22BE3343B7256CED /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31069BB5B89E8C5FB8247AD7 /* AppSettings.swift */; };
@@ -32,6 +34,7 @@
 		4E2F158CBC40B7142F348F10 /* ScreenCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9EB971207FEF63A60AE956 /* ScreenCaptureService.swift */; };
 		50CF58FDBB57ED09582DAB39 /* CaptureEditorView+Rendering.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E96E3182AA6BE724B857007 /* CaptureEditorView+Rendering.swift */; };
 		530DF77AF207713354D20F23 /* ShortcutAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202185ADE6715D504D7EB55B /* ShortcutAction.swift */; };
+		5D56A03E14FE3FCB299FAA45 /* ScreenshotStore+TextNotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BD03DF02BFF1DD1EB261EF9 /* ScreenshotStore+TextNotes.swift */; };
 		5E44D7BE4532C0B89364F604 /* PinnedPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63F18A5427F062C7DE80D80B /* PinnedPanel.swift */; };
 		63B8E27F17695B0D58261964 /* LensoRadius.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6629E0A218BB4F749B26F653 /* LensoRadius.swift */; };
 		6487CCF571CF67B5D891A7B6 /* LocalTranslationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13C841ABBC94B98F90482EB7 /* LocalTranslationProvider.swift */; };
@@ -52,6 +55,7 @@
 		8A053A317CB5D595422AA5CF /* LibraryWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE319A913EF71A6473D9DA2 /* LibraryWindowView.swift */; };
 		8BE7DED61C9EC55C98155854 /* CaptureEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51F18440E25048F21350866B /* CaptureEditorView.swift */; };
 		928281151374A4BDD8D0E037 /* ScreenshotStoreSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B81A568E9C7979CF07D4649 /* ScreenshotStoreSmokeTests.swift */; };
+		9446F5B38015B89C9D75D753 /* ScreenshotStoreErrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53F85D5B035951804AA98425 /* ScreenshotStoreErrorTests.swift */; };
 		949F2379957DF484D0042FC9 /* ClipboardPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE3FCF1084A3CEA10F815351 /* ClipboardPanelController.swift */; };
 		95CB31807F3B6DBCA946F821 /* VisionOCRProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B32B0E3248D1E1B3977D21C1 /* VisionOCRProvider.swift */; };
 		96AC4AAB68AEB4F0EE3EDC30 /* LensoMaterials.swift in Sources */ = {isa = PBXBuildFile; fileRef = B774C35C380B7D917F97F431 /* LensoMaterials.swift */; };
@@ -72,6 +76,7 @@
 		D56366CAE97F29BC4080CCDD /* EditingComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41222AD41C09728906A0315C /* EditingComponents.swift */; };
 		D5B91F2ED5C521F4E15D0686 /* ShortcutStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 135EF660F9BA9A889666F34B /* ShortcutStore.swift */; };
 		DE568699012109BCB32B82B4 /* ClipboardMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BDA7F5691661D2318B5AB81 /* ClipboardMonitor.swift */; };
+		E30CD1FB7A8947B2034EDCB9 /* ScreenshotStore+Clipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB39BDB337D37DAF198C8E6 /* ScreenshotStore+Clipboard.swift */; };
 		E71287CEB3C2A6436ECFC0D8 /* MCPMessageCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A106FF95B8D7E0291F155A9 /* MCPMessageCodec.swift */; };
 		E8A1E10D92154E1F0DDD271E /* PreviewWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD209F1E73612BFE09EF7A77 /* PreviewWindowView.swift */; };
 		EA8F47115E3516693BF94D72 /* CaptureEditorLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DC6F3181397AE48FCB7B45C /* CaptureEditorLayout.swift */; };
@@ -103,6 +108,8 @@
 		135EF660F9BA9A889666F34B /* ShortcutStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutStore.swift; sourceTree = "<group>"; };
 		13C841ABBC94B98F90482EB7 /* LocalTranslationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTranslationProvider.swift; sourceTree = "<group>"; };
 		17B81EF42D2A3A0FDE2294D3 /* LensoMCPServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoMCPServer.swift; sourceTree = "<group>"; };
+		1BD03DF02BFF1DD1EB261EF9 /* ScreenshotStore+TextNotes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ScreenshotStore+TextNotes.swift"; sourceTree = "<group>"; };
+		1BFE90DC05F8B3F2B9CC7173 /* LensoMCPServer+Tools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LensoMCPServer+Tools.swift"; sourceTree = "<group>"; };
 		202185ADE6715D504D7EB55B /* ShortcutAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutAction.swift; sourceTree = "<group>"; };
 		23AB2FC879FA87DFEC9E48FD /* SettingsWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowView.swift; sourceTree = "<group>"; };
 		253AE39E10F62B39843EA8E1 /* MenuBarPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPanelView.swift; sourceTree = "<group>"; };
@@ -110,6 +117,7 @@
 		27A12E562F3E75E7654448B1 /* LibraryImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryImage.swift; sourceTree = "<group>"; };
 		2AB003CD37209DD64C011EA3 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		2C9EB971207FEF63A60AE956 /* ScreenCaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCaptureService.swift; sourceTree = "<group>"; };
+		2DA52241CE3AECDAA44DA665 /* ScreenshotStore+Analytics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ScreenshotStore+Analytics.swift"; sourceTree = "<group>"; };
 		3031C0220EE701B03107A142 /* EditorPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorPanel.swift; sourceTree = "<group>"; };
 		31069BB5B89E8C5FB8247AD7 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		3326A48E064867C956689606 /* CapturePermissionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapturePermissionService.swift; sourceTree = "<group>"; };
@@ -119,6 +127,7 @@
 		5080262241D8FE4DC09C334E /* CaptureProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureProtocols.swift; sourceTree = "<group>"; };
 		51F18440E25048F21350866B /* CaptureEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureEditorView.swift; sourceTree = "<group>"; };
 		53A5FF2F92852CF47FF402B8 /* LensoMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoMark.swift; sourceTree = "<group>"; };
+		53F85D5B035951804AA98425 /* ScreenshotStoreErrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotStoreErrorTests.swift; sourceTree = "<group>"; };
 		558D02748CC0113C3987ED96 /* LENSO.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LENSO.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5DE319A913EF71A6473D9DA2 /* LibraryWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryWindowView.swift; sourceTree = "<group>"; };
 		61852D60891BBD9485F0A630 /* SaveToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveToast.swift; sourceTree = "<group>"; };
@@ -165,6 +174,7 @@
 		CD209F1E73612BFE09EF7A77 /* PreviewWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewWindowView.swift; sourceTree = "<group>"; };
 		D93797B089581C688C44523A /* WindowConfigurator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowConfigurator.swift; sourceTree = "<group>"; };
 		DB8EC9C1D622C9710C862636 /* TextIntelligence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextIntelligence.swift; sourceTree = "<group>"; };
+		DEB39BDB337D37DAF198C8E6 /* ScreenshotStore+Clipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ScreenshotStore+Clipboard.swift"; sourceTree = "<group>"; };
 		E39A3A4D31663FA84824550F /* AnalyticsDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsDashboardView.swift; sourceTree = "<group>"; };
 		F7E44F0DE297A9F2CCB87BF6 /* PinnedToolbarViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedToolbarViews.swift; sourceTree = "<group>"; };
 		FE3FCF1084A3CEA10F815351 /* ClipboardPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPanelController.swift; sourceTree = "<group>"; };
@@ -195,6 +205,7 @@
 				5080262241D8FE4DC09C334E /* CaptureProtocols.swift */,
 				C126297582173D0BA7E950D0 /* LensoLocalService.swift */,
 				17B81EF42D2A3A0FDE2294D3 /* LensoMCPServer.swift */,
+				1BFE90DC05F8B3F2B9CC7173 /* LensoMCPServer+Tools.swift */,
 				8A106FF95B8D7E0291F155A9 /* MCPMessageCodec.swift */,
 				ABC9A216CFCB35B3DC4B5132 /* NotificationNames.swift */,
 				61852D60891BBD9485F0A630 /* SaveToast.swift */,
@@ -262,6 +273,7 @@
 			children = (
 				C5F396A325DCEEFB54682870 /* CaptureStateMachineTests.swift */,
 				710BC10338C23E3F8CA71C9A /* MCPCodecTests.swift */,
+				53F85D5B035951804AA98425 /* ScreenshotStoreErrorTests.swift */,
 				7B81A568E9C7979CF07D4649 /* ScreenshotStoreSmokeTests.swift */,
 				09EDC975DD0E0B048782A224 /* ScreenshotStoreTests.swift */,
 			);
@@ -352,6 +364,9 @@
 				86C78002C2F37CAB9153ED45 /* RegionSelectorWindow.swift */,
 				2C9EB971207FEF63A60AE956 /* ScreenCaptureService.swift */,
 				6D3AF7C7AB4090B43A75631B /* ScreenshotStore.swift */,
+				2DA52241CE3AECDAA44DA665 /* ScreenshotStore+Analytics.swift */,
+				DEB39BDB337D37DAF198C8E6 /* ScreenshotStore+Clipboard.swift */,
+				1BD03DF02BFF1DD1EB261EF9 /* ScreenshotStore+TextNotes.swift */,
 				918A3C1CAB5A278A99DB0630 /* Providers */,
 			);
 			path = Infrastructure;
@@ -526,6 +541,7 @@
 				2509AA1345F0E0D358BF382B /* LensoGlassPanel.swift in Sources */,
 				2D5A9F058D3292FB5411D7F4 /* LensoLibraryView.swift in Sources */,
 				6D51C982C93FC44C617A9B30 /* LensoLocalService.swift in Sources */,
+				2D7249ACB8A8F2988126FD79 /* LensoMCPServer+Tools.swift in Sources */,
 				44664630634ABEC3686AEF97 /* LensoMCPServer.swift in Sources */,
 				7411FB463E194F750DFE3FD4 /* LensoMark.swift in Sources */,
 				96AC4AAB68AEB4F0EE3EDC30 /* LensoMaterials.swift in Sources */,
@@ -555,6 +571,9 @@
 				20F723F27026817794C9859C /* RegionSelectorWindow.swift in Sources */,
 				3B725BFD879E49FFCC8DA38C /* SaveToast.swift in Sources */,
 				4E2F158CBC40B7142F348F10 /* ScreenCaptureService.swift in Sources */,
+				0611E384B3B1B1F988A25A3C /* ScreenshotStore+Analytics.swift in Sources */,
+				E30CD1FB7A8947B2034EDCB9 /* ScreenshotStore+Clipboard.swift in Sources */,
+				5D56A03E14FE3FCB299FAA45 /* ScreenshotStore+TextNotes.swift in Sources */,
 				A0A0C969EDE1C8AE41F7FA07 /* ScreenshotStore.swift in Sources */,
 				0AF1DFAA4D092400748BC9E4 /* SearchPanelController.swift in Sources */,
 				3F8B2F39F47F8C1AC0BBF278 /* SearchPanelView.swift in Sources */,
@@ -579,6 +598,7 @@
 			files = (
 				75F200BB43C6491973E52E34 /* CaptureStateMachineTests.swift in Sources */,
 				821D5BBF2F3F92331EAF87CD /* MCPCodecTests.swift in Sources */,
+				9446F5B38015B89C9D75D753 /* ScreenshotStoreErrorTests.swift in Sources */,
 				928281151374A4BDD8D0E037 /* ScreenshotStoreSmokeTests.swift in Sources */,
 				9CD530A11D08C5042F9C71F6 /* ScreenshotStoreTests.swift in Sources */,
 			);
