@@ -84,44 +84,59 @@ struct LibrarySidebarView: View {
 
     private var settingsMenuSection: some View {
         VStack(alignment: .leading, spacing: 2) {
-            // 一级菜单项：偏好设置
+            // 分割线，自然分离主功能与偏好设置
+            Rectangle()
+                .fill(Color.black.opacity(0.06))
+                .frame(height: 1)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+
+            // 一级菜单项：偏好设置（点击整行始终直达通用设置，绝不反向折叠）
             HStack(spacing: 9) {
                 Image(systemName: "gearshape.fill")
                     .font(.system(size: 13, weight: section.isSettings ? .semibold : .medium))
-                    .foregroundStyle(section.isSettings ? LensoColors.kleinBlueBright : Color(red: 0.18, green: 0.18, blue: 0.22))
+                    .foregroundStyle(section.isSettings && !isSettingsExpanded ? .white : (section.isSettings ? LensoColors.kleinBlueBright : Color(red: 0.18, green: 0.18, blue: 0.22)))
                     .frame(width: 18)
 
                 Text("偏好设置")
                     .font(.system(size: 13, weight: section.isSettings ? .semibold : .medium))
-                    .foregroundStyle(Color(red: 0.18, green: 0.18, blue: 0.22))
+                    .foregroundStyle(section.isSettings && !isSettingsExpanded ? .white : Color(red: 0.18, green: 0.18, blue: 0.22))
 
                 Spacer()
 
-                Image(systemName: isSettingsExpanded ? "chevron.down" : "chevron.right")
+                // 折叠/展开独立按钮：平滑弹性旋转，专司收放，不干扰整行直达
+                Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Color.secondary.opacity(0.8))
+                    .foregroundStyle(section.isSettings && !isSettingsExpanded ? Color.white.opacity(0.9) : Color.secondary.opacity(0.7))
+                    .rotationEffect(.degrees(isSettingsExpanded ? 90 : 0))
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                            isSettingsExpanded.toggle()
+                        }
+                    }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
+            .background {
+                if section.isSettings && !isSettingsExpanded {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(LensoColors.kleinBlueBright)
+                        .shadow(color: LensoColors.kleinBlueBright.opacity(0.28), radius: 6, y: 2)
+                }
+            }
             .contentShape(Rectangle())
             .onTapGesture {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    if !isSettingsExpanded {
-                        isSettingsExpanded = true
-                        if !section.isSettings {
-                            section = .settings(.general)
-                        }
-                    } else {
-                        if !section.isSettings {
-                            section = .settings(.general)
-                        } else {
-                            isSettingsExpanded.toggle()
-                        }
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                    isSettingsExpanded = true
+                    if !section.isSettings {
+                        section = .settings(.general)
                     }
                 }
             }
 
-            // 二级菜单：铺开各功能项
+            // 二级菜单：原生柔和透明度过渡，杜绝突兀的上下位移穿越
             if isSettingsExpanded {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(SettingsCategory.allCases) { cat in
@@ -155,7 +170,7 @@ struct LibrarySidebarView: View {
                     }
                 }
                 .padding(.top, 1)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .transition(.opacity)
             }
         }
     }
