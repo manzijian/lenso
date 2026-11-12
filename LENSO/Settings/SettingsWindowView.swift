@@ -282,22 +282,17 @@ struct SettingsWindowView: View {
 
     private var agentGuidePrompt: String {
         """
-        请帮我连接并配置本地运行的 LENSO 剪贴板历史与截图服务（MCP / 本地服务）：
+        请在你的 MCP 配置中添加本地 LENSO 剪贴板与截图服务：
 
-        【本地服务信息】
-        - MCP SSE 端点: http://127.0.0.1:52888/sse
-        - MCP HTTP 端点: http://127.0.0.1:52888/mcp
-        - 剪贴板 REST API: GET http://127.0.0.1:52888/api/clipboard
-        - 最新截图 REST API: GET http://127.0.0.1:52888/api/screenshot/latest
+        {
+          "mcpServers": {
+            "lenso": {
+              "url": "http://127.0.0.1:52888/sse"
+            }
+          }
+        }
 
-        【配置方式】
-        1. 若支持 MCP SSE（如 Cursor / Claude / Antigravity 等）：
-           在 mcpServers 中加入：
-           "lenso": { "url": "http://127.0.0.1:52888/sse" }
-        2. 纯代码或脚本调用：
-           直接请求 http://127.0.0.1:52888/api/clipboard 即可读取最近剪贴板。
-
-        请确认已就绪，并告诉我你能读取到什么。
+        配置完成后，你即可在对话中随时调用 LENSO 提供的工具，读取我最近复制的文字、截图历史及收纳便签。
         """
     }
 
@@ -320,11 +315,11 @@ struct SettingsWindowView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 8) {
                         Circle().fill(Color.green).frame(width: 8, height: 8)
-                        Text("本地网络服务已就绪 (127.0.0.1:52888)")
+                        Text("MCP 本地服务已就绪")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(LensoColors.kleinBlueBright)
                         Spacer()
-                        Text("SSE / HTTP / MCP")
+                        Text("MCP over SSE")
                             .font(.system(size: 11, weight: .medium, design: .monospaced))
                             .foregroundStyle(LensoColors.kleinBlueBright)
                             .padding(.horizontal, 6)
@@ -332,32 +327,21 @@ struct SettingsWindowView: View {
                             .background(Capsule().fill(LensoColors.kleinBlueSoft))
                     }
 
-                    Text("无需配置系统二进制复杂路径，通过本地网络端口即可让任意 AI Agent、脚本或自动化工具直接读取你的剪贴板历史与最新截图。")
+                    Text("LENSO 内置标准的 Model Context Protocol (MCP) 服务。无需配置复杂的系统二进制文件路径，AI Agent（如 Cursor、Claude Desktop、Windsurf、Antigravity 等）只需通过本地 MCP 地址即可直接挂载连接。")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .lineSpacing(3)
 
                     Divider().opacity(0.6)
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 8) {
-                            Text("MCP SSE 地址:")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(Color.primary.opacity(0.7))
-                            Text("http://127.0.0.1:52888/sse")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(LensoColors.kleinBlueBright)
-                                .textSelection(.enabled)
-                        }
-                        HStack(spacing: 8) {
-                            Text("免协议 REST API:")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(Color.primary.opacity(0.7))
-                            Text("GET http://127.0.0.1:52888/api/clipboard")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(Color.primary.opacity(0.85))
-                                .textSelection(.enabled)
-                        }
+                    HStack(spacing: 8) {
+                        Text("MCP 服务地址:")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Color.primary.opacity(0.75))
+                        Text("http://127.0.0.1:52888/sse")
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(LensoColors.kleinBlueBright)
+                            .textSelection(.enabled)
                     }
                 }
                 .padding(16)
@@ -404,7 +388,7 @@ struct SettingsWindowView: View {
             // JSON 配置文件
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("MCP SSE 客户端配置 JSON")
+                    Text("MCP 客户端配置代码块")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.primary.opacity(0.85))
                     Spacer()
@@ -412,7 +396,7 @@ struct SettingsWindowView: View {
                         let pb = NSPasteboard.general
                         pb.clearContents()
                         pb.setString(sseJsonConfig, forType: .string)
-                        SaveToastController.shared.show(title: "已复制 SSE 配置 JSON", subtitle: "可粘贴至 Claude / Cursor 的 mcpServers 中", thumbnail: nil)
+                        SaveToastController.shared.show(title: "已复制 MCP 配置 JSON", subtitle: "可粘贴至 Claude / Cursor 的 mcpServers 中", thumbnail: nil)
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "doc.on.doc")

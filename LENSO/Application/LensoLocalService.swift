@@ -185,15 +185,6 @@ final class LensoLocalService: @unchecked Sendable {
             let sessionId = queryItems.first(where: { $0.name == "sessionId" })?.value ?? ""
             handleMessagePost(sessionId: sessionId, bodyData: bodyData, connection: connection)
 
-        case ("POST", "/mcp"), ("POST", "/"):
-            handleDirectJSONRPC(bodyData: bodyData, connection: connection)
-
-        case ("GET", "/api/clipboard"):
-            handleGetClipboard(queryItems: queryItems, connection: connection)
-
-        case ("GET", "/api/screenshot/latest"):
-            handleGetLatestScreenshot(connection: connection)
-
         case ("GET", "/status"), ("GET", "/"):
             handleGetStatus(connection: connection)
 
@@ -295,95 +286,15 @@ final class LensoLocalService: @unchecked Sendable {
         }
     }
 
-    private func handleDirectJSONRPC(bodyData: Data, connection: NWConnection) {
-        guard let json = (try? JSONSerialization.jsonObject(with: bodyData)) as? [String: Any] else {
-            sendJSONResponse(connection: connection, statusCode: 400, statusText: "Bad Request", payload: ["error": "Invalid JSON"])
-            return
-        }
-
-        if let result = LensoMCPServer.shared.process(json: json) {
-            sendJSONResponse(connection: connection, statusCode: 200, statusText: "OK", payload: result)
-        } else {
-            sendJSONResponse(connection: connection, statusCode: 204, statusText: "No Content", payload: [:])
-        }
-    }
-
-    private func handleGetClipboard(queryItems: [URLQueryItem], connection: NWConnection) {
-        let limit = min(max(Int(queryItems.first(where: { $0.name == "limit" })?.value ?? "") ?? 30, 1), 100)
-        let kindFilter = queryItems.first(where: { $0.name == "kind" })?.value ?? "all"
-
-        let items = (try? ScreenshotStore.shared.listClipboard(limit: 120)) ?? []
-        var resultList: [[String: Any]] = []
-
-        for item in items {
-            if kindFilter == "text" && item.kind != .text { continue }
-            if kindFilter == "image" && item.kind != .image { continue }
-
-            var dict: [String: Any] = [
-                "id": item.id.uuidString,
-                "kind": item.kind.rawValue,
-                "source_app": item.sourceApp ?? "Unknown",
-                "created_at": isoFormatter.string(from: item.createdAt)
-            ]
-
-            if item.kind == .text {
-                dict["content"] = item.text ?? ""
-                dict["char_count"] = (item.text ?? "").count
-            } else if item.kind == .image {
-                dict["image_file_path"] = ScreenshotStore.shared.clipboardImageURL(item)?.path ?? ""
-            }
-
-            resultList.append(dict)
-            if resultList.count >= limit { break }
-        }
-
-        sendJSONResponse(connection: connection, statusCode: 200, statusText: "OK", payload: [
-            "status": "ok",
-            "count": resultList.count,
-            "items": resultList
-        ])
-    }
-
-    private func handleGetLatestScreenshot(connection: NWConnection) {
-        let records = (try? ScreenshotStore.shared.list()) ?? []
-        if let newest = records.first {
-            let path = ScreenshotStore.shared.screenshotOriginalURL(newest)?.path ?? ""
-            let payload: [String: Any] = [
-                "status": "ok",
-                "screenshot": [
-                    "id": newest.id.uuidString,
-                    "filename": newest.filename,
-                    "file_path": path,
-                    "width": newest.width,
-                    "height": newest.height,
-                    "file_size_bytes": newest.fileSize,
-                    "is_favorite": newest.isFavorite,
-                    "captured_at": isoFormatter.string(from: newest.capturedAt)
-                ]
-            ]
-            sendJSONResponse(connection: connection, statusCode: 200, statusText: "OK", payload: payload)
-        } else {
-            sendJSONResponse(connection: connection, statusCode: 404, statusText: "Not Found", payload: [
-                "status": "empty",
-                "message": "当前暂无截图记录"
-            ])
-        }
-    }
-
     private func handleGetStatus(connection: NWConnection) {
         let payload: [String: Any] = [
             "status": "online",
             "app": "LENSO",
-            "service": "Lenso Local Assistant & MCP Service",
+            "service": "Lenso Local MCP Service",
+            "protocol": "Model Context Protocol (MCP)",
             "version": "1.0.0",
             "port": currentPort,
-            "endpoints": [
-                "mcp_sse": "http://127.0.0.1:\(currentPort)/sse",
-                "mcp_http": "http://127.0.0.1:\(currentPort)/mcp",
-                "clipboard_api": "http://127.0.0.1:\(currentPort)/api/clipboard",
-                "latest_screenshot_api": "http://127.0.0.1:\(currentPort)/api/screenshot/latest"
-            ],
-            "docs": "可以直接使用 GET /api/clipboard 获取最近剪贴板，或添加 mcpServers 指向 /sse"
+            "mcp_sse_endpoint": "http://127.0.0.1:\(currentPort)/sse"
         ]
         sendJSONResponse(connection: connection, statusCode: 200, statusText: "OK", payload: payload)
     }
