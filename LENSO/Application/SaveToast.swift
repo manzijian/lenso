@@ -8,6 +8,9 @@ final class SaveToastController {
     private var hideTask: Task<Void, Never>?
 
     func show(title: String = "截图已保存", subtitle: String = "到图片库", thumbnail: CGImage?) {
+        // 用户在设置中关闭浮动提示时，直接拦截不显示
+        guard AppSettings.shared.showFloatingPreview else { return }
+
         hideTask?.cancel()
         panel?.orderOut(nil)
         panel?.close()

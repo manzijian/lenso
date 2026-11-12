@@ -43,6 +43,8 @@ struct SettingsSectionContentView: View {
                     rowDivider
                     SettingToggleRow(label: "截图保存后打开预览窗口", subtitle: "截完图后自动打开独立无极缩放预览", isOn: $settings.showPreviewAfterCapture)
                     rowDivider
+                    SettingToggleRow(label: "复制与保存成功后在右下角弹出提醒", subtitle: "复制文本、图片或截图保存时，在屏幕右下角显示浮动气泡反馈", isOn: $settings.showFloatingPreview)
+                    rowDivider
                     SettingToggleRow(label: "开启 MCP 本地服务", subtitle: "允许本地 AI Agent（Claude、Cursor 等）安全读取历史与剪贴板", isOn: $settings.enableMCPServer)
                 }
 
@@ -158,7 +160,7 @@ struct SettingsSectionContentView: View {
             settingCard {
                 SettingToggleRow(label: "截图后自动复制到剪贴板", subtitle: "截完直接 ⌘V 粘贴使用", isOn: $settings.autoCopyAfterCapture)
                 rowDivider
-                SettingToggleRow(label: "显示浮动轻提示 (Toast)", subtitle: "截图保存或复制时在屏幕右上角给出反馈", isOn: $settings.showFloatingPreview)
+                SettingToggleRow(label: "复制与保存成功后在右下角弹出提醒", subtitle: "复制文本、图片或截图保存时，在屏幕右下角显示浮动气泡反馈", isOn: $settings.showFloatingPreview)
             }
 
         case .shortcuts:
