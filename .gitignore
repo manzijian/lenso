@@ -1,6 +1,7 @@
 .DS_Store
 build/
 DerivedData/
+LENSO.xcodeproj/
 *.xcodeproj/project.xcworkspace/xcuserdata/
 xcuserdata/
 .swiftpm/
