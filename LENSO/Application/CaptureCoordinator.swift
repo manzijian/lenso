@@ -291,64 +291,7 @@ final class CaptureCoordinator: NSObject {
     }
 }
 
-/// 编辑器覆盖面板：Esc 取消，滚轮缩放选区，右键取消/退回上一级
-final class EditorPanel: NSPanel {
-    var onCancel: (() -> Void)?
-    override var canBecomeKey: Bool { true }
-    override func cancelOperation(_ sender: Any?) { onCancel?() }
-    override func scrollWheel(with event: NSEvent) {
-        NotificationCenter.default.post(name: .editorScrollWheel, object: event)
-    }
-    override func rightMouseDown(with event: NSEvent) {
-        NotificationCenter.default.post(name: .editorRightClick, object: event)
-    }
-}
-
-/// 贴图/预览浮动面板：支持 Esc、⌘W 一键彻底关闭，空格切换工具栏，响应键盘事件
-final class PinnedPanel: NSPanel {
-    var onCancel: (() -> Void)?
-    var onSpace: (() -> Void)?
-
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { true }
-
-    override func cancelOperation(_ sender: Any?) {
-        onCancel?()
-    }
-
-    override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 { // Esc 键立即彻底关闭
-            onCancel?()
-            return
-        }
-        if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "w" { // ⌘W
-            onCancel?()
-            return
-        }
-        if event.keyCode == 49 { // 空格键切换底部编辑栏
-            onSpace?()
-            return
-        }
-        super.keyDown(with: event)
-    }
-}
-
 // MARK: - 贴图控制器与独立浮动工具栏（专属针对贴图操作，不遮挡屏幕也不进入二次截图）
-
-@Observable
-final class PinnedEditorState {
-    var isSidePanelVisible = false
-    var panelTab: PanelTab = .ocr
-    var ocrPhase: OCRPhase = .idle
-    var ocrLines: [RecognizedText] = []
-    var ocrErrorMessage: String? = nil
-    var translationPhase: TranslationPhase = .idle
-    var translations: [UUID: String] = [:]
-    var translationErrorMessage: String? = nil
-    var justSavedNote: Bool = false
-    @ObservationIgnored var ocrTask: Task<Void, Never>?
-    @ObservationIgnored var translationTask: Task<Void, Never>?
-}
 
 @MainActor
 final class PinnedScreenshotController: NSObject {
