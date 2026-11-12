@@ -8,6 +8,10 @@ final class SearchPanel: NSPanel {
     override func cancelOperation(_ sender: Any?) { onCancel?() }
 }
 
+extension Notification.Name {
+    static let searchPanelShouldReload = Notification.Name("com.lenso.searchPanelShouldReload")
+}
+
 /// 全局搜索浮动窗（参考图 4 顶部 Spotlight 风格胶囊）
 @MainActor
 final class SearchPanelController {
@@ -18,6 +22,7 @@ final class SearchPanelController {
 
     func show() {
         if let panel {
+            NotificationCenter.default.post(name: .searchPanelShouldReload, object: nil)
             panel.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return

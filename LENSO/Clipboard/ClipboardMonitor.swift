@@ -96,13 +96,16 @@ final class ClipboardMonitor: @unchecked Sendable {
             lastImageHash = nil
             do {
                 _ = try ScreenshotStore.shared.saveClipboardText(text, sourceApp: sourceApp)
-                // 同时自动收进「文字收纳」（内容去重）
+                // 同时自动收进「文字收纳」：若已存在则刷新时间升到最顶，若不存在则新建
                 let existing = (try? ScreenshotStore.shared.listTextNotes()) ?? []
-                if !existing.contains(where: { $0.content == text }) {
-                    _ = try ScreenshotStore.shared.createTextNote(content: text, sourceApp: sourceApp)
-                    DispatchQueue.main.async {
-                        NotificationCenter.default.post(name: .textNotesChanged, object: nil)
-                    }
+                if let matched = existing.first(where: { $0.content == text }) {
+                    try? ScreenshotStore.shared.touchTextNote(id: matched.id)
+                } else {
+                    _ = try? ScreenshotStore.shared.createTextNote(content: text, sourceApp: sourceApp)
+                }
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: .textNotesChanged, object: nil)
+                    NotificationCenter.default.post(name: .libraryChanged, object: nil)
                 }
                 log.info("recorded clipboard text (\(text.count) chars) from \(sourceApp ?? "?", privacy: .public)")
             } catch {

@@ -104,6 +104,10 @@ struct SearchPanelView: View {
         }
         .onChange(of: searchText) { _ in reloadFeed() }
         .onChange(of: selectedCategory) { _ in reloadFeed() }
+        .onReceive(NotificationCenter.default.publisher(for: .searchPanelShouldReload)) { _ in reloadFeed() }
+        .onReceive(NotificationCenter.default.publisher(for: .textNotesChanged)) { _ in reloadFeed() }
+        .onReceive(NotificationCenter.default.publisher(for: .libraryChanged)) { _ in reloadFeed() }
+        .onReceive(NotificationCenter.default.publisher(for: .screenshotSaved)) { _ in reloadFeed() }
         .onExitCommand { onDismiss() }
         .sheet(item: $inspectingItem) { item in
             if case .text(let content) = item.kind {
@@ -635,13 +639,18 @@ struct SearchPanelView: View {
     private func reloadFeed() {
         let store = ScreenshotStore.shared
         var feed: [FeedItem] = []
+        var seenTexts = Set<String>()
 
-        // 1. 读取剪贴板历史（图文混合）
+        // 1. 读取剪贴板历史（图文混合，最准确的复制时间流）
         if let clipItems = try? store.listClipboard(limit: 120) {
             for clip in clipItems {
                 switch clip.kind {
                 case .text:
                     if let text = clip.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        // 文本内容去重：只保留最新的复制时间点，避免重复卡片
+                        if seenTexts.contains(text) { continue }
+                        seenTexts.insert(text)
+
                         feed.append(FeedItem(
                             id: clip.id,
                             kind: .text(content: text),
@@ -671,7 +680,27 @@ struct SearchPanelView: View {
             }
         }
 
-        // 2. 读取截图记录（若不在剪贴板历史中则融合进来，保证截图也能搜到）
+        // 2. 读取文字收纳便签（若该文本未在最近剪贴板中出现，则收录并以 updatedAt 时间排序）
+        if let notes = try? store.listTextNotes() {
+            for note in notes {
+                if seenTexts.contains(note.content) { continue }
+                seenTexts.insert(note.content)
+
+                feed.append(FeedItem(
+                    id: note.id,
+                    kind: .text(content: note.content),
+                    title: note.content.replacingOccurrences(of: "\n", with: " "),
+                    subtitle: "收纳便签 · \(note.content.count) 个字符",
+                    sourceApp: note.sourceApp ?? "收纳",
+                    createdAt: note.updatedAt,
+                    rawText: note.content,
+                    thumbnail: nil,
+                    clipboardID: nil
+                ))
+            }
+        }
+
+        // 3. 读取本地截图记录（若为历史截图，融合进来）
         if let records = try? store.list() {
             for record in records {
                 let thumb = store.loadThumbnail(record) ?? store.loadImage(record)
@@ -689,34 +718,9 @@ struct SearchPanelView: View {
             }
         }
 
-        // 3. 读取文字收纳便签
-        if let notes = try? store.listTextNotes() {
-            for note in notes {
-                feed.append(FeedItem(
-                    id: note.id,
-                    kind: .text(content: note.content),
-                    title: note.content.replacingOccurrences(of: "\n", with: " "),
-                    subtitle: "收纳便签 · \(note.content.count) 个字符",
-                    sourceApp: note.sourceApp ?? "收纳",
-                    createdAt: note.createdAt,
-                    rawText: note.content,
-                    thumbnail: nil,
-                    clipboardID: nil
-                ))
-            }
-        }
-
-        // 去重并按创建时间绝对倒序（最新复制/截图排在最顶部）
-        var seenIDs = Set<UUID>()
-        var unique: [FeedItem] = []
-        for f in feed {
-            if !seenIDs.contains(f.id) {
-                seenIDs.insert(f.id)
-                unique.append(f)
-            }
-        }
-        unique.sort { $0.createdAt > $1.createdAt }
-        items = unique
+        // 严格按时间绝对倒序（最新复制/截图排在第 1 个，即左上角最顶端）
+        feed.sort { $0.createdAt > $1.createdAt }
+        items = feed
     }
 
     // MARK: - 交互操作

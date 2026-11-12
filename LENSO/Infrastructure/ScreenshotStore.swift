@@ -350,6 +350,19 @@ final class ScreenshotStore: @unchecked Sendable {
         }
     }
 
+    /// 重新触碰便签，更新 updated_at 为当前时间，让再次复制或使用的内容立即跃升到时间倒序的最顶部
+    func touchTextNote(id: UUID) throws {
+        try queue.sync {
+            let sql = "UPDATE text_notes SET updated_at = ? WHERE id = ?;"
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
+            defer { sqlite3_finalize(stmt) }
+            sqlite3_bind_double(stmt, 1, Date().timeIntervalSince1970)
+            Self.bind(stmt, 2, id.uuidString)
+            guard sqlite3_step(stmt) == SQLITE_DONE else { throw StoreError.dbFailed }
+        }
+    }
+
     func deleteTextNote(id: UUID) throws {
         try queue.sync {
             let sql = "DELETE FROM text_notes WHERE id = ?;"
