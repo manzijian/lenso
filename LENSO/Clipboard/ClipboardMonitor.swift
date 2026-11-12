@@ -14,7 +14,7 @@ final class ClipboardMonitor: @unchecked Sendable {
     private var timer: DispatchSourceTimer?
     private var activity: NSObjectProtocol?
     private var lastChangeCount = NSPasteboard.general.changeCount
-    private var lastImageHash: Int?
+    private var lastImageHash: String?
     private var lastText: String?
     /// 我们自己写回剪贴板时跳过记录
     private var skipNextChange = false
@@ -75,23 +75,25 @@ final class ClipboardMonitor: @unchecked Sendable {
 
         // 图片优先
         if let image = imageFromPasteboard(pasteboard) {
-            let hash = image.hashValue // 粗略去重
-            if hash != lastImageHash {
-                lastImageHash = hash
-                lastText = nil
-                do {
-                    _ = try ScreenshotStore.shared.saveClipboardImage(image, sourceApp: sourceApp)
-                    log.info("recorded clipboard image \(image.width)x\(image.height) from \(sourceApp ?? "?", privacy: .public)")
-                } catch {
-                    log.error("save clipboard image failed: \(error.localizedDescription, privacy: .public)")
+            let hash = ScreenshotStore.computeImageHash(image)
+            lastImageHash = hash
+            lastText = nil
+            do {
+                _ = try ScreenshotStore.shared.saveClipboardImage(image, sourceApp: sourceApp)
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: .screenshotSaved, object: nil)
+                    NotificationCenter.default.post(name: .libraryChanged, object: nil)
                 }
+                log.info("recorded/refreshed clipboard image \(image.width)x\(image.height) from \(sourceApp ?? "?", privacy: .public)")
+            } catch {
+                log.error("save clipboard image failed: \(error.localizedDescription, privacy: .public)")
             }
             return
         }
 
         // 文字
         if let text = pasteboard.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !text.isEmpty, text != lastText {
+           !text.isEmpty {
             lastText = text
             lastImageHash = nil
             do {
@@ -107,7 +109,7 @@ final class ClipboardMonitor: @unchecked Sendable {
                     NotificationCenter.default.post(name: .textNotesChanged, object: nil)
                     NotificationCenter.default.post(name: .libraryChanged, object: nil)
                 }
-                log.info("recorded clipboard text (\(text.count) chars) from \(sourceApp ?? "?", privacy: .public)")
+                log.info("recorded/refreshed clipboard text (\(text.count) chars) from \(sourceApp ?? "?", privacy: .public)")
             } catch {
                 log.error("save clipboard text failed: \(error.localizedDescription, privacy: .public)")
             }

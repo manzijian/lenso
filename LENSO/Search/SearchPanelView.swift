@@ -640,6 +640,7 @@ struct SearchPanelView: View {
         let store = ScreenshotStore.shared
         var feed: [FeedItem] = []
         var seenTexts = Set<String>()
+        var seenImageHashes = Set<String>()
 
         // 1. 读取剪贴板历史（图文混合，最准确的复制时间流）
         if let clipItems = try? store.listClipboard(limit: 120) {
@@ -665,6 +666,13 @@ struct SearchPanelView: View {
                     }
                 case .image:
                     let cgImage = store.loadClipboardImage(clip)
+                    // 图片特征哈希去重：相同的图片只保留最新复制的那张，节省空间
+                    if let cgImage {
+                        let hash = ScreenshotStore.computeImageHash(cgImage)
+                        if seenImageHashes.contains(hash) { continue }
+                        seenImageHashes.insert(hash)
+                    }
+
                     feed.append(FeedItem(
                         id: clip.id,
                         kind: .image(cgImage: cgImage, recordID: nil),
@@ -700,10 +708,16 @@ struct SearchPanelView: View {
             }
         }
 
-        // 3. 读取本地截图记录（若为历史截图，融合进来）
+        // 3. 读取本地截图记录（若为历史截图且未在剪贴板中展示，融合进来）
         if let records = try? store.list() {
             for record in records {
                 let thumb = store.loadThumbnail(record) ?? store.loadImage(record)
+                if let thumb {
+                    let hash = ScreenshotStore.computeImageHash(thumb)
+                    if seenImageHashes.contains(hash) { continue }
+                    seenImageHashes.insert(hash)
+                }
+
                 feed.append(FeedItem(
                     id: record.id,
                     kind: .image(cgImage: store.loadImage(record), recordID: record.id),

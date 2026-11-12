@@ -3,6 +3,7 @@ import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
 import SQLite3
+import CryptoKit
 
 struct ScreenshotRecord: Identifiable, Hashable {
     let id: UUID
@@ -107,11 +108,27 @@ final class ScreenshotStore: @unchecked Sendable {
         sqlite3_exec(db, sql, nil, nil, nil)
         // 旧表升级：补充 source_app 列（已存在则忽略错误）
         sqlite3_exec(db, "ALTER TABLE clipboard_items ADD COLUMN source_app TEXT;", nil, nil, nil)
+        // 旧表升级：补充 content_hash 列用于内容指纹去重并节省磁盘空间
+        sqlite3_exec(db, "ALTER TABLE clipboard_items ADD COLUMN content_hash TEXT;", nil, nil, nil)
+        sqlite3_exec(db, "CREATE INDEX IF NOT EXISTS idx_clip_hash ON clipboard_items(content_hash);", nil, nil, nil)
         // 旧表升级：收藏列
         sqlite3_exec(db, "ALTER TABLE screenshots ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0;", nil, nil, nil)
         sqlite3_exec(db, "ALTER TABLE screenshots ADD COLUMN favorited_at REAL;", nil, nil, nil)
         sqlite3_exec(db, "ALTER TABLE text_notes ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0;", nil, nil, nil)
         sqlite3_exec(db, "ALTER TABLE text_notes ADD COLUMN favorited_at REAL;", nil, nil, nil)
+
+        // 智能清理：对文本去重，只保留同一文本最近一次复制的时间记录，节省空间
+        sqlite3_exec(db, """
+        DELETE FROM clipboard_items
+        WHERE kind = 'text' AND id NOT IN (
+            SELECT c1.id FROM clipboard_items c1
+            JOIN (
+                SELECT text, MAX(created_at) as max_created
+                FROM clipboard_items WHERE kind = 'text'
+                GROUP BY text
+            ) c2 ON c1.text = c2.text AND c1.created_at = c2.max_created
+        );
+        """, nil, nil, nil)
     }
 
     private static let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
@@ -383,10 +400,74 @@ final class ScreenshotStore: @unchecked Sendable {
         }) ?? 0
     }
 
+    // MARK: - Hashing & Deduplication
+
+    /// 计算图片的确定性特征指纹（用于去重与磁盘空间优化）
+    static func computeImageHash(_ image: CGImage) -> String {
+        if let provider = image.dataProvider, let cfData = provider.data {
+            let digest = SHA256.hash(data: cfData as Data)
+            return "\(image.width)x\(image.height):" + digest.map { String(format: "%02x", $0) }.joined()
+        }
+        let mutableData = NSMutableData()
+        if let dest = CGImageDestinationCreateWithData(mutableData as CFMutableData, UTType.png.identifier as CFString, 1, nil) {
+            CGImageDestinationAddImage(dest, image, nil)
+            if CGImageDestinationFinalize(dest) {
+                let digest = SHA256.hash(data: mutableData as Data)
+                return "\(image.width)x\(image.height):" + digest.map { String(format: "%02x", $0) }.joined()
+            }
+        }
+        return "\(image.width)x\(image.height)"
+    }
+
+    /// 计算纯文本的 SHA256 哈希
+    static func computeTextHash(_ text: String) -> String {
+        let digest = SHA256.hash(data: Data(text.utf8))
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
     // MARK: - Clipboard history
 
     @discardableResult
     func saveClipboardImage(_ image: CGImage, sourceApp: String?) throws -> ClipboardItem {
+        let now = Date()
+        let hash = Self.computeImageHash(image)
+
+        // 1. 查找是否已存在相同指纹的图片记录
+        var matched: (id: UUID, filename: String)?
+        try queue.sync {
+            let sql = "SELECT id, filename FROM clipboard_items WHERE kind = 'image' AND content_hash = ? LIMIT 1;"
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                defer { sqlite3_finalize(stmt) }
+                Self.bind(stmt, 1, hash)
+                if sqlite3_step(stmt) == SQLITE_ROW,
+                   let idStr = sqlite3_column_text(stmt, 0),
+                   let id = UUID(uuidString: String(cString: idStr)),
+                   let fnStr = sqlite3_column_text(stmt, 1) {
+                    matched = (id, String(cString: fnStr))
+                }
+            }
+        }
+
+        if let matched {
+            let fileUrl = baseDir.appendingPathComponent("Clipboard").appendingPathComponent(matched.filename)
+            if FileManager.default.fileExists(atPath: fileUrl.path) {
+                // 文件依然完好：无需重复编码写入磁盘（节省宝贵空间），直接更新时间为最新秒数，排在最前面！
+                try queue.sync {
+                    let sql = "UPDATE clipboard_items SET created_at = ?, source_app = ? WHERE id = ?;"
+                    var stmt: OpaquePointer?
+                    guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
+                    defer { sqlite3_finalize(stmt) }
+                    sqlite3_bind_double(stmt, 1, now.timeIntervalSince1970)
+                    if let sourceApp { Self.bind(stmt, 2, sourceApp) } else { sqlite3_bind_null(stmt, 2) }
+                    Self.bind(stmt, 3, matched.id.uuidString)
+                    guard sqlite3_step(stmt) == SQLITE_DONE else { throw StoreError.dbFailed }
+                }
+                return ClipboardItem(id: matched.id, kind: .image, filename: matched.filename, text: nil, sourceApp: sourceApp, createdAt: now)
+            }
+        }
+
+        // 2. 不存在或文件丢失：编码写入新 PNG
         let id = UUID()
         let filename = "\(id.uuidString).png"
         let url = baseDir.appendingPathComponent("Clipboard").appendingPathComponent(filename)
@@ -396,22 +477,57 @@ final class ScreenshotStore: @unchecked Sendable {
         CGImageDestinationAddImage(dest, image, nil)
         guard CGImageDestinationFinalize(dest) else { throw StoreError.imageEncodeFailed }
 
-        let createdAt = Date()
-        try insertClipboard(id: id, kind: .image, filename: filename, text: nil, sourceApp: sourceApp, createdAt: createdAt)
-        return ClipboardItem(id: id, kind: .image, filename: filename, text: nil, sourceApp: sourceApp, createdAt: createdAt)
+        try insertClipboard(id: id, kind: .image, filename: filename, text: nil, sourceApp: sourceApp, createdAt: now, contentHash: hash)
+        return ClipboardItem(id: id, kind: .image, filename: filename, text: nil, sourceApp: sourceApp, createdAt: now)
     }
 
     @discardableResult
     func saveClipboardText(_ text: String, sourceApp: String?) throws -> ClipboardItem {
+        let now = Date()
+        let hash = Self.computeTextHash(text)
+
+        // 1. 查找是否已存在相同文本的记录
+        var matchedID: UUID?
+        try queue.sync {
+            let sql = "SELECT id FROM clipboard_items WHERE kind = 'text' AND (content_hash = ? OR text = ?) LIMIT 1;"
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                defer { sqlite3_finalize(stmt) }
+                Self.bind(stmt, 1, hash)
+                Self.bind(stmt, 2, text)
+                if sqlite3_step(stmt) == SQLITE_ROW,
+                   let idStr = sqlite3_column_text(stmt, 0),
+                   let id = UUID(uuidString: String(cString: idStr)) {
+                    matchedID = id
+                }
+            }
+        }
+
+        if let matchedID {
+            // 已存在：直接更新时间戳为当前最新时间，并更新 content_hash，不再插入重复记录！
+            try queue.sync {
+                let sql = "UPDATE clipboard_items SET created_at = ?, source_app = ?, content_hash = ? WHERE id = ?;"
+                var stmt: OpaquePointer?
+                guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
+                defer { sqlite3_finalize(stmt) }
+                sqlite3_bind_double(stmt, 1, now.timeIntervalSince1970)
+                if let sourceApp { Self.bind(stmt, 2, sourceApp) } else { sqlite3_bind_null(stmt, 2) }
+                Self.bind(stmt, 3, hash)
+                Self.bind(stmt, 4, matchedID.uuidString)
+                guard sqlite3_step(stmt) == SQLITE_DONE else { throw StoreError.dbFailed }
+            }
+            return ClipboardItem(id: matchedID, kind: .text, filename: nil, text: text, sourceApp: sourceApp, createdAt: now)
+        }
+
+        // 2. 不存在：插入新记录
         let id = UUID()
-        let createdAt = Date()
-        try insertClipboard(id: id, kind: .text, filename: nil, text: text, sourceApp: sourceApp, createdAt: createdAt)
-        return ClipboardItem(id: id, kind: .text, filename: nil, text: text, sourceApp: sourceApp, createdAt: createdAt)
+        try insertClipboard(id: id, kind: .text, filename: nil, text: text, sourceApp: sourceApp, createdAt: now, contentHash: hash)
+        return ClipboardItem(id: id, kind: .text, filename: nil, text: text, sourceApp: sourceApp, createdAt: now)
     }
 
-    private func insertClipboard(id: UUID, kind: ClipboardItem.Kind, filename: String?, text: String?, sourceApp: String?, createdAt: Date) throws {
+    private func insertClipboard(id: UUID, kind: ClipboardItem.Kind, filename: String?, text: String?, sourceApp: String?, createdAt: Date, contentHash: String? = nil) throws {
         try queue.sync {
-            let sql = "INSERT INTO clipboard_items (id, kind, filename, text, source_app, created_at) VALUES (?,?,?,?,?,?);"
+            let sql = "INSERT INTO clipboard_items (id, kind, filename, text, source_app, created_at, content_hash) VALUES (?,?,?,?,?,?,?);"
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
             defer { sqlite3_finalize(stmt) }
@@ -421,6 +537,7 @@ final class ScreenshotStore: @unchecked Sendable {
             if let text { Self.bind(stmt, 4, text) } else { sqlite3_bind_null(stmt, 4) }
             if let sourceApp { Self.bind(stmt, 5, sourceApp) } else { sqlite3_bind_null(stmt, 5) }
             sqlite3_bind_double(stmt, 6, createdAt.timeIntervalSince1970)
+            if let contentHash { Self.bind(stmt, 7, contentHash) } else { sqlite3_bind_null(stmt, 7) }
             guard sqlite3_step(stmt) == SQLITE_DONE else { throw StoreError.dbFailed }
 
             // 保留最近 200 条，超出的删除并清理文件
