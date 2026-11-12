@@ -78,6 +78,8 @@ struct SettingShortcutRow: View {
 
 /// MCP 服务设置页签
 struct MCPSettingsSectionView: View {
+    @State private var settings = AppSettings.shared
+
     private var agentGuidePrompt: String {
         """
         请在你的 MCP 配置中添加本地 LENSO 剪贴板与截图服务：
@@ -100,134 +102,154 @@ struct MCPSettingsSectionView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            // 开关控制卡片
+            SettingCardContainer {
+                SettingToggleRow(
+                    label: "开启 MCP 本地服务",
+                    subtitle: "允许本地 AI Agent（Claude、Cursor、Antigravity 等）安全调用剪贴板与截图工具",
+                    isOn: $settings.enableMCPServer
+                )
+            }
+
             // 服务状态卡片
             SettingCardContainer {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 8) {
-                        Circle().fill(Color.green).frame(width: 8, height: 8)
-                        Text("MCP 本地服务已就绪")
+                        Circle()
+                            .fill(settings.enableMCPServer ? Color.green : Color.secondary.opacity(0.5))
+                            .frame(width: 8, height: 8)
+                        Text(settings.enableMCPServer ? "MCP 本地服务运行中" : "MCP 本地服务已关闭")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(LensoColors.kleinBlueBright)
+                            .foregroundStyle(settings.enableMCPServer ? LensoColors.kleinBlueBright : Color.secondary)
                         Spacer()
-                        Text("MCP over SSE")
+                        Text(settings.enableMCPServer ? "127.0.0.1:52888" : "已离线")
                             .font(.system(size: 11, weight: .medium, design: .monospaced))
-                            .foregroundStyle(LensoColors.kleinBlueBright)
+                            .foregroundStyle(settings.enableMCPServer ? LensoColors.kleinBlueBright : Color.secondary)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Capsule().fill(LensoColors.kleinBlueSoft))
+                            .background(Capsule().fill(settings.enableMCPServer ? LensoColors.kleinBlueSoft : Color.black.opacity(0.04)))
                     }
 
-                    Text("LENSO 内置标准的 Model Context Protocol (MCP) 服务。无需配置复杂的系统二进制文件路径，AI Agent（如 Cursor、Claude Desktop、Windsurf、Antigravity 等）只需通过本地 MCP 地址即可直接挂载连接。")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .lineSpacing(3)
+                    if settings.enableMCPServer {
+                        Text("LENSO 内置标准的 Model Context Protocol (MCP) 服务。无需配置复杂的系统二进制文件路径，AI Agent（如 Cursor、Claude Desktop、Windsurf、Antigravity 等）只需通过本地 MCP 地址即可直接挂载连接。")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .lineSpacing(3)
 
-                    Divider().opacity(0.6)
+                        Divider().opacity(0.6)
 
-                    HStack(spacing: 8) {
-                        Text("MCP 服务地址:")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Color.primary.opacity(0.75))
-                        Text("http://127.0.0.1:52888/sse")
-                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(LensoColors.kleinBlueBright)
-                            .textSelection(.enabled)
+                        HStack(spacing: 8) {
+                            Text("MCP 服务地址:")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Color.primary.opacity(0.75))
+                            Text("http://127.0.0.1:52888/sse")
+                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(LensoColors.kleinBlueBright)
+                                .textSelection(.enabled)
+                        }
+                    } else {
+                        Text("本地 52888 端口监听已停止并完全释放。外部 AI 客户端将无法连接或读取剪贴板与截图数据。随时可重新打开上方开关以恢复连接。")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .lineSpacing(3)
                     }
                 }
                 .padding(16)
             }
 
-            // 专属一键引导卡片
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Label("让 Agent 自动连接的引导命令", systemImage: "sparkles")
+            if settings.enableMCPServer {
+                // 专属一键引导卡片
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Label("让 Agent 自动连接的引导命令", systemImage: "sparkles")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color.primary.opacity(0.85))
+                        Spacer()
+                        Button {
+                            let pb = NSPasteboard.general
+                            pb.clearContents()
+                            pb.setString(agentGuidePrompt, forType: .string)
+                            SaveToastController.shared.show(title: "已复制 Agent 引导指令", subtitle: "直接粘贴发送给任意 AI 对话框即可", thumbnail: nil)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "doc.on.doc.fill")
+                                Text("一键复制 Agent 引导指令")
+                            }
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Capsule().fill(LensoColors.kleinBlueBright))
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    SettingCardContainer {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(agentGuidePrompt)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(Color.primary.opacity(0.85))
+                                .lineSpacing(2)
+                                .textSelection(.enabled)
+                        }
+                        .padding(14)
+                    }
+                }
+
+                // JSON 配置文件
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Claude Desktop / MCP 客户端配置")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color.primary.opacity(0.85))
+                        Spacer()
+                        Button {
+                            let pb = NSPasteboard.general
+                            pb.clearContents()
+                            pb.setString(sseJsonConfig, forType: .string)
+                            SaveToastController.shared.show(title: "已复制 MCP 配置 JSON", subtitle: "可粘贴至 Claude / Cursor 的 mcpServers 中", thumbnail: nil)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "doc.on.doc")
+                                Text("复制 JSON")
+                            }
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(LensoColors.kleinBlueBright)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(LensoColors.kleinBlueSoft))
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    SettingCardContainer {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(sseJsonConfig)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(Color.primary.opacity(0.85))
+                                .textSelection(.enabled)
+                        }
+                        .padding(14)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("已开放的 MCP 工具列表 (Tools)")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.primary.opacity(0.85))
-                    Spacer()
-                    Button {
-                        let pb = NSPasteboard.general
-                        pb.clearContents()
-                        pb.setString(agentGuidePrompt, forType: .string)
-                        SaveToastController.shared.show(title: "已复制 Agent 引导指令", subtitle: "直接粘贴发送给任意 AI 对话框即可", thumbnail: nil)
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "doc.on.doc.fill")
-                            Text("一键复制 Agent 引导指令")
+
+                    SettingCardContainer {
+                        VStack(spacing: 0) {
+                            mcpToolRow(name: "lenso_get_recent_clipboard", desc: "读取最近复制的图文记录 (支持条数与类型过滤)")
+                            toolDivider
+                            mcpToolRow(name: "lenso_search_history", desc: "全局检索剪贴板内容、截图记录与文字收纳")
+                            toolDivider
+                            mcpToolRow(name: "lenso_get_latest_screenshot", desc: "获取最新一张截图的元数据与本地文件绝对路径")
+                            toolDivider
+                            mcpToolRow(name: "lenso_copy_text", desc: "写入文本至系统剪贴板并归集到 LENSO 历史")
+                            toolDivider
+                            mcpToolRow(name: "lenso_add_text_note", desc: "向文字收纳库保存一条新便签")
                         }
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(LensoColors.kleinBlueBright))
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                SettingCardContainer {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(agentGuidePrompt)
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(Color.primary.opacity(0.85))
-                            .lineSpacing(2)
-                            .textSelection(.enabled)
-                    }
-                    .padding(14)
-                }
-            }
-
-            // JSON 配置文件
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Claude Desktop / MCP 客户端配置")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.primary.opacity(0.85))
-                    Spacer()
-                    Button {
-                        let pb = NSPasteboard.general
-                        pb.clearContents()
-                        pb.setString(sseJsonConfig, forType: .string)
-                        SaveToastController.shared.show(title: "已复制 MCP 配置 JSON", subtitle: "可粘贴至 Claude / Cursor 的 mcpServers 中", thumbnail: nil)
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "doc.on.doc")
-                            Text("复制 JSON")
-                        }
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(LensoColors.kleinBlueBright)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(LensoColors.kleinBlueSoft))
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                SettingCardContainer {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(sseJsonConfig)
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(Color.primary.opacity(0.85))
-                            .textSelection(.enabled)
-                    }
-                    .padding(14)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("已开放的 MCP 工具列表 (Tools)")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.primary.opacity(0.85))
-
-                SettingCardContainer {
-                    VStack(spacing: 0) {
-                        mcpToolRow(name: "lenso_get_recent_clipboard", desc: "读取最近复制的图文记录 (支持条数与类型过滤)")
-                        toolDivider
-                        mcpToolRow(name: "lenso_search_history", desc: "全局检索剪贴板内容、截图记录与文字收纳")
-                        toolDivider
-                        mcpToolRow(name: "lenso_get_latest_screenshot", desc: "获取最新一张截图的元数据与本地文件绝对路径")
-                        toolDivider
-                        mcpToolRow(name: "lenso_copy_text", desc: "写入文本至系统剪贴板并归集到 LENSO 历史")
-                        toolDivider
-                        mcpToolRow(name: "lenso_add_text_note", desc: "向文字收纳库保存一条新便签")
                     }
                 }
             }

@@ -16,8 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         registerApplicationIcon()
         // 开始监听剪贴板（记录复制过的截图与文字，含来源应用）
         ClipboardMonitor.shared.start()
-        // 启动本地 HTTP / SSE / MCP 服务 (端口 52888)
-        LensoLocalService.shared.start()
+        // 启动本地 HTTP / SSE / MCP 服务 (端口 52888，按设置开启或关闭)
+        AppSettings.shared.applyMCPServerState()
         // 执行自动保存时长检查与过期清理
         AppSettings.shared.runAutoCleanup()
         Timer.scheduledTimer(withTimeInterval: 900, repeats: true) { _ in

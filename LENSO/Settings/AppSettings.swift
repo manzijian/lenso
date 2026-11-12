@@ -87,6 +87,7 @@ final class AppSettings {
         case showFloatingPreview
         case followSystemAppearance
         case glassEffect
+        case enableMCPServer
     }
 
     private static func key(_ key: Key) -> String { keyPrefix + key.rawValue }
@@ -139,6 +140,25 @@ final class AppSettings {
     /// 玻璃材质效果（关：编辑器工具栏/面板与设置卡片改用实色材质）。
     var glassEffect: Bool {
         didSet { persist(.glassEffect, glassEffect) }
+    }
+
+    // MARK: - MCP 服务
+
+    /// 启用本地 MCP 服务 (端口 52888)。关掉后停止本地网络监听并释放端口。
+    var enableMCPServer: Bool {
+        didSet {
+            persist(.enableMCPServer, enableMCPServer)
+            applyMCPServerState()
+        }
+    }
+
+    /// 应用 MCP 服务开启/关闭状态
+    func applyMCPServerState() {
+        if enableMCPServer {
+            LensoLocalService.shared.start()
+        } else {
+            LensoLocalService.shared.stop()
+        }
     }
 
     /// 状态栏图标样式（可在设置中随时切换）
@@ -225,6 +245,7 @@ final class AppSettings {
         showFloatingPreview = Self.read(.showFloatingPreview, default: true, defaults: defaults)
         followSystemAppearance = Self.read(.followSystemAppearance, default: false, defaults: defaults)
         glassEffect = Self.read(.glassEffect, default: true, defaults: defaults)
+        enableMCPServer = Self.read(.enableMCPServer, default: true, defaults: defaults)
 
         let storedScale = defaults.double(forKey: Self.keyPrefix + "previewScale")
         previewScale = storedScale >= 0.2 ? CGFloat(storedScale) : 1.0

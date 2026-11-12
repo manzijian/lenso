@@ -110,6 +110,24 @@ struct HardeningSecurityTests {
         #expect(sseSnippet.contains("/sse?token="))
     }
 
+    @Test("MCP 服务开关控制：禁用时停止服务释放端口，开启时恢复监听")
+    @MainActor
+    func testMCPServerToggleSetting() {
+        let settings = AppSettings.shared
+        let originalState = settings.enableMCPServer
+        defer {
+            settings.enableMCPServer = originalState
+        }
+
+        settings.enableMCPServer = false
+        #expect(settings.enableMCPServer == false)
+        #expect(LensoLocalService.shared.isRunning == false)
+
+        settings.enableMCPServer = true
+        #expect(settings.enableMCPServer == true)
+        #expect(UserDefaults.standard.bool(forKey: "lenso.settings.v1.enableMCPServer") == true)
+    }
+
     // MARK: - 4. 辅助服务与边界测试
 
     @Test("显示器缩放比例边界计算：无效 DisplayID 正确回退")
