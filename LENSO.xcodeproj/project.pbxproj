@@ -43,6 +43,7 @@
 		6F1AD5DBC077F820272B7CCC /* LibraryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEC28A398581D301F8477089 /* LibraryViewModel.swift */; };
 		737871EAE860C603CF70B9FE /* TextDetailInspectorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11A555E7F611F2ABC6B7DC88 /* TextDetailInspectorSheet.swift */; };
 		7411FB463E194F750DFE3FD4 /* LensoMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A5FF2F92852CF47FF402B8 /* LensoMark.swift */; };
+		75F200BB43C6491973E52E34 /* CaptureStateMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5F396A325DCEEFB54682870 /* CaptureStateMachineTests.swift */; };
 		7EDE11C83D89B9FABEEA011E /* PinnedEditorState.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9676DFA319F5D5C3C336936 /* PinnedEditorState.swift */; };
 		814F45DDDA3D4EC1FE3439F5 /* PinnedScreenshotController+OCR.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80E07E66C59CFE8A4EF34F9B /* PinnedScreenshotController+OCR.swift */; };
 		85C1529CEE1DB774A56FF9EF /* PinnedScreenshotController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5F74DC24DD60529627DAC8E /* PinnedScreenshotController.swift */; };
@@ -153,6 +154,7 @@
 		BFB662904840CB9F5885D0C1 /* NoteEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteEditorSheet.swift; sourceTree = "<group>"; };
 		C126297582173D0BA7E950D0 /* LensoLocalService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoLocalService.swift; sourceTree = "<group>"; };
 		C5A7B338A56587241624CF4F /* LibraryEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryEntry.swift; sourceTree = "<group>"; };
+		C5F396A325DCEEFB54682870 /* CaptureStateMachineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureStateMachineTests.swift; sourceTree = "<group>"; };
 		C5F74DC24DD60529627DAC8E /* PinnedScreenshotController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedScreenshotController.swift; sourceTree = "<group>"; };
 		C9676DFA319F5D5C3C336936 /* PinnedEditorState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedEditorState.swift; sourceTree = "<group>"; };
 		C9D07DA1B053B980CDE8B2CA /* LENSOTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LENSOTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -253,6 +255,7 @@
 		6FAE9512A75562DEE0C4AB1C /* LENSOTests */ = {
 			isa = PBXGroup;
 			children = (
+				C5F396A325DCEEFB54682870 /* CaptureStateMachineTests.swift */,
 				7B81A568E9C7979CF07D4649 /* ScreenshotStoreSmokeTests.swift */,
 				09EDC975DD0E0B048782A224 /* ScreenshotStoreTests.swift */,
 			);
@@ -567,6 +570,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				75F200BB43C6491973E52E34 /* CaptureStateMachineTests.swift in Sources */,
 				928281151374A4BDD8D0E037 /* ScreenshotStoreSmokeTests.swift in Sources */,
 				9CD530A11D08C5042F9C71F6 /* ScreenshotStoreTests.swift in Sources */,
 			);

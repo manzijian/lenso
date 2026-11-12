@@ -173,7 +173,7 @@ final class CaptureCoordinator: NSObject {
         log.info("full editor shown on display \(NSStringFromRect(panel.screen?.frame ?? .zero), privacy: .public)")
     }
 
-    private func closeEditor() {
+    func closeEditor() {
         editorPanel?.orderOut(nil)
         editorPanel?.close()
         editorPanel = nil
