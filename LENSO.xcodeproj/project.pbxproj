@@ -30,6 +30,7 @@
 		4514A59D53168D0443A7C291 /* NotificationNames.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABC9A216CFCB35B3DC4B5132 /* NotificationNames.swift */; };
 		47FBC1D203B3D0110A0445B0 /* LibraryEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A7B338A56587241624CF4F /* LibraryEntry.swift */; };
 		4E2F158CBC40B7142F348F10 /* ScreenCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9EB971207FEF63A60AE956 /* ScreenCaptureService.swift */; };
+		50CF58FDBB57ED09582DAB39 /* CaptureEditorView+Rendering.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E96E3182AA6BE724B857007 /* CaptureEditorView+Rendering.swift */; };
 		530DF77AF207713354D20F23 /* ShortcutAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202185ADE6715D504D7EB55B /* ShortcutAction.swift */; };
 		5E44D7BE4532C0B89364F604 /* PinnedPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63F18A5427F062C7DE80D80B /* PinnedPanel.swift */; };
 		63B8E27F17695B0D58261964 /* LensoRadius.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6629E0A218BB4F749B26F653 /* LensoRadius.swift */; };
@@ -70,6 +71,7 @@
 		D5B91F2ED5C521F4E15D0686 /* ShortcutStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 135EF660F9BA9A889666F34B /* ShortcutStore.swift */; };
 		DE568699012109BCB32B82B4 /* ClipboardMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BDA7F5691661D2318B5AB81 /* ClipboardMonitor.swift */; };
 		E8A1E10D92154E1F0DDD271E /* PreviewWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD209F1E73612BFE09EF7A77 /* PreviewWindowView.swift */; };
+		EA8F47115E3516693BF94D72 /* CaptureEditorLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DC6F3181397AE48FCB7B45C /* CaptureEditorLayout.swift */; };
 		ED62A1057DA2F03880318F1A /* CaptureEditorSidePanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02DA93EC1B0CA6699CFA7072 /* CaptureEditorSidePanelView.swift */; };
 		F1661F941BC19A8D5898962D /* WindowConfigurator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D93797B089581C688C44523A /* WindowConfigurator.swift */; };
 		F62C4A4B0B6E32DE2F10021C /* PinnedImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25B807289023065DFCE75637 /* PinnedImageView.swift */; };
@@ -124,6 +126,8 @@
 		70271F6849804572EDD4DE4C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		7162CE756E651C3E0CEDB4EE /* CaptureEditorToolbarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureEditorToolbarView.swift; sourceTree = "<group>"; };
 		7B81A568E9C7979CF07D4649 /* ScreenshotStoreSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotStoreSmokeTests.swift; sourceTree = "<group>"; };
+		7DC6F3181397AE48FCB7B45C /* CaptureEditorLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureEditorLayout.swift; sourceTree = "<group>"; };
+		7E96E3182AA6BE724B857007 /* CaptureEditorView+Rendering.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CaptureEditorView+Rendering.swift"; sourceTree = "<group>"; };
 		80E07E66C59CFE8A4EF34F9B /* PinnedScreenshotController+OCR.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PinnedScreenshotController+OCR.swift"; sourceTree = "<group>"; };
 		86C78002C2F37CAB9153ED45 /* RegionSelectorWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionSelectorWindow.swift; sourceTree = "<group>"; };
 		877A569F97194ADB3A26C379 /* TranslationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationProvider.swift; sourceTree = "<group>"; };
@@ -165,9 +169,11 @@
 			isa = PBXGroup;
 			children = (
 				FEA52E5DA6BB4A0D1D863A96 /* AnnotationModel.swift */,
+				7DC6F3181397AE48FCB7B45C /* CaptureEditorLayout.swift */,
 				02DA93EC1B0CA6699CFA7072 /* CaptureEditorSidePanelView.swift */,
 				7162CE756E651C3E0CEDB4EE /* CaptureEditorToolbarView.swift */,
 				51F18440E25048F21350866B /* CaptureEditorView.swift */,
+				7E96E3182AA6BE724B857007 /* CaptureEditorView+Rendering.swift */,
 				41222AD41C09728906A0315C /* EditingComponents.swift */,
 				61FA2619E357175E925D798D /* SelectionOverlayView.swift */,
 			);
@@ -488,8 +494,10 @@
 				B5584BCC1216AF24B332E40D /* AppDelegate.swift in Sources */,
 				310AC41A22BE3343B7256CED /* AppSettings.swift in Sources */,
 				21B69121FFF44550CD4586A0 /* CaptureCoordinator.swift in Sources */,
+				EA8F47115E3516693BF94D72 /* CaptureEditorLayout.swift in Sources */,
 				ED62A1057DA2F03880318F1A /* CaptureEditorSidePanelView.swift in Sources */,
 				4325DE83948DEDC2C1A7CF78 /* CaptureEditorToolbarView.swift in Sources */,
+				50CF58FDBB57ED09582DAB39 /* CaptureEditorView+Rendering.swift in Sources */,
 				8BE7DED61C9EC55C98155854 /* CaptureEditorView.swift in Sources */,
 				F8E7C96B92F1BEE9E504D74C /* CapturePermissionService.swift in Sources */,
 				DE568699012109BCB32B82B4 /* ClipboardMonitor.swift in Sources */,

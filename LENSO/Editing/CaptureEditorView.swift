@@ -12,8 +12,8 @@ struct CaptureEditorView: View {
     let onQuickCopy: (CGImage) -> Void
     let onPin: (CGImage, CGRect) -> Void
 
-    @State private var state = AnnotationState()
-    @State private var selection: CGRect
+    @State var state = AnnotationState()
+    @State var selection: CGRect
     @State private var drawingAnnotation = false
 
     /// 是否显示右侧属性面板（可关闭，避免遮挡）
@@ -30,11 +30,9 @@ struct CaptureEditorView: View {
     @State private var ocrTask: Task<Void, Never>?
     @State private var translationTask: Task<Void, Never>?
     @State private var justSavedNote = false
-    @State private var ocrDisplayMode = 0
-    @State private var translationDisplayMode = 0
 
     /// 冻结图与屏幕的像素比
-    private var imageScale: CGFloat {
+    var imageScale: CGFloat {
         CGFloat(frozenImage.width) / screenFrame.width
     }
 
@@ -229,105 +227,13 @@ struct CaptureEditorView: View {
         onPin(composited, globalRect)
     }
 
-    // MARK: - 布局计算与避免遮挡
-
-    private struct EditorLayoutPositions {
-        let toolbarFrame: CGRect
-        let panelFrame: CGRect
-    }
-
-    /// 计算工具栏与属性面板（OCR卡片）位置，严格保证二者永不重叠，避免保存/取消按钮被遮挡
-    private static func calculateLayout(
-        selection: CGRect,
-        screenSize: CGSize,
-        toolbarSize: CGSize,
-        panelSize: CGSize
-    ) -> EditorLayoutPositions {
-        let margin: CGFloat = 8
-        let spacing: CGFloat = 12
-
-        // 1. 计算 bottomToolbar 位置
-        let toolbarX = min(
-            max(toolbarSize.width / 2 + margin, selection.midX),
-            screenSize.width - toolbarSize.width / 2 - margin
-        )
-
-        // 优先在选区下方；放不下放选区上方；都放不下放选区内底端（Snipaste 策略）
-        let toolbarY: CGFloat
-        if selection.maxY + spacing + toolbarSize.height + margin <= screenSize.height {
-            toolbarY = selection.maxY + spacing + toolbarSize.height / 2
-        } else if selection.minY - spacing - toolbarSize.height >= margin {
-            toolbarY = selection.minY - spacing - toolbarSize.height / 2
-        } else {
-            toolbarY = min(
-                selection.maxY - spacing - toolbarSize.height / 2,
-                screenSize.height - toolbarSize.height / 2 - margin
-            )
-        }
-
-        let toolbarRect = CGRect(
-            x: toolbarX - toolbarSize.width / 2,
-            y: toolbarY - toolbarSize.height / 2,
-            width: toolbarSize.width,
-            height: toolbarSize.height
-        )
-
-        // 2. 计算 sidePanel（OCR/属性面板）位置
-        // 优先放选区右侧；右侧不够放选区左侧；两边都不够放屏幕右侧
-        let panelX: CGFloat
-        if selection.maxX + spacing + panelSize.width + margin <= screenSize.width {
-            panelX = selection.maxX + spacing + panelSize.width / 2
-        } else if selection.minX - spacing - panelSize.width >= margin {
-            panelX = selection.minX - spacing - panelSize.width / 2
-        } else {
-            panelX = screenSize.width - panelSize.width / 2 - margin
-        }
-
-        let panelLeft = panelX - panelSize.width / 2
-        let panelRight = panelX + panelSize.width / 2
-
-        // 判断 X 轴是否与底部工具栏重叠（留出间距）
-        let overlapsX = panelLeft < toolbarRect.maxX + spacing && panelRight > toolbarRect.minX - spacing
-
-        var panelY: CGFloat
-        if overlapsX {
-            // X 轴重叠：垂直方向严格避让工具栏，绝不能遮挡保存/取消按钮
-            if toolbarRect.midY > screenSize.height / 2 {
-                // 工具栏偏屏幕下方：属性面板放置在工具栏上方
-                let maxPanelBottom = toolbarRect.minY - spacing
-                panelY = maxPanelBottom - panelSize.height / 2
-                panelY = max(panelSize.height / 2 + margin, panelY)
-            } else {
-                // 工具栏偏屏幕上方：属性面板放置在工具栏下方
-                let minPanelTop = toolbarRect.maxY + spacing
-                panelY = minPanelTop + panelSize.height / 2
-                panelY = min(screenSize.height - panelSize.height / 2 - margin, panelY)
-            }
-        } else {
-            // X 轴不重叠：垂直居中于选区
-            panelY = min(
-                max(panelSize.height / 2 + margin, selection.midY),
-                screenSize.height - panelSize.height / 2 - margin
-            )
-        }
-
-        let panelRect = CGRect(
-            x: panelX - panelSize.width / 2,
-            y: panelY - panelSize.height / 2,
-            width: panelSize.width,
-            height: panelSize.height
-        )
-
-        return EditorLayoutPositions(toolbarFrame: toolbarRect, panelFrame: panelRect)
-    }
-
     /// 工具栏与属性面板挂载
     @ViewBuilder
     private var toolbarAndPanel: some View {
         let localSel = selection
         let toolbarSize = CGSize(width: 610, height: 52)
         let panelSize = CGSize(width: 270, height: 410)
-        let layout = Self.calculateLayout(
+        let layout = CaptureEditorLayout.calculateLayout(
             selection: localSel,
             screenSize: screenFrame.size,
             toolbarSize: toolbarSize,
@@ -515,121 +421,7 @@ struct CaptureEditorView: View {
         }
     }
 
-    /// 合成：冻结帧裁剪选区 + 标注
-    private func renderFinalImage() -> CGImage? {
-        let pxRect = CGRect(
-            x: selection.origin.x * imageScale,
-            y: selection.origin.y * imageScale,
-            width: selection.width * imageScale,
-            height: selection.height * imageScale
-        ).integral
-        let base = frozenImage.cropping(to: pxRect)
-        guard var base, !state.annotations.isEmpty else { return base }
 
-        // 画标注
-        let w = Int(pxRect.width), h = Int(pxRect.height)
-        guard let ctx = CGContext(
-            data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return base }
-        ctx.draw(base, in: CGRect(x: 0, y: 0, width: w, height: h))
-        ctx.setLineCap(.round)
-
-        let sw = CGFloat(w), sh = CGFloat(h)
-        for annotation in state.annotations {
-            let color = NSColor(AnnotationPalette[annotation.colorIndex]).withAlphaComponent(annotation.kind == .highlight ? 0.4 : 1)
-            ctx.setStrokeColor(color.cgColor)
-            ctx.setFillColor(color.cgColor)
-            ctx.setLineWidth(annotation.strokeWidth * imageScale)
-
-            let p1 = CGPoint(x: annotation.start.x * sw, y: (1 - annotation.start.y) * sh)
-            let p2 = CGPoint(x: annotation.end.x * sw, y: (1 - annotation.end.y) * sh)
-            let rect = CGRect(x: min(p1.x, p2.x), y: min(p1.y, p2.y),
-                              width: abs(p2.x - p1.x), height: abs(p2.y - p1.y))
-
-            switch annotation.kind {
-            case .rect:
-                ctx.stroke(rect)
-            case .ellipse:
-                ctx.strokeEllipse(in: rect)
-            case .arrow:
-                drawArrow(ctx, from: p1, to: p2, headLen: 12 * imageScale)
-            case .brush:
-                ctx.move(to: p1)
-                ctx.addLine(to: p2)
-                ctx.strokePath()
-            case .highlight:
-                ctx.setFillColor(color.cgColor)
-                ctx.fill(rect)
-            case .mosaic:
-                applyMosaic(ctx, image: base, rect: CGRect(
-                    x: min(p1.x, p2.x), y: min(p1.y, p2.y),
-                    width: rect.width, height: rect.height
-                ))
-            case .text:
-                // 文字标注：按所选颜色把真文字画进导出图（翻转坐标系里按左上锚点排版）
-                let fontSize = 16 * imageScale
-                let font = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
-                let attrs: [NSAttributedString.Key: Any] = [
-                    .font: font,
-                    .foregroundColor: NSColor(AnnotationPalette[annotation.colorIndex])
-                ]
-                let attr = NSAttributedString(string: annotation.text, attributes: attrs)
-                let topDownRect = CGRect(
-                    x: annotation.start.x * sw,
-                    y: annotation.start.y * sh,
-                    width: max(1, (annotation.end.x - annotation.start.x) * sw),
-                    height: max(fontSize * 1.2, (annotation.end.y - annotation.start.y) * sh)
-                )
-                let nsCtx = NSGraphicsContext(cgContext: ctx, flipped: true)
-                NSGraphicsContext.saveGraphicsState()
-                NSGraphicsContext.current = nsCtx
-                attr.draw(in: topDownRect)
-                NSGraphicsContext.restoreGraphicsState()
-            }
-        }
-        base = ctx.makeImage() ?? base
-        return base
-    }
-
-    private func drawArrow(_ ctx: CGContext, from: CGPoint, to: CGPoint, headLen: CGFloat) {
-        ctx.move(to: from)
-        ctx.addLine(to: to)
-        ctx.strokePath()
-        let angle = atan2(to.y - from.y, to.x - from.x)
-        for delta in [2.5, -2.5] {
-            let hx = to.x - headLen * cos(angle + delta)
-            let hy = to.y - headLen * sin(angle + delta)
-            ctx.move(to: to)
-            ctx.addLine(to: CGPoint(x: hx, y: hy))
-            ctx.strokePath()
-        }
-    }
-
-    /// 马赛克：选区内 16px 块取平均色
-    private func applyMosaic(_ ctx: CGContext, image: CGImage, rect: CGRect) {
-        let blockSize = max(8, 16 * Int(imageScale) / 2)
-        guard let data = ctx.makeImage() else { return }
-        // 简化：用低分辨率重采样回贴
-        let smallW = max(1, Int(rect.width) / blockSize)
-        let smallH = max(1, Int(rect.height) / blockSize)
-        guard let smallCtx = CGContext(
-            data: nil, width: smallW, height: smallH, bitsPerComponent: 8, bytesPerRow: 0,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return }
-        smallCtx.interpolationQuality = .low
-        smallCtx.draw(image, in: CGRect(x: -rect.origin.x / CGFloat(blockSize), y: -rect.origin.y / CGFloat(blockSize),
-                                        width: CGFloat(smallW) + rect.width / CGFloat(blockSize),
-                                        height: CGFloat(smallH) + rect.height / CGFloat(blockSize)))
-        guard let small = smallCtx.makeImage() else { return }
-        ctx.saveGState()
-        ctx.clip(to: [rect])
-        ctx.interpolationQuality = .none
-        ctx.draw(small, in: rect)
-        ctx.restoreGState()
-    }
 }
 
 
