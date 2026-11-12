@@ -48,14 +48,17 @@ final class CaptureCoordinator: NSObject {
     }
 
     private func startRegionCaptureAsync() async {
-        // 触发阶段**不再**做权限探测。
-        //
-        // 以前这里会先枚举 SCShareableContent 当作权限检查，问题有两个：
-        //   1. 枚举本身会偶发失败（锁屏、显示器热插拔、系统繁忙都会），
-        //      一失败就直接 return，用户看到的就是「按了热键没反应」；
-        //   2. 选区浮层根本不需要屏幕录制权限——它只是个透明面板。
-        // 所以现在先无条件把选区上屏，真正抓图时若没权限，在「确认」那一步
-        // 给出明确提示（见下面的 catch）。触发因此永远是即时的。
+        // 权限前置拦截：若无屏幕录制权限，直接拦截并触发系统权限申请，绝不上屏选区遮罩或让用户无效框选
+        var hasAccess = CGPreflightScreenCaptureAccess()
+        if !hasAccess {
+            hasAccess = await CapturePermissionService.probeAccess()
+        }
+        guard hasAccess else {
+            log.warning("startRegionCapture blocked: screen recording permission not granted")
+            NSSound.beep()
+            _ = CGRequestScreenCaptureAccess()
+            return
+        }
 
         // 丝滑 v2：面板立刻上屏（不预抓图），选区里透出实时桌面。
         // 确认后才抓一张全屏当编辑器背景，抓时把选区面板排除在外。
