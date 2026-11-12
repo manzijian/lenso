@@ -64,15 +64,17 @@ final class CaptureCoordinator: NSObject {
         selector.begin { [weak self, weak selector] rect, displayID, panelWindowNumber, prefrozen in
             Task { @MainActor in
                 guard let self, let selector, !selector.isDismissed else { return }
+                // 核心修复：选区确认后立刻关闭选区全屏面板，彻底退出截图遮罩状态，
+                // 绝不拖到后续抓图或报错弹窗之后，杜绝“弹出错误时还在截图状态”
+                selector.dismiss()
+                self.selector = nil
+
                 _ = await self.captureFrameAndProceed(
                     displayID: displayID,
                     excludedWindowIDs: [panelWindowNumber],
                     prefrozen: prefrozen,
                     rect: rect
                 )
-                // 无论抓取成功与否，选区阶段均已结束，必须立刻 dismiss 关闭选区面板，杜绝全屏遮罩残留挡住桌面
-                selector.dismiss()
-                self.selector = nil
             }
         }
     }
@@ -273,12 +275,22 @@ final class CaptureCoordinator: NSObject {
         }
     }
 
-    /// SCK 在没有屏幕录制权限时抛的错误（域 SCStreamErrorDomain / 用户取消）。
+    /// SCK 在没有屏幕录制权限或用户拒绝 TCC 时抛的错误
     static func isPermissionError(_ error: Error) -> Bool {
         let ns = error as NSError
-        if ns.domain == "SCStreamErrorDomain" { return true }
-        // CGError 里 .notPermitted / .invalidDisplay 也常被包成这个
-        return ns.code == -3801 || ns.code == -3802
+        let desc = error.localizedDescription
+        if desc.localizedCaseInsensitiveContains("tcc")
+            || desc.contains("权限")
+            || desc.contains("拒绝")
+            || desc.localizedCaseInsensitiveContains("declined")
+            || desc.localizedCaseInsensitiveContains("denied")
+            || desc.localizedCaseInsensitiveContains("not permitted") {
+            return true
+        }
+        if ns.domain.contains("ScreenCaptureKit") || ns.domain.contains("SCStreamErrorDomain") {
+            return true
+        }
+        return ns.code == -3801 || ns.code == -3802 || ns.code == 1
     }
 
     func copyToClipboard(image: CGImage) {
