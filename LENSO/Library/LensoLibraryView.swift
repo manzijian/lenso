@@ -10,7 +10,7 @@ struct LensoLibraryView: View {
     var onOpenPreview: ((UUID) -> Void)? = nil
 
     @State private var selectedIDs: Set<UUID> = []
-    @State private var section: Section = .screenshots
+    @State private var section: LibrarySection = .screenshots
     @State private var viewMode: ViewMode = .grid
     @State private var searchText: String = ""
     @State private var timeFilter: TimeFilter = .all
@@ -20,7 +20,7 @@ struct LensoLibraryView: View {
 
     @Environment(\.openWindow) private var openWindow
 
-    enum Section { case screenshots, text, recent, favorites, analytics }
+    typealias Section = LibrarySection
     enum ViewMode { case grid, list }
     enum TimeFilter: String, CaseIterable {
         case all = "全部时间"
@@ -93,6 +93,28 @@ struct LensoLibraryView: View {
                 case .analytics:
                     AnalyticsDashboardView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                case .settings(let category):
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 18) {
+                            HStack(spacing: 8) {
+                                Image(systemName: category.icon)
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundStyle(LensoColors.kleinBlueBright)
+                                Text(category.rawValue)
+                                    .font(.system(size: 19, weight: .bold))
+                                    .foregroundStyle(Color.primary)
+                                Spacer()
+                            }
+                            .padding(.top, 4)
+
+                            SettingsSectionContentView(category: category)
+                        }
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 20)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .background(mainBackground)
@@ -152,109 +174,16 @@ struct LensoLibraryView: View {
             .ignoresSafeArea()
     }
 
-    // MARK: - 侧边栏（无回收站，克莱因蓝激活胶囊）
+    // MARK: - 侧边栏（无回收站，克莱因蓝激活胶囊，看板下方铺开设置二级菜单）
 
     private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // 顶部留出 macOS 红绿灯高度
-            Color.clear.frame(height: 38)
-
-            navigationItem(
-                "全部截图",
-                icon: "photo.stack.fill",
-                count: images.count,
-                isActive: section == .screenshots
-            )
-            .onTapGesture { section = .screenshots }
-
-            navigationItem(
-                "文字收纳",
-                icon: "text.alignleft",
-                count: notes.count,
-                isActive: section == .text
-            )
-            .onTapGesture { section = .text }
-
-            navigationItem(
-                "最近",
-                icon: "clock.fill",
-                count: recentEntries.count,
-                isActive: section == .recent
-            )
-            .onTapGesture { section = .recent }
-
-            navigationItem(
-                "收藏夹",
-                icon: "star.fill",
-                count: favoriteEntries.count,
-                isActive: section == .favorites
-            )
-            .onTapGesture { section = .favorites }
-
-            navigationItem(
-                "数据看板",
-                icon: "chart.bar.xaxis",
-                isActive: section == .analytics
-            )
-            .onTapGesture { section = .analytics }
-
-            Spacer()
-
-            // 侧栏底部：偏好设置
-            navigationItem(
-                "偏好设置",
-                icon: "gearshape.fill",
-                isActive: false
-            )
-            .onTapGesture {
-                openWindow(id: "settings")
-                NSApp.activate(ignoringOtherApps: true)
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.bottom, 14)
-        .frame(width: 185)
-    }
-
-    private func navigationItem(
-        _ title: String,
-        icon: String,
-        count: Int? = nil,
-        isActive: Bool
-    ) -> some View {
-        HStack(spacing: 9) {
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: isActive ? .semibold : .medium))
-                .foregroundStyle(isActive ? .white : Color(red: 0.18, green: 0.18, blue: 0.22))
-                .frame(width: 18)
-
-            Text(title)
-                .font(.system(size: 13, weight: isActive ? .semibold : .medium))
-                .foregroundStyle(isActive ? .white : Color(red: 0.18, green: 0.18, blue: 0.22))
-
-            Spacer()
-
-            if let count {
-                Text("\(count)")
-                    .font(.system(size: 11, weight: isActive ? .bold : .medium, design: .rounded))
-                    .foregroundStyle(isActive ? LensoColors.kleinBlueBright : Color.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1.5)
-                    .background(
-                        Capsule().fill(isActive ? Color.white : Color.black.opacity(0.04))
-                    )
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background {
-            if isActive {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(LensoColors.kleinBlueBright)
-                    .shadow(color: LensoColors.kleinBlueBright.opacity(0.28), radius: 6, y: 2)
-            }
-        }
-        .contentShape(Rectangle())
+        LibrarySidebarView(
+            section: $section,
+            screenshotsCount: images.count,
+            textCount: notes.count,
+            recentCount: recentEntries.count,
+            favoritesCount: favoriteEntries.count
+        )
     }
 
     // MARK: - 顶部工具栏（克莱因蓝强调色 + 搜索框 + 视图切换）
