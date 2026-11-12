@@ -140,6 +140,8 @@ struct SettingsWindowView: View {
                     SettingToggleRow(label: "在下方应用栏（程序坞）显示图标", subtitle: "关闭后隐藏下方图标，仅在顶部状态栏常驻（默认开启）", isOn: $settings.showInDock)
                     rowDivider
                     SettingToggleRow(label: "截图保存后打开预览窗口", subtitle: "截完图后自动打开独立无极缩放预览", isOn: $settings.showPreviewAfterCapture)
+                    rowDivider
+                    SettingToggleRow(label: "开启 MCP 本地服务", subtitle: "允许本地 AI Agent（Claude、Cursor 等）安全读取历史与剪贴板", isOn: $settings.enableMCPServer)
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
