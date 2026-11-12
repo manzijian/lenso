@@ -12,7 +12,7 @@ struct ScreenshotStoreSmokeTests {
             try? FileManager.default.removeItem(at: tempDir)
         }
 
-        let store = ScreenshotStore(baseDirectory: tempDir)
+        let store = try ScreenshotStore(baseDirectory: tempDir)
         #expect(store.textNoteCount() == 0)
 
         // 验证数据库和必要子目录已在临时目录成功生成

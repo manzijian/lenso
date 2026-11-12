@@ -22,10 +22,10 @@ struct CaptureStateMachineTests {
         return context.makeImage()!
     }
 
-    private func makeTemporaryStore() -> (ScreenshotStore, URL) {
+    private func makeTemporaryStore() throws -> (ScreenshotStore, URL) {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("LENSO_CaptureTest_\(UUID().uuidString)", isDirectory: true)
-        let store = ScreenshotStore(baseDirectory: tempDir)
+        let store = try ScreenshotStore(baseDirectory: tempDir)
         return (store, tempDir)
     }
 
@@ -36,7 +36,7 @@ struct CaptureStateMachineTests {
         let mockCapture = MockCaptureService(image: image)
         let mockClipboard = MockClipboard()
         let mockPresenter = MockErrorPresenter()
-        let (store, tempDir) = makeTemporaryStore()
+        let (store, tempDir) = try makeTemporaryStore()
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
         let coordinator = CaptureCoordinator(
@@ -65,7 +65,7 @@ struct CaptureStateMachineTests {
         mockCapture.shouldThrowPermissionError = true
         let mockClipboard = MockClipboard()
         let mockPresenter = MockErrorPresenter()
-        let (store, tempDir) = makeTemporaryStore()
+        let (store, tempDir) = try makeTemporaryStore()
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
         let coordinator = CaptureCoordinator(
@@ -95,7 +95,7 @@ struct CaptureStateMachineTests {
         mockCapture.shouldThrowGenericError = true
         let mockClipboard = MockClipboard()
         let mockPresenter = MockErrorPresenter()
-        let (store, tempDir) = makeTemporaryStore()
+        let (store, tempDir) = try makeTemporaryStore()
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
         let coordinator = CaptureCoordinator(
@@ -123,7 +123,7 @@ struct CaptureStateMachineTests {
         let mockCapture = MockCaptureService()
         let mockClipboard = MockClipboard()
         let mockPresenter = MockErrorPresenter()
-        let (store, tempDir) = makeTemporaryStore()
+        let (store, tempDir) = try makeTemporaryStore()
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
         let coordinator = CaptureCoordinator(
@@ -158,7 +158,7 @@ struct CaptureStateMachineTests {
         let mockCapture = MockCaptureService()
         let mockClipboard = MockClipboard()
         let mockPresenter = MockErrorPresenter()
-        let (store, tempDir) = makeTemporaryStore()
+        let (store, tempDir) = try makeTemporaryStore()
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
         let coordinator = CaptureCoordinator(

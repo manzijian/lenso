@@ -7,10 +7,10 @@ import AppKit
 @Suite("ScreenshotStore Storage Layer Tests")
 struct ScreenshotStoreTests {
 
-    private func createTempStore() -> (ScreenshotStore, URL) {
+    private func createTempStore() throws -> (ScreenshotStore, URL) {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("LENSO_StoreTest_\(UUID().uuidString)", isDirectory: true)
-        let store = ScreenshotStore(baseDirectory: tempDir)
+        let store = try ScreenshotStore(baseDirectory: tempDir)
         return (store, tempDir)
     }
 
@@ -35,7 +35,7 @@ struct ScreenshotStoreTests {
 
     @Test("截图记录 CRUD：保存、查询、加载图片、删除与文件清理")
     func screenshotCRUD() throws {
-        let (store, tempDir) = createTempStore()
+        let (store, tempDir) = try createTempStore()
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
         let image = makeTestCGImage(width: 64, height: 48, color: .green)
@@ -76,7 +76,7 @@ struct ScreenshotStoreTests {
 
     @Test("收藏切换：isFavorite 状态改变与 favoritedAt 时间戳记录")
     func screenshotFavoriteToggle() throws {
-        let (store, tempDir) = createTempStore()
+        let (store, tempDir) = try createTempStore()
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
         let image = makeTestCGImage()
@@ -104,7 +104,7 @@ struct ScreenshotStoreTests {
 
     @Test("Retention 过期清理：清理指定期限之前的数据，保留收藏项")
     func retentionCleanup() throws {
-        let (store, tempDir) = createTempStore()
+        let (store, tempDir) = try createTempStore()
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
         let oldDate = Date().addingTimeInterval(-86400 * 10) // 10 天前
@@ -133,7 +133,7 @@ struct ScreenshotStoreTests {
 
     @Test("剪贴板图文写入：去重、时间倒序与最新时间跃升")
     func clipboardDeduplicationAndOrder() async throws {
-        let (store, tempDir) = createTempStore()
+        let (store, tempDir) = try createTempStore()
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
         // 1. 文本写入与倒序
@@ -176,7 +176,7 @@ struct ScreenshotStoreTests {
 
     @Test("TextNote CRUD：创建、查询、更新、Touch 跃升、收藏与删除")
     func textNoteCRUD() async throws {
-        let (store, tempDir) = createTempStore()
+        let (store, tempDir) = try createTempStore()
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
         // 创建
@@ -214,7 +214,7 @@ struct ScreenshotStoreTests {
 
     @Test("并发写入 50 条：多线程并发调用 createTextNote，断言无丢失无死锁")
     func concurrentInsertNoLoss() throws {
-        let (store, tempDir) = createTempStore()
+        let (store, tempDir) = try createTempStore()
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
         let count = 50
