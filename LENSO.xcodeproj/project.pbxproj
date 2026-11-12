@@ -41,6 +41,8 @@
 		737871EAE860C603CF70B9FE /* TextDetailInspectorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11A555E7F611F2ABC6B7DC88 /* TextDetailInspectorSheet.swift */; };
 		7411FB463E194F750DFE3FD4 /* LensoMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A5FF2F92852CF47FF402B8 /* LensoMark.swift */; };
 		7EDE11C83D89B9FABEEA011E /* PinnedEditorState.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9676DFA319F5D5C3C336936 /* PinnedEditorState.swift */; };
+		814F45DDDA3D4EC1FE3439F5 /* PinnedScreenshotController+OCR.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80E07E66C59CFE8A4EF34F9B /* PinnedScreenshotController+OCR.swift */; };
+		85C1529CEE1DB774A56FF9EF /* PinnedScreenshotController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5F74DC24DD60529627DAC8E /* PinnedScreenshotController.swift */; };
 		8633F888101A9B4B098BE4E7 /* AnalyticsDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E39A3A4D31663FA84824550F /* AnalyticsDashboardView.swift */; };
 		8A053A317CB5D595422AA5CF /* LibraryWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE319A913EF71A6473D9DA2 /* LibraryWindowView.swift */; };
 		8BE7DED61C9EC55C98155854 /* CaptureEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51F18440E25048F21350866B /* CaptureEditorView.swift */; };
@@ -56,6 +58,7 @@
 		B6AC8948238E399699455EF3 /* LensoAnimations.swift in Sources */ = {isa = PBXBuildFile; fileRef = A26280DFFE85B83D0B9A05D2 /* LensoAnimations.swift */; };
 		BCA9481A1BD9DDBA8CBF3D8E /* TextIntelligence.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB8EC9C1D622C9710C862636 /* TextIntelligence.swift */; };
 		BEF7EBE7C225F23EF8AA22C4 /* LensoColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = A82C877CAA54F5A72BB7A2C4 /* LensoColors.swift */; };
+		C8F9758287D91AACF85EFB48 /* PinnedToolbarViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7E44F0DE297A9F2CCB87BF6 /* PinnedToolbarViews.swift */; };
 		C9F8421873724F37DEE74863 /* LensoSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61EDF15A8E03284FE7451DBE /* LensoSpacing.swift */; };
 		CAB5A40D1F356E29BD3679D4 /* GlobalHotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92607DD1E5C5B98847BD096E /* GlobalHotKeyManager.swift */; };
 		D153AE7F6D916F17FAB9F757 /* LensoTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B7699807F95B1D64ECCC681 /* LensoTypography.swift */; };
@@ -113,6 +116,7 @@
 		6D3AF7C7AB4090B43A75631B /* ScreenshotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotStore.swift; sourceTree = "<group>"; };
 		70271F6849804572EDD4DE4C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		7B81A568E9C7979CF07D4649 /* ScreenshotStoreSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotStoreSmokeTests.swift; sourceTree = "<group>"; };
+		80E07E66C59CFE8A4EF34F9B /* PinnedScreenshotController+OCR.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PinnedScreenshotController+OCR.swift"; sourceTree = "<group>"; };
 		86C78002C2F37CAB9153ED45 /* RegionSelectorWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionSelectorWindow.swift; sourceTree = "<group>"; };
 		877A569F97194ADB3A26C379 /* TranslationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationProvider.swift; sourceTree = "<group>"; };
 		884BB61BBEFEE7928E2EC72B /* FavoriteStarButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteStarButton.swift; sourceTree = "<group>"; };
@@ -135,12 +139,14 @@
 		BFB662904840CB9F5885D0C1 /* NoteEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteEditorSheet.swift; sourceTree = "<group>"; };
 		C126297582173D0BA7E950D0 /* LensoLocalService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoLocalService.swift; sourceTree = "<group>"; };
 		C5A7B338A56587241624CF4F /* LibraryEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryEntry.swift; sourceTree = "<group>"; };
+		C5F74DC24DD60529627DAC8E /* PinnedScreenshotController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedScreenshotController.swift; sourceTree = "<group>"; };
 		C9676DFA319F5D5C3C336936 /* PinnedEditorState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedEditorState.swift; sourceTree = "<group>"; };
 		C9D07DA1B053B980CDE8B2CA /* LENSOTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LENSOTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CD209F1E73612BFE09EF7A77 /* PreviewWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewWindowView.swift; sourceTree = "<group>"; };
 		D93797B089581C688C44523A /* WindowConfigurator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowConfigurator.swift; sourceTree = "<group>"; };
 		DB8EC9C1D622C9710C862636 /* TextIntelligence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextIntelligence.swift; sourceTree = "<group>"; };
 		E39A3A4D31663FA84824550F /* AnalyticsDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsDashboardView.swift; sourceTree = "<group>"; };
+		F7E44F0DE297A9F2CCB87BF6 /* PinnedToolbarViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedToolbarViews.swift; sourceTree = "<group>"; };
 		FE3FCF1084A3CEA10F815351 /* ClipboardPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPanelController.swift; sourceTree = "<group>"; };
 		FEA52E5DA6BB4A0D1D863A96 /* AnnotationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationModel.swift; sourceTree = "<group>"; };
 		FEC28A398581D301F8477089 /* LibraryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryViewModel.swift; sourceTree = "<group>"; };
@@ -207,6 +213,9 @@
 				C9676DFA319F5D5C3C336936 /* PinnedEditorState.swift */,
 				25B807289023065DFCE75637 /* PinnedImageView.swift */,
 				63F18A5427F062C7DE80D80B /* PinnedPanel.swift */,
+				C5F74DC24DD60529627DAC8E /* PinnedScreenshotController.swift */,
+				80E07E66C59CFE8A4EF34F9B /* PinnedScreenshotController+OCR.swift */,
+				F7E44F0DE297A9F2CCB87BF6 /* PinnedToolbarViews.swift */,
 			);
 			path = Pinned;
 			sourceTree = "<group>";
@@ -501,6 +510,9 @@
 				7EDE11C83D89B9FABEEA011E /* PinnedEditorState.swift in Sources */,
 				F62C4A4B0B6E32DE2F10021C /* PinnedImageView.swift in Sources */,
 				5E44D7BE4532C0B89364F604 /* PinnedPanel.swift in Sources */,
+				814F45DDDA3D4EC1FE3439F5 /* PinnedScreenshotController+OCR.swift in Sources */,
+				85C1529CEE1DB774A56FF9EF /* PinnedScreenshotController.swift in Sources */,
+				C8F9758287D91AACF85EFB48 /* PinnedToolbarViews.swift in Sources */,
 				E8A1E10D92154E1F0DDD271E /* PreviewWindowView.swift in Sources */,
 				308025B66ECD2E6CA69FC9AB /* ProviderRegistry.swift in Sources */,
 				20F723F27026817794C9859C /* RegionSelectorWindow.swift in Sources */,
