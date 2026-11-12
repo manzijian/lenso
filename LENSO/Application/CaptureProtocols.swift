@@ -59,22 +59,16 @@ final class SystemClipboardWriter: ClipboardWriting {
 @MainActor
 final class SystemErrorPresenter: ErrorPresenting {
     func presentCaptureError(title: String, message: String, isPermission: Bool) {
+        // macOS 系统在缺少屏幕录制权限时会自动弹出系统级授权提醒，应用层无需再弹窗重复打扰
+        if isPermission {
+            return
+        }
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = message
         alert.alertStyle = .warning
-        if isPermission {
-            alert.addButton(withTitle: "打开系统设置")
-            alert.addButton(withTitle: "好")
-        } else {
-            alert.addButton(withTitle: "好")
-        }
-        let response = alert.runModal()
-        if isPermission && response == .alertFirstButtonReturn {
-            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
-                NSWorkspace.shared.open(url)
-            }
-        }
+        alert.addButton(withTitle: "好")
+        _ = alert.runModal()
     }
 }

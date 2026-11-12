@@ -64,16 +64,15 @@ final class CaptureCoordinator: NSObject {
         selector.begin { [weak self, weak selector] rect, displayID, panelWindowNumber, prefrozen in
             Task { @MainActor in
                 guard let self, let selector, !selector.isDismissed else { return }
-                let success = await self.captureFrameAndProceed(
+                _ = await self.captureFrameAndProceed(
                     displayID: displayID,
                     excludedWindowIDs: [panelWindowNumber],
                     prefrozen: prefrozen,
                     rect: rect
                 )
-                if success {
-                    selector.dismiss()
-                    self.selector = nil
-                }
+                // 无论抓取成功与否，选区阶段均已结束，必须立刻 dismiss 关闭选区面板，杜绝全屏遮罩残留挡住桌面
+                selector.dismiss()
+                self.selector = nil
             }
         }
     }

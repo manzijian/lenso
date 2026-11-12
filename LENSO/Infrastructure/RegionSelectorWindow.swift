@@ -296,6 +296,12 @@ final class RegionSelectorController: NSObject {
               let downPanel else { return }
         let clamped = hit.intersection(downPanel.screenFrameForDisplay)
         guard clamped.width >= 8, clamped.height >= 8 else { return }
+        // 区域截图模式下：若命中的窗口尺寸接近全屏（如桌面壁纸、Finder 背景），不作为吸附，避免意外触发全屏截图
+        let screen = downPanel.screenFrameForDisplay
+        if clamped.width >= screen.width - 16 && clamped.height >= screen.height - 16 {
+            selLog.info("ignore full screen snap on click in region capture mode")
+            return
+        }
         selLog.info("window snap click at \(NSStringFromPoint(globalPoint), privacy: .public)")
         let id = downPanel.ownDisplayID
         onComplete?(clamped, id, CGWindowID(downPanel.windowNumber), frozenFrames[id])
