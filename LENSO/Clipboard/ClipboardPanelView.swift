@@ -118,7 +118,7 @@ struct ClipboardPanelView: View {
                     if copiedID == item.id {
                         Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                     } else {
-                        Text(item.createdAt, style: .time)
+                        Text(DateFormatter.lensoFullDateTime.string(from: item.createdAt))
                     }
                     if item.kind == .text {
                         Button {

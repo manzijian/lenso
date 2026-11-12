@@ -27,11 +27,11 @@ final class SearchPanelController {
         }
         let hosting = NSHostingView(rootView: view)
         hosting.appearance = NSAppearance(named: .aqua)
-        let size = NSSize(width: 780, height: 580)
+        let size = NSSize(width: 880, height: 620)
         guard let screen = NSScreen.main else { return }
         let frame = NSRect(
             x: screen.frame.midX - size.width / 2,
-            y: screen.frame.maxY - size.height - 80,
+            y: screen.frame.maxY - size.height - 70,
             width: size.width,
             height: size.height
         )
@@ -45,6 +45,8 @@ final class SearchPanelController {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
+        panel.isMovable = true
+        panel.isMovableByWindowBackground = true
         panel.contentView = hosting
         panel.setFrame(frame, display: true)
         panel.onCancel = { [weak self] in self?.hide() }

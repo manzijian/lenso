@@ -178,7 +178,7 @@ struct LibraryFeedView: View {
     }
 
     private func timeText(_ date: Date) -> String {
-        date.formatted(date: .abbreviated, time: .shortened)
+        DateFormatter.lensoFullDateTime.string(from: date)
     }
 
     private func toggleScreenshotFavorite(_ record: ScreenshotRecord) {

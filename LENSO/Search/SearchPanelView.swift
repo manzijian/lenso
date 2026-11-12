@@ -1,8 +1,32 @@
 import SwiftUI
 import AppKit
 
-/// Spotlight 风格全局搜索与最近剪贴板聚合面板
-/// 唤出搜索直接按时间倒序展示最新复制的文字与图片，支持分类过滤、实时检索与平滑滚动查看
+/// 通用中文完整日期时间格式化工具：统一输出「年月日时分秒」
+extension DateFormatter {
+    static let lensoFullDateTime: DateFormatter = {
+        let df = DateFormatter()
+        df.dateFormat = "yyyy年MM月dd日 HH:mm:ss"
+        df.locale = Locale(identifier: "zh_CN")
+        return df
+    }()
+}
+
+/// 原生窗口拖拽手势辅助视图：按住任意区域即可流畅拖动窗口移动
+struct WindowDragHandleView: NSViewRepresentable {
+    func makeNSView(context: Context) -> DragNSView { DragNSView() }
+    func updateNSView(_ nsView: DragNSView, context: Context) {}
+
+    final class DragNSView: NSView {
+        override var mouseDownCanMoveWindow: Bool { true }
+        override func mouseDown(with event: NSEvent) {
+            window?.performDrag(with: event)
+        }
+    }
+}
+
+/// Spotlight 风格全局搜索与最近剪贴板聚合画廊
+/// 采用方块形照片网格铺满排版（LazyVGrid），支持窗口自由拖拽移动，
+/// 整合展示截图与复制文字，并以「年月日时分秒」精准呈现时间。
 struct SearchPanelView: View {
     var onDismiss: () -> Void = {}
 
@@ -36,26 +60,40 @@ struct SearchPanelView: View {
     @State private var copiedID: UUID?
     @FocusState private var focused: Bool
 
+    // 方块形网格布局：自适应列宽（185~230pt），如同相册照片墙铺满整个界面
+    private let gridColumns = [
+        GridItem(.adaptive(minimum: 185, maximum: 230), spacing: 14)
+    ]
+
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
+            // 顶部拖拽手柄指示条（按住可拖动窗口）
+            topDragBar
+
             // 顶部搜索胶囊栏
             searchHeader
 
             // 分类筛选与数量统计栏
             filterBar
 
-            // 滚动查看内容流（图文聚合，时间倒序）
+            // 照片级方块铺满网格流（图文聚合，时间倒序）
             scrollContent
         }
-        .padding(16)
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .padding(.bottom, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color(red: 0.985, green: 0.988, blue: 0.995))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
-                )
+            ZStack {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(Color(red: 0.985, green: 0.988, blue: 0.995))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
+                    )
+                // 背景区域可全局直接拖拽窗口
+                WindowDragHandleView()
+            }
         }
         .shadow(color: Color.black.opacity(0.22), radius: 32, y: 14)
         .onAppear {
@@ -66,6 +104,22 @@ struct SearchPanelView: View {
         .onChange(of: selectedCategory) { _ in reloadFeed() }
         .onExitCommand { onDismiss() }
         .lensoColorScheme()
+    }
+
+    // MARK: - 顶部拖拽把手
+
+    private var topDragBar: some View {
+        HStack {
+            Spacer()
+            Capsule()
+                .fill(Color.black.opacity(0.18))
+                .frame(width: 44, height: 4.5)
+            Spacer()
+        }
+        .padding(.top, 2)
+        .padding(.bottom, 2)
+        .background(WindowDragHandleView())
+        .help("按住可拖拽移动此窗口")
     }
 
     // MARK: - 顶部搜索胶囊
@@ -81,7 +135,6 @@ struct SearchPanelView: View {
                 .font(.system(size: 15))
                 .focused($focused)
                 .onSubmit {
-                    // 回车直接复制第一项
                     if let first = filteredItems.first {
                         copyItem(first)
                     }
@@ -98,6 +151,12 @@ struct SearchPanelView: View {
                 .buttonStyle(.plain)
             }
 
+            // 拖拽窗口移动图标提示
+            Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+                .font(.system(size: 12))
+                .foregroundStyle(Color.secondary.opacity(0.5))
+                .help("拖拽窗口任意空白区可移动位置")
+
             // 关闭按钮
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
@@ -110,7 +169,7 @@ struct SearchPanelView: View {
             .help("关闭搜索 (Esc)")
         }
         .padding(.horizontal, 16)
-        .frame(height: 52)
+        .frame(height: 50)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color.white)
@@ -146,7 +205,7 @@ struct SearchPanelView: View {
 
             Spacer()
 
-            Text("共 \(filteredItems.count) 条记录 · 时间倒序")
+            Text("共 \(filteredItems.count) 项 · 按时间倒序")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
 
@@ -165,20 +224,20 @@ struct SearchPanelView: View {
         .padding(.horizontal, 4)
     }
 
-    // MARK: - 滚动流
+    // MARK: - 方块形铺满内容流（类似照片相册卡片）
 
     private var scrollContent: some View {
         Group {
             if filteredItems.isEmpty {
                 VStack(spacing: 12) {
                     Spacer()
-                    Image(systemName: searchText.isEmpty ? "doc.on.clipboard" : "magnifyingglass")
-                        .font(.system(size: 36))
+                    Image(systemName: searchText.isEmpty ? "photo.stack" : "magnifyingglass")
+                        .font(.system(size: 38))
                         .foregroundStyle(LensoColors.kleinBlueBright.opacity(0.45))
-                    Text(searchText.isEmpty ? "还没有最近复制记录" : "未找到匹配的内容")
+                    Text(searchText.isEmpty ? "暂无最近复制记录" : "未找到匹配的内容")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(.secondary)
-                    Text(searchText.isEmpty ? "复制任何文字或截取图片将自动在此归集显示" : "请尝试更换关键词")
+                    Text(searchText.isEmpty ? "截取图片或复制任何文字，将自动在此形成方块卡片归集" : "请尝试更换关键词")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary.opacity(0.7))
                     Spacer()
@@ -186,164 +245,249 @@ struct SearchPanelView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 8) {
+                    LazyVGrid(columns: gridColumns, spacing: 14) {
                         ForEach(filteredItems) { item in
-                            cardView(for: item)
+                            tileView(for: item)
                         }
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 6)
                 }
             }
         }
     }
 
-    // MARK: - 单元卡片视图
+    // MARK: - 方块卡片分发
 
     @ViewBuilder
-    private func cardView(for item: FeedItem) -> some View {
+    private func tileView(for item: FeedItem) -> some View {
+        switch item.kind {
+        case .image(let cgImage, _):
+            screenshotTile(for: item, cgImage: cgImage)
+        case .text(let content):
+            textTile(for: item, content: content)
+        }
+    }
+
+    // MARK: - 截图方块卡片（类似相册照片，满铺 + 年月日时分秒）
+
+    @ViewBuilder
+    private func screenshotTile(for item: FeedItem, cgImage: CGImage?) -> some View {
         let isCopied = copiedID == item.id
 
-        HStack(spacing: 12) {
-            // 左侧：图片缩略图 或 文字图标
-            switch item.kind {
-            case .image(let cgImage, _):
+        ZStack(alignment: .bottom) {
+            // 背景与图片主体
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color(red: 0.93, green: 0.94, blue: 0.96))
+
                 if let cgImage {
                     Image(decorative: cgImage, scale: 2)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                        .frame(width: 72, height: 50)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
-                        )
+                        .frame(height: 185)
+                        .clipped()
                 } else {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.black.opacity(0.04))
-                        .frame(width: 72, height: 50)
-                        .overlay(Image(systemName: "photo").foregroundStyle(.secondary))
-                }
-
-            case .text:
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(LensoColors.kleinBlueSoft)
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "text.quote")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(LensoColors.kleinBlueBright)
+                    VStack(spacing: 6) {
+                        Image(systemName: "photo")
+                            .font(.system(size: 24))
+                            .foregroundStyle(.secondary)
+                        Text("图片记录")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
+            .frame(height: 185)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-            // 中间：主内容与副标题
-            VStack(alignment: .leading, spacing: 4) {
+            // 顶部浮动栏：来源应用胶囊 + 快速动作（预览/复制）
+            VStack {
                 HStack(spacing: 6) {
                     if let app = item.sourceApp, !app.isEmpty {
                         Text(app)
-                            .font(.system(size: 10, weight: .medium))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.black.opacity(0.05)))
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(Color.black.opacity(0.6)))
                     }
-
-                    Text(relativeTime(item.createdAt))
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-
                     Spacer()
-                }
-
-                Text(item.title)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.primary.opacity(0.9))
-                    .lineLimit(2)
-
-                if !item.subtitle.isEmpty {
-                    Text(item.subtitle)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer(minLength: 8)
-
-            // 右侧操作栏：复制反馈 / 查看预览 / 复制按钮
-            HStack(spacing: 6) {
-                if isCopied {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 13))
-                        Text("已复制")
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .foregroundStyle(Color.green)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(Color.green.opacity(0.12)))
-                } else {
-                    // 若是图片，提供查看大图按钮
-                    if case .image(let cgImage, _) = item.kind, let cgImage {
+                    if let cgImage {
                         Button {
                             openFloatingPreview(cgImage)
                         } label: {
                             Image(systemName: "eye.fill")
-                                .font(.system(size: 11))
-                                .foregroundStyle(Color.primary.opacity(0.75))
-                                .frame(width: 28, height: 28)
-                                .background(Circle().fill(Color.black.opacity(0.04)))
+                                .font(.system(size: 10))
+                                .foregroundStyle(.white)
+                                .frame(width: 24, height: 24)
+                                .background(Circle().fill(Color.black.opacity(0.6)))
                         }
                         .buttonStyle(.plain)
-                        .help("打开无边框贴图预览")
+                        .help("无边框置顶预览")
                     }
-
-                    // 复制按钮
                     Button {
                         copyItem(item)
                     } label: {
                         Image(systemName: "doc.on.doc.fill")
-                            .font(.system(size: 11))
-                            .foregroundStyle(LensoColors.kleinBlueBright)
-                            .frame(width: 28, height: 28)
-                            .background(Circle().fill(LensoColors.kleinBlueSoft))
+                            .font(.system(size: 10))
+                            .foregroundStyle(.white)
+                            .frame(width: 24, height: 24)
+                            .background(Circle().fill(Color.black.opacity(0.6)))
                     }
                     .buttonStyle(.plain)
-                    .help("重新复制到剪贴板")
-
-                    // 删除单个记录
-                    Button {
-                        deleteSingleItem(item)
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color.red.opacity(0.8))
-                            .frame(width: 28, height: 28)
-                            .background(Circle().fill(Color.red.opacity(0.06)))
-                    }
-                    .buttonStyle(.plain)
-                    .help("彻底永久删除此条记录")
+                    .help("复制图片到剪贴板")
                 }
+                .padding(8)
+                Spacer()
+            }
+
+            // 底部暗色渐变层 + 年月日时分秒时间
+            VStack(alignment: .leading, spacing: 2) {
+                Spacer()
+                HStack {
+                    Text(DateFormatter.lensoFullDateTime.string(from: item.createdAt))
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.9), radius: 3, y: 1)
+                    Spacer()
+                }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 8)
+                .padding(.top, 28)
+                .background(
+                    LinearGradient(
+                        colors: [.clear, Color.black.opacity(0.78)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+            }
+
+            // 复制成功的覆盖反馈
+            if isCopied {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.black.opacity(0.5))
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.green)
+                        Text("已复制")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Color.black.opacity(0.85)))
+                }
+                .transition(.opacity)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Color.black.opacity(0.05), lineWidth: 1)
-                )
-                .shadow(color: Color.black.opacity(0.02), radius: 3, y: 1)
+        .frame(height: 185)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
         )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            copyItem(item)
-        }
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .onTapGesture { copyItem(item) }
     }
 
-    // MARK: - 数据加载与过滤
+    // MARK: - 文字方块卡片（便签式排版 + 年月日时分秒）
+
+    @ViewBuilder
+    private func textTile(for item: FeedItem, content: String) -> some View {
+        let isCopied = copiedID == item.id
+
+        ZStack(alignment: .topLeading) {
+            // 便签卡片底板
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white)
+                .shadow(color: Color.black.opacity(0.04), radius: 6, y: 2)
+
+            VStack(alignment: .leading, spacing: 8) {
+                // 顶部：引用标志 + 来源应用 + 字符数 + 复制
+                HStack(spacing: 5) {
+                    Image(systemName: "text.quote")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(LensoColors.kleinBlueBright)
+
+                    if let app = item.sourceApp, !app.isEmpty {
+                        Text(app)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(Color.primary.opacity(0.75))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(LensoColors.kleinBlueSoft))
+                    }
+
+                    Spacer()
+
+                    Text("\(content.count) 字")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+
+                    Button {
+                        copyItem(item)
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(.plain)
+                    .help("复制文本")
+                }
+
+                // 核心文本内容：居中方块式多行自然排版
+                Text(content)
+                    .font(.system(size: 12.5, weight: .regular))
+                    .foregroundStyle(Color.primary.opacity(0.88))
+                    .lineSpacing(3)
+                    .lineLimit(5)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+                Divider().opacity(0.5)
+
+                // 底部精准时间：年月日时分秒
+                HStack {
+                    Text(DateFormatter.lensoFullDateTime.string(from: item.createdAt))
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+            }
+            .padding(12)
+
+            // 复制成功的覆盖反馈
+            if isCopied {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.black.opacity(0.5))
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.green)
+                        Text("已复制")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Color.black.opacity(0.85)))
+                }
+                .transition(.opacity)
+            }
+        }
+        .frame(height: 185)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .onTapGesture { copyItem(item) }
+    }
+
+    // MARK: - 过滤逻辑
 
     private var filteredItems: [FeedItem] {
         items.filter { item in
@@ -488,33 +632,9 @@ struct SearchPanelView: View {
         onDismiss()
     }
 
-    private func deleteSingleItem(_ item: FeedItem) {
-        let store = ScreenshotStore.shared
-        if let clipID = item.clipboardID {
-            try? store.deleteClipboardItem(id: clipID)
-        } else if case .image(_, let recID) = item.kind, let recID {
-            if let record = (try? store.list())?.first(where: { $0.id == recID }) {
-                try? store.delete(record)
-            }
-        } else if case .text = item.kind {
-            try? store.deleteTextNote(id: item.id)
-        }
-        reloadFeed()
-    }
-
     private func clearHistory() {
         try? ScreenshotStore.shared.clearClipboardHistory()
         reloadFeed()
-    }
-
-    private func relativeTime(_ date: Date) -> String {
-        let interval = Date().timeIntervalSince(date)
-        if interval < 60 { return "刚刚" }
-        if interval < 3600 { return "\(max(1, Int(interval / 60))) 分钟前" }
-        if Calendar.current.isDateInToday(date) {
-            return date.formatted(date: .omitted, time: .shortened)
-        }
-        return date.formatted(date: .abbreviated, time: .shortened)
     }
 
     private func byteString(_ bytes: Int) -> String {
