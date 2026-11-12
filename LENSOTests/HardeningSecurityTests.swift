@@ -109,4 +109,76 @@ struct HardeningSecurityTests {
         #expect(sseSnippet.contains("http://127.0.0.1:"))
         #expect(sseSnippet.contains("/sse?token="))
     }
+
+    // MARK: - 4. 辅助服务与边界测试
+
+    @Test("显示器缩放比例边界计算：无效 DisplayID 正确回退")
+    func testScreenCaptureScaleCalculation() {
+        let scale = ScreenCaptureService.displayScale(0)
+        #expect(scale >= 1.0)
+    }
+
+    @Test("存储清理结果汇总统计正确性")
+    func testStoreCleanupResultCalculations() {
+        let result = ScreenshotStore.CleanupResult(
+            deletedScreenshots: 5,
+            deletedClipboardItems: 12,
+            deletedTextNotes: 3
+        )
+        #expect(result.totalDeleted == 20)
+    }
+
+    @Test("截图与剪贴板文件路径映射解析")
+    func testStoreFilePaths() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LENSO_PathTest_\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let store = try ScreenshotStore(baseDirectory: tempDir)
+        let record = ScreenshotRecord(
+            id: UUID(),
+            filename: "test_pic.png",
+            width: 100,
+            height: 100,
+            fileSize: 1024,
+            capturedAt: Date(),
+            isFavorite: false,
+            favoritedAt: nil
+        )
+        let origURL = store.screenshotOriginalURL(record)
+        #expect(origURL?.lastPathComponent == "test_pic.png")
+        #expect(origURL?.path.contains("/Original/") == true)
+
+        let clipItem = ClipboardItem(
+            id: UUID(),
+            kind: .image,
+            filename: "clip_pic.png",
+            text: nil,
+            sourceApp: "TestApp",
+            createdAt: Date()
+        )
+        let clipURL = store.clipboardImageURL(clipItem)
+        #expect(clipURL?.lastPathComponent == "clip_pic.png")
+        #expect(clipURL?.path.contains("/Clipboard/") == true)
+    }
+
+    @Test("MCPRequest 相等性断言")
+    func testMCPRequestEquality() {
+        let req1 = MCPRequest(id: AnyHashable(123), method: "tools/list", params: ["key": "val"])
+        let req2 = MCPRequest(id: AnyHashable(123), method: "tools/list", params: ["key": "val"])
+        let req3 = MCPRequest(id: AnyHashable(456), method: "tools/list", params: ["key": "val"])
+
+        #expect(req1 == req2)
+        #expect(req1 != req3)
+    }
+
+    @Test("HTTP OPTIONS / HEAD 请求行及头部解析")
+    func testParseHTTPOptionsAndHead() {
+        let rawOptions = "OPTIONS /mcp HTTP/1.1\r\nHost: 127.0.0.1:52888\r\nOrigin: http://localhost\r\n\r\n"
+        let parsed = MCPMessageCodec.parseHTTPHeader(rawOptions)
+        #expect(parsed != nil)
+        #expect(parsed?.method == "OPTIONS")
+        #expect(parsed?.path == "/mcp")
+        #expect(parsed?.headers["origin"] == "http://localhost")
+    }
 }
