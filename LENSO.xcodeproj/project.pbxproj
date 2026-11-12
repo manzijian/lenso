@@ -69,6 +69,7 @@
 		D5B91F2ED5C521F4E15D0686 /* ShortcutStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 135EF660F9BA9A889666F34B /* ShortcutStore.swift */; };
 		DE568699012109BCB32B82B4 /* ClipboardMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BDA7F5691661D2318B5AB81 /* ClipboardMonitor.swift */; };
 		E8A1E10D92154E1F0DDD271E /* PreviewWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD209F1E73612BFE09EF7A77 /* PreviewWindowView.swift */; };
+		ED62A1057DA2F03880318F1A /* CaptureEditorSidePanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02DA93EC1B0CA6699CFA7072 /* CaptureEditorSidePanelView.swift */; };
 		F1661F941BC19A8D5898962D /* WindowConfigurator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D93797B089581C688C44523A /* WindowConfigurator.swift */; };
 		F62C4A4B0B6E32DE2F10021C /* PinnedImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25B807289023065DFCE75637 /* PinnedImageView.swift */; };
 		F8E7C96B92F1BEE9E504D74C /* CapturePermissionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3326A48E064867C956689606 /* CapturePermissionService.swift */; };
@@ -86,6 +87,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		02DA93EC1B0CA6699CFA7072 /* CaptureEditorSidePanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureEditorSidePanelView.swift; sourceTree = "<group>"; };
 		08F9CDACC203C3D02FC3E057 /* ShortcutRecorderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutRecorderView.swift; sourceTree = "<group>"; };
 		09EDC975DD0E0B048782A224 /* ScreenshotStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotStoreTests.swift; sourceTree = "<group>"; };
 		0BDA7F5691661D2318B5AB81 /* ClipboardMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardMonitor.swift; sourceTree = "<group>"; };
@@ -161,6 +163,7 @@
 			isa = PBXGroup;
 			children = (
 				FEA52E5DA6BB4A0D1D863A96 /* AnnotationModel.swift */,
+				02DA93EC1B0CA6699CFA7072 /* CaptureEditorSidePanelView.swift */,
 				51F18440E25048F21350866B /* CaptureEditorView.swift */,
 				41222AD41C09728906A0315C /* EditingComponents.swift */,
 				61FA2619E357175E925D798D /* SelectionOverlayView.swift */,
@@ -482,6 +485,7 @@
 				B5584BCC1216AF24B332E40D /* AppDelegate.swift in Sources */,
 				310AC41A22BE3343B7256CED /* AppSettings.swift in Sources */,
 				21B69121FFF44550CD4586A0 /* CaptureCoordinator.swift in Sources */,
+				ED62A1057DA2F03880318F1A /* CaptureEditorSidePanelView.swift in Sources */,
 				8BE7DED61C9EC55C98155854 /* CaptureEditorView.swift in Sources */,
 				F8E7C96B92F1BEE9E504D74C /* CapturePermissionService.swift in Sources */,
 				DE568699012109BCB32B82B4 /* ClipboardMonitor.swift in Sources */,
