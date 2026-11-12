@@ -15,6 +15,19 @@ settings:
     GENERATE_INFOPLIST_FILE: true
     CURRENT_PROJECT_VERSION: "1"
     MARKETING_VERSION: "1.0"
+    ENABLE_TESTABILITY: true
+
+schemes:
+  LENSO:
+    build:
+      targets:
+        LENSO: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - LENSOTests
 
 targets:
   LENSO:
@@ -25,6 +38,7 @@ targets:
     settings:
       base:
         PRODUCT_NAME: lenso
+        PRODUCT_MODULE_NAME: LENSO
         PRODUCT_BUNDLE_IDENTIFIER: com.lenso.app
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "lenso 需要访问图片以管理你的截图。"
@@ -33,3 +47,18 @@ targets:
         GENERATE_INFOPLIST_FILE: true
         SWIFT_EMIT_LOC_STRINGS: true
         ENABLE_PREVIEWS: true
+
+  LENSOTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: LENSOTests
+    dependencies:
+      - target: LENSO
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.lenso.tests
+        GENERATE_INFOPLIST_FILE: true
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/lenso.app/Contents/MacOS/lenso
+        BUNDLE_LOADER: $(TEST_HOST)
+        SWIFT_INCLUDE_PATHS: $(BUILT_PRODUCTS_DIR)
