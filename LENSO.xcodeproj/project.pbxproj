@@ -25,6 +25,7 @@
 		3B725BFD879E49FFCC8DA38C /* SaveToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61852D60891BBD9485F0A630 /* SaveToast.swift */; };
 		3F8B2F39F47F8C1AC0BBF278 /* SearchPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5CFCAC958BAEF1C9CDC1C42 /* SearchPanelView.swift */; };
 		44664630634ABEC3686AEF97 /* LensoMCPServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17B81EF42D2A3A0FDE2294D3 /* LensoMCPServer.swift */; };
+		4514A59D53168D0443A7C291 /* NotificationNames.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABC9A216CFCB35B3DC4B5132 /* NotificationNames.swift */; };
 		47FBC1D203B3D0110A0445B0 /* LibraryEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A7B338A56587241624CF4F /* LibraryEntry.swift */; };
 		4E2F158CBC40B7142F348F10 /* ScreenCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9EB971207FEF63A60AE956 /* ScreenCaptureService.swift */; };
 		530DF77AF207713354D20F23 /* ShortcutAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202185ADE6715D504D7EB55B /* ShortcutAction.swift */; };
@@ -118,6 +119,7 @@
 		A5CFCAC958BAEF1C9CDC1C42 /* SearchPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchPanelView.swift; sourceTree = "<group>"; };
 		A82C877CAA54F5A72BB7A2C4 /* LensoColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoColors.swift; sourceTree = "<group>"; };
 		AA746850EAA616D24E83203A /* OCRProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRProvider.swift; sourceTree = "<group>"; };
+		ABC9A216CFCB35B3DC4B5132 /* NotificationNames.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationNames.swift; sourceTree = "<group>"; };
 		B044ADEB2AF234FFA798A8B5 /* LENSOApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LENSOApp.swift; sourceTree = "<group>"; };
 		B32B0E3248D1E1B3977D21C1 /* VisionOCRProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionOCRProvider.swift; sourceTree = "<group>"; };
 		B774C35C380B7D917F97F431 /* LensoMaterials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoMaterials.swift; sourceTree = "<group>"; };
@@ -152,6 +154,7 @@
 				8D784B50D6B7F67CC9AB3338 /* CaptureCoordinator.swift */,
 				C126297582173D0BA7E950D0 /* LensoLocalService.swift */,
 				17B81EF42D2A3A0FDE2294D3 /* LensoMCPServer.swift */,
+				ABC9A216CFCB35B3DC4B5132 /* NotificationNames.swift */,
 				61852D60891BBD9485F0A630 /* SaveToast.swift */,
 			);
 			path = Application;
@@ -472,6 +475,7 @@
 				6487CCF571CF67B5D891A7B6 /* LocalTranslationProvider.swift in Sources */,
 				322C57EFEFC8BCAA7849DD5F /* MenuBarPanelView.swift in Sources */,
 				296D82716BB78111AC67F889 /* NoteEditorSheet.swift in Sources */,
+				4514A59D53168D0443A7C291 /* NotificationNames.swift in Sources */,
 				6E75A23B184007F121F541A1 /* OCRProvider.swift in Sources */,
 				E8A1E10D92154E1F0DDD271E /* PreviewWindowView.swift in Sources */,
 				308025B66ECD2E6CA69FC9AB /* ProviderRegistry.swift in Sources */,
