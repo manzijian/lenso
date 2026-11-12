@@ -9,6 +9,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
     case previewLatest
     case globalSearch
     case clipboardHistory
+    case openAnalytics
     case openSettings
 
     var id: String { rawValue }
@@ -21,6 +22,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
         case .previewLatest: "预览最新截图"
         case .globalSearch: "全局搜索"
         case .clipboardHistory: "剪贴板历史"
+        case .openAnalytics: "数据看板"
         case .openSettings: "打开设置"
         }
     }
@@ -35,6 +37,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
         case .previewLatest: "预览最新截图"
         case .globalSearch: "全局搜索"
         case .clipboardHistory: "剪贴板历史"
+        case .openAnalytics: "数据看板"
         case .openSettings: "打开设置"
         }
     }
@@ -47,6 +50,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable, Codable {
         case .previewLatest: "eye"
         case .globalSearch: "magnifyingglass"
         case .clipboardHistory: "doc.on.clipboard"
+        case .openAnalytics: "chart.bar.xaxis"
         case .openSettings: "gearshape"
         }
     }

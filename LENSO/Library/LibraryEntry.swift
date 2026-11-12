@@ -44,4 +44,5 @@ struct LibraryEntry: Identifiable {
 extension Notification.Name {
     static let libraryChanged = Notification.Name("com.lenso.libraryChanged")
     static let textNotesChanged = Notification.Name("com.lenso.textNotesChanged")
+    static let openAnalyticsSection = Notification.Name("com.lenso.openAnalyticsSection")
 }

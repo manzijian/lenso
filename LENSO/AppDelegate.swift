@@ -10,6 +10,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 外观按设置走：跟随系统时不强制，默认锁定浅色（见 AppSettings）
         AppSettings.shared.applyAppearance()
+        // 程序坞（下方应用栏）显示状态按设置走，默认显示，支持仅菜单栏常驻
+        AppSettings.shared.applyDockVisibility()
         // 显式注册 bundle 图标，避免 Stage Manager 窗口缩略图回退到通用空白图标
         registerApplicationIcon()
         // 开始监听剪贴板（记录复制过的截图与文字，含来源应用）
@@ -36,6 +38,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         GlobalHotKeyManager.shared.directHandlers[.clipboardHistory] = {
             ClipboardPanelController.shared.show()
+        }
+        GlobalHotKeyManager.shared.directHandlers[.openAnalytics] = {
+            NotificationCenter.default.post(name: .openAnalyticsSection, object: nil)
         }
         // 注册系统级全局热键：切到别的 App 也能按 ⇧⌘1 截图
         GlobalHotKeyManager.shared.refresh(using: ShortcutStore.shared)

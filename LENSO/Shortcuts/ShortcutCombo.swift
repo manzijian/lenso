@@ -86,6 +86,8 @@ struct ShortcutCombo: Codable, Equatable, Hashable {
             ShortcutCombo(key: "k", command: true)
         case .clipboardHistory:
             ShortcutCombo(key: "v", command: true, shift: true)
+        case .openAnalytics:
+            ShortcutCombo(key: "d", command: true, shift: true)
         case .openSettings:
             ShortcutCombo(key: ",", command: true)
         }

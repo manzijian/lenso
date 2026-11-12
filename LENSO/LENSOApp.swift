@@ -96,6 +96,14 @@ struct LENSOApp: App {
                 }
                 .keyboardShortcut(shortcut(for: .openSettings))
             }
+            CommandMenu("看板") {
+                Button("数据看板") {
+                    openWindow(id: "library")
+                    NSApp.activate(ignoringOtherApps: true)
+                    NotificationCenter.default.post(name: .openAnalyticsSection, object: nil)
+                }
+                .keyboardShortcut(shortcut(for: .openAnalytics))
+            }
         }
     }
 

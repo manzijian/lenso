@@ -137,6 +137,8 @@ struct SettingsWindowView: View {
                     rowDivider
                     SettingToggleRow(label: "在顶部菜单栏显示图标", subtitle: "方便随时唤出截图工具与图库", isOn: $settings.showMenuBarIcon)
                     rowDivider
+                    SettingToggleRow(label: "在下方应用栏（程序坞）显示图标", subtitle: "关闭后隐藏下方图标，仅在顶部状态栏常驻（默认开启）", isOn: $settings.showInDock)
+                    rowDivider
                     SettingToggleRow(label: "截图保存后打开预览窗口", subtitle: "截完图后自动打开独立无极缩放预览", isOn: $settings.showPreviewAfterCapture)
                 }
 

@@ -99,6 +99,9 @@ struct LensoLibraryView: View {
         }
         .frame(minWidth: 840, minHeight: 560)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .onReceive(NotificationCenter.default.publisher(for: .openAnalyticsSection)) { _ in
+            section = .analytics
+        }
         .alert(
             "确定直接删除？",
             isPresented: $showDeleteConfirm,

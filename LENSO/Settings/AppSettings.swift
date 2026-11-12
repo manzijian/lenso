@@ -81,6 +81,7 @@ final class AppSettings {
     private enum Key: String, CaseIterable {
         case launchAtLogin
         case showMenuBarIcon
+        case showInDock
         case showPreviewAfterCapture
         case autoCopyAfterCapture
         case showFloatingPreview
@@ -102,6 +103,13 @@ final class AppSettings {
     /// 菜单栏显示图标（关掉后菜单栏入口消失，用 Dock 图标点开图库再进设置）。
     var showMenuBarIcon: Bool {
         didSet { persist(.showMenuBarIcon, showMenuBarIcon) }
+    }
+    /// 在下方应用栏（程序坞）显示图标（关掉后隐藏下方图标，只有顶部状态栏常驻；默认开启）。
+    var showInDock: Bool {
+        didSet {
+            persist(.showInDock, showInDock)
+            applyDockVisibility()
+        }
     }
     /// 截图后显示预览（保存完成后自动打开预览窗口）。
     var showPreviewAfterCapture: Bool {
@@ -211,6 +219,7 @@ final class AppSettings {
         // 调用实例方法会报 "self used before all stored properties are initialized"。
         launchAtLogin = Self.read(.launchAtLogin, default: false, defaults: defaults)
         showMenuBarIcon = Self.read(.showMenuBarIcon, default: true, defaults: defaults)
+        showInDock = Self.read(.showInDock, default: true, defaults: defaults)
         showPreviewAfterCapture = Self.read(.showPreviewAfterCapture, default: false, defaults: defaults)
         autoCopyAfterCapture = Self.read(.autoCopyAfterCapture, default: true, defaults: defaults)
         showFloatingPreview = Self.read(.showFloatingPreview, default: true, defaults: defaults)
@@ -284,6 +293,16 @@ final class AppSettings {
     func applyAppearance() {
         guard let app = NSApp else { return }
         app.appearance = followSystemAppearance ? nil : NSAppearance(named: .aqua)
+    }
+
+    /// 控制应用是否在下方程序坞（Dock）显示图标。默认显示；关闭后仅在顶部状态栏常驻。
+    func applyDockVisibility() {
+        guard let app = NSApp else { return }
+        if showInDock {
+            app.setActivationPolicy(.regular)
+        } else {
+            app.setActivationPolicy(.accessory)
+        }
     }
 }
 
