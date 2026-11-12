@@ -11,12 +11,29 @@ private let log = Logger(subsystem: "com.lenso.app", category: "capture")
 final class CaptureCoordinator: NSObject {
     static let shared = CaptureCoordinator()
 
-    private let capture = ScreenCaptureService()
+    let capture: ScreenCapturing
+    let clipboard: ClipboardWriting
+    let errorPresenter: ErrorPresenting
+    let store: ScreenshotStore
+
     private var selector: RegionSelectorController?
     private var editorPanel: NSPanel?
     private var editorHost: NSHostingView<CaptureEditorView>?
     /// 钉图控制器集合（持有引用防止释放）
     private var pinnedControllers: [PinnedScreenshotController] = []
+
+    init(
+        capture: ScreenCapturing = ScreenCaptureService(),
+        clipboard: ClipboardWriting = SystemClipboardWriter(),
+        errorPresenter: ErrorPresenting = SystemErrorPresenter(),
+        store: ScreenshotStore = .shared
+    ) {
+        self.capture = capture
+        self.clipboard = clipboard
+        self.errorPresenter = errorPresenter
+        self.store = store
+        super.init()
+    }
 
     func startRegionCapture() {
         log.info("startRegionCapture triggered")
@@ -44,44 +61,62 @@ final class CaptureCoordinator: NSObject {
         // 确认后才抓一张全屏当编辑器背景，抓时把选区面板排除在外。
         let selector = RegionSelectorController()
         self.selector = selector
-        let captureService = capture
         selector.begin { [weak self, weak selector] rect, displayID, panelWindowNumber, prefrozen in
             Task { @MainActor in
                 guard let self, let selector, !selector.isDismissed else { return }
-                do {
-                    // 优先用选区阶段就已经冻结好的画面：编辑器可以立刻上屏。
-                    // 只有冻结帧还没到位（热键按下后不到 ~200ms 就确认）才现场抓。
-                    let frozen: CGImage
-                    if let prefrozen {
-                        frozen = prefrozen
-                    } else {
-                        frozen = try await captureService.captureDisplayExcluding(
-                            displayID: displayID, excludedWindowIDs: [panelWindowNumber]
-                        )
-                    }
-                    let screenFrame = NSScreen.screens
-                        .first(where: {
-                            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == displayID
-                                || ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) == displayID
-                        })?
-                        .frame ?? rect
-                    self.showFullEditor(frozen: frozen, screenFrame: screenFrame, initialSelection: rect)
+                let success = await self.captureFrameAndProceed(
+                    displayID: displayID,
+                    excludedWindowIDs: [panelWindowNumber],
+                    prefrozen: prefrozen,
+                    rect: rect
+                )
+                if success {
                     selector.dismiss()
                     self.selector = nil
-                } catch {
-                    NSSound.beep()
-                    log.error("capture failed: \(error.localizedDescription, privacy: .public)")
-                    if Self.isPermissionError(error) {
-                        self.presentCaptureError(
-                            title: "无法截图：缺少屏幕录制权限",
-                            message: "请到「系统设置 → 隐私与安全性 → 屏幕录制」中为 lenso 开启权限，然后重新截图。",
-                            isPermission: true
-                        )
-                    } else {
-                        self.presentCaptureError(title: "截图失败", message: error.localizedDescription)
-                    }
                 }
             }
+        }
+    }
+
+    @discardableResult
+    func captureFrameAndProceed(
+        displayID: CGDirectDisplayID,
+        excludedWindowIDs: [CGWindowID],
+        prefrozen: CGImage?,
+        rect: CGRect
+    ) async -> Bool {
+        do {
+            // 优先用选区阶段就已经冻结好的画面：编辑器可以立刻上屏。
+            // 只有冻结帧还没到位（热键按下后不到 ~200ms 就确认）才现场抓。
+            let frozen: CGImage
+            if let prefrozen {
+                frozen = prefrozen
+            } else {
+                frozen = try await capture.captureDisplayExcluding(
+                    displayID: displayID, excludedWindowIDs: excludedWindowIDs
+                )
+            }
+            let screenFrame = NSScreen.screens
+                .first(where: {
+                    ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == displayID
+                        || ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) == displayID
+                })?
+                .frame ?? rect
+            showFullEditor(frozen: frozen, screenFrame: screenFrame, initialSelection: rect)
+            return true
+        } catch {
+            NSSound.beep()
+            log.error("capture failed: \(error.localizedDescription, privacy: .public)")
+            if Self.isPermissionError(error) {
+                errorPresenter.presentCaptureError(
+                    title: "无法截图：缺少屏幕录制权限",
+                    message: "请到「系统设置 → 隐私与安全性 → 屏幕录制」中为 lenso 开启权限，然后重新截图。",
+                    isPermission: true
+                )
+            } else {
+                errorPresenter.presentCaptureError(title: "截图失败", message: error.localizedDescription, isPermission: false)
+            }
+            return false
         }
     }
 
@@ -145,23 +180,23 @@ final class CaptureCoordinator: NSObject {
         editorHost = nil
     }
 
-    private func handleFinish(finalImage: CGImage?) {
+    func handleFinish(finalImage: CGImage?) {
         guard let image = finalImage else {
             log.info("editor discarded")
             return
         }
         do {
-            let record = try ScreenshotStore.shared.save(image: image, capturedAt: Date())
+            let record = try store.save(image: image, capturedAt: Date())
             // 截图确定之后：默认 100% 自动复制到剪贴板，支持所有现代 App 直接 ⌘V 粘贴
             copyToClipboard(image: image)
             // 记录到剪贴板历史，使唤出搜索时能立即在最顶部看到并滚到
-            _ = try? ScreenshotStore.shared.saveClipboardImage(image, sourceApp: "截图")
+            _ = try? store.saveClipboardImage(image, sourceApp: "截图")
             NotificationCenter.default.post(name: .screenshotSaved, object: record)
             if AppSettings.shared.showFloatingPreview {
                 SaveToastController.shared.show(
                     title: "已复制到剪贴板",
                     subtitle: "已自动保存到图库",
-                    thumbnail: try? ScreenshotStore.shared.loadThumbnail(record)
+                    thumbnail: try? store.loadThumbnail(record)
                 )
             }
             if AppSettings.shared.showPreviewAfterCapture {
@@ -172,7 +207,7 @@ final class CaptureCoordinator: NSObject {
         } catch {
             // 即使保存到磁盘出现异常，剪贴板也 100% 确保复制成功
             copyToClipboard(image: image)
-            _ = try? ScreenshotStore.shared.saveClipboardImage(image, sourceApp: "截图")
+            _ = try? store.saveClipboardImage(image, sourceApp: "截图")
             if AppSettings.shared.showFloatingPreview {
                 SaveToastController.shared.show(
                     title: "已复制到剪贴板",
@@ -240,54 +275,15 @@ final class CaptureCoordinator: NSObject {
     }
 
     /// SCK 在没有屏幕录制权限时抛的错误（域 SCStreamErrorDomain / 用户取消）。
-    private static func isPermissionError(_ error: Error) -> Bool {
+    static func isPermissionError(_ error: Error) -> Bool {
         let ns = error as NSError
         if ns.domain == "SCStreamErrorDomain" { return true }
         // CGError 里 .notPermitted / .invalidDisplay 也常被包成这个
         return ns.code == -3801 || ns.code == -3802
     }
 
-    /// 截图失败时给一个用户看得见的提示（beep 太容易错过）。
-    /// 用 NSAlert 而不是自绘浮层：失败路径要尽量简单，别再依赖别的东西能跑起来。
-    private func presentCaptureError(title: String, message: String, isPermission: Bool = false) {
-        NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = message
-        alert.alertStyle = .warning
-        if isPermission {
-            alert.addButton(withTitle: "打开系统设置")
-            alert.addButton(withTitle: "好")
-        } else {
-            alert.addButton(withTitle: "好")
-        }
-        let response = alert.runModal()
-        if isPermission && response == .alertFirstButtonReturn {
-            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
-                NSWorkspace.shared.open(url)
-            }
-        }
-    }
-
     func copyToClipboard(image: CGImage) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-
-        let nsImage = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
-
-        // 1. TIFF 基础数据
-        if let tiff = nsImage.tiffRepresentation {
-            pasteboard.setData(tiff, forType: .tiff)
-
-            // 2. PNG 格式数据（关键：微信、飞书、现代浏览器与设计工具优先读取 PNG）
-            if let bitmap = NSBitmapImageRep(data: tiff),
-               let pngData = bitmap.representation(using: .png, properties: [:]) {
-                pasteboard.setData(pngData, forType: .png)
-            }
-        }
-
-        // 3. 原生图像对象写入（支持系统级粘贴）
-        pasteboard.writeObjects([nsImage])
+        clipboard.writeImage(image)
     }
 }
 

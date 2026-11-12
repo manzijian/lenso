@@ -19,7 +19,7 @@ enum CaptureError: LocalizedError {
 /// 确认那一刻，选区面板还在台上时抓一张全屏图，把选区面板按窗口 ID
 /// 排除在外，当编辑器背景；抓完开编辑器、再关选区，中间不露桌面。
 /// 主窗口不排除——它是可以被截的（Ta 的原则：自己的窗口保持可见时能被截图）。
-final class ScreenCaptureService: Sendable {
+final class ScreenCaptureService: ScreenCapturing, Sendable {
     /// 抓指定显示器的全屏图（物理像素），排除给定的窗口（选区面板）。
     func captureDisplayExcluding(displayID: CGDirectDisplayID, excludedWindowIDs: [CGWindowID]) async throws -> CGImage {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)

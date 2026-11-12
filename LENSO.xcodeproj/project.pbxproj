@@ -77,6 +77,7 @@
 		F62C4A4B0B6E32DE2F10021C /* PinnedImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25B807289023065DFCE75637 /* PinnedImageView.swift */; };
 		F8E7C96B92F1BEE9E504D74C /* CapturePermissionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3326A48E064867C956689606 /* CapturePermissionService.swift */; };
 		F95E22C0B2CC82BD6181E284 /* ClipboardPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF014BA807177AA4AC07780B /* ClipboardPanelView.swift */; };
+		F9D95DB8A3588B164F8B99DF /* CaptureProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5080262241D8FE4DC09C334E /* CaptureProtocols.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -112,6 +113,7 @@
 		41222AD41C09728906A0315C /* EditingComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditingComponents.swift; sourceTree = "<group>"; };
 		4C9500803224317D40B6EF66 /* LensoLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoLibraryView.swift; sourceTree = "<group>"; };
 		4F74640FE4B2B2190F58163E /* LensoShadows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoShadows.swift; sourceTree = "<group>"; };
+		5080262241D8FE4DC09C334E /* CaptureProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureProtocols.swift; sourceTree = "<group>"; };
 		51F18440E25048F21350866B /* CaptureEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureEditorView.swift; sourceTree = "<group>"; };
 		53A5FF2F92852CF47FF402B8 /* LensoMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensoMark.swift; sourceTree = "<group>"; };
 		558D02748CC0113C3987ED96 /* LENSO.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LENSO.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -184,6 +186,7 @@
 			isa = PBXGroup;
 			children = (
 				8D784B50D6B7F67CC9AB3338 /* CaptureCoordinator.swift */,
+				5080262241D8FE4DC09C334E /* CaptureProtocols.swift */,
 				C126297582173D0BA7E950D0 /* LensoLocalService.swift */,
 				17B81EF42D2A3A0FDE2294D3 /* LensoMCPServer.swift */,
 				ABC9A216CFCB35B3DC4B5132 /* NotificationNames.swift */,
@@ -500,6 +503,7 @@
 				50CF58FDBB57ED09582DAB39 /* CaptureEditorView+Rendering.swift in Sources */,
 				8BE7DED61C9EC55C98155854 /* CaptureEditorView.swift in Sources */,
 				F8E7C96B92F1BEE9E504D74C /* CapturePermissionService.swift in Sources */,
+				F9D95DB8A3588B164F8B99DF /* CaptureProtocols.swift in Sources */,
 				DE568699012109BCB32B82B4 /* ClipboardMonitor.swift in Sources */,
 				949F2379957DF484D0042FC9 /* ClipboardPanelController.swift in Sources */,
 				F95E22C0B2CC82BD6181E284 /* ClipboardPanelView.swift in Sources */,
