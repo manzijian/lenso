@@ -16,6 +16,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ClipboardMonitor.shared.start()
         // 启动本地 HTTP / SSE / MCP 服务 (端口 52888)
         LensoLocalService.shared.start()
+        // 执行自动保存时长检查与过期清理
+        AppSettings.shared.runAutoCleanup()
+        Timer.scheduledTimer(withTimeInterval: 900, repeats: true) { _ in
+            Task { @MainActor in
+                AppSettings.shared.runAutoCleanup()
+            }
+        }
         // 菜单栏常驻应用不该被系统的「突然终止」回收：
         // 没有窗口时 macOS 会认为它可以随时退出，导致热键忽然全部失灵。
         ProcessInfo.processInfo.disableSuddenTermination()

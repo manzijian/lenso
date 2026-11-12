@@ -4,6 +4,43 @@ import Observation
 import ServiceManagement
 import SwiftUI
 
+/// 数据自动保留时长预设（支持小时、天数与自定义）
+enum RetentionPreset: String, CaseIterable, Identifiable {
+    case never = "永久保存 (不自动删除)"
+    case hours6 = "6 小时"
+    case hours12 = "12 小时"
+    case hours24 = "24 小时 (1 天)"
+    case days3 = "3 天"
+    case days7 = "7 天 (1 周)"
+    case days14 = "14 天 (2 周)"
+    case days30 = "30 天 (1 个月)"
+    case days90 = "90 天 (3 个月)"
+    case custom = "自定义时长..."
+
+    var id: String { rawValue }
+
+    var durationHours: Int? {
+        switch self {
+        case .never: return nil
+        case .hours6: return 6
+        case .hours12: return 12
+        case .hours24: return 24
+        case .days3: return 72
+        case .days7: return 168
+        case .days14: return 336
+        case .days30: return 720
+        case .days90: return 2160
+        case .custom: return nil
+        }
+    }
+}
+
+enum RetentionUnit: String, CaseIterable, Identifiable {
+    case hours = "小时"
+    case days = "天"
+    var id: String { rawValue }
+}
+
 /// 状态栏图标候选样式（精选原生无歧义、高质感图标，杜绝录屏圆点与拥挤糊块）
 enum MenuBarIconStyle: String, CaseIterable, Identifiable {
     case crop = "极简裁切刀锋 (设计剪辑风 · 推荐)"
@@ -110,6 +147,62 @@ final class AppSettings {
         }
     }
 
+    // MARK: - 数据保存与自动清理
+
+    /// 数据自动保留时长预设
+    var retentionPreset: RetentionPreset {
+        didSet {
+            defaults.set(retentionPreset.rawValue, forKey: Self.keyPrefix + "retentionPreset")
+            runAutoCleanup()
+        }
+    }
+
+    /// 自定义时长数值（例如 12、48、7）
+    var customRetentionValue: Int {
+        didSet {
+            defaults.set(customRetentionValue, forKey: Self.keyPrefix + "customRetentionValue")
+            if retentionPreset == .custom { runAutoCleanup() }
+        }
+    }
+
+    /// 自定义时长单位（小时 / 天）
+    var customRetentionUnit: RetentionUnit {
+        didSet {
+            defaults.set(customRetentionUnit.rawValue, forKey: Self.keyPrefix + "customRetentionUnit")
+            if retentionPreset == .custom { runAutoCleanup() }
+        }
+    }
+
+    /// 清理时保留已收藏的数据（防止用户星标的内容被误删）
+    var preserveFavoritesOnCleanup: Bool {
+        didSet {
+            defaults.set(preserveFavoritesOnCleanup, forKey: Self.keyPrefix + "preserveFavoritesOnCleanup")
+        }
+    }
+
+    /// 计算生效的保留小时数
+    var effectiveRetentionHours: Int? {
+        if retentionPreset == .never { return nil }
+        if retentionPreset == .custom {
+            let val = max(1, customRetentionValue)
+            return customRetentionUnit == .hours ? val : val * 24
+        }
+        return retentionPreset.durationHours
+    }
+
+    /// 当前到期截止时间（早于该时间的数据即判定为过期）
+    var retentionCutoffDate: Date? {
+        guard let hours = effectiveRetentionHours else { return nil }
+        return Calendar.current.date(byAdding: .hour, value: -hours, to: Date())
+    }
+
+    /// 执行一次过期数据清理
+    @discardableResult
+    func runAutoCleanup() -> ScreenshotStore.CleanupResult? {
+        guard let cutoff = retentionCutoffDate else { return nil }
+        return ScreenshotStore.shared.cleanupOlderThan(cutoff: cutoff, preserveFavorites: preserveFavoritesOnCleanup)
+    }
+
     // MARK: - Init
 
     private init(defaults: UserDefaults = .standard) {
@@ -134,6 +227,21 @@ final class AppSettings {
             defaults.set(loadedStyle.rawValue, forKey: Self.keyPrefix + "menuBarIconStyle")
         }
         menuBarIconStyle = loadedStyle
+
+        let rawRetention = defaults.string(forKey: Self.keyPrefix + "retentionPreset") ?? ""
+        retentionPreset = RetentionPreset(rawValue: rawRetention) ?? .never
+
+        let customVal = defaults.integer(forKey: Self.keyPrefix + "customRetentionValue")
+        customRetentionValue = customVal > 0 ? customVal : 7
+
+        let rawUnit = defaults.string(forKey: Self.keyPrefix + "customRetentionUnit") ?? ""
+        customRetentionUnit = RetentionUnit(rawValue: rawUnit) ?? .days
+
+        if defaults.object(forKey: Self.keyPrefix + "preserveFavoritesOnCleanup") != nil {
+            preserveFavoritesOnCleanup = defaults.bool(forKey: Self.keyPrefix + "preserveFavoritesOnCleanup")
+        } else {
+            preserveFavoritesOnCleanup = true
+        }
         // 开机启动：按存量值静默同步一次（注册是幂等的）。
         if launchAtLogin { try? SMAppService.mainApp.register() }
         // 注意：这里不要调 applyAppearance()——SwiftUI 的 App.init() 早于

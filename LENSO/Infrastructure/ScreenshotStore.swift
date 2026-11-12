@@ -494,6 +494,298 @@ final class ScreenshotStore: @unchecked Sendable {
         }
     }
 
+    // MARK: - Auto Cleanup (过期自动删除)
+
+    struct CleanupResult {
+        let deletedScreenshots: Int
+        let deletedClipboardItems: Int
+        let deletedTextNotes: Int
+        var totalDeleted: Int { deletedScreenshots + deletedClipboardItems + deletedTextNotes }
+    }
+
+    @discardableResult
+    func cleanupOlderThan(cutoff: Date, preserveFavorites: Bool = true) -> CleanupResult {
+        var countScreenshots = 0
+        var countClips = 0
+        var countNotes = 0
+
+        queue.sync {
+            let cutoffSec = cutoff.timeIntervalSince1970
+
+            // 1. 清理过期截图
+            let favClause = preserveFavorites ? "AND is_favorite = 0" : ""
+            let selScreenshots = "SELECT id, filename FROM screenshots WHERE captured_at < ? \(favClause);"
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, selScreenshots, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_double(stmt, 1, cutoffSec)
+                var toDelete: [(String, String)] = []
+                while sqlite3_step(stmt) == SQLITE_ROW {
+                    if let idStr = sqlite3_column_text(stmt, 0).map({ String(cString: $0) }),
+                       let fn = sqlite3_column_text(stmt, 1).map({ String(cString: $0) }) {
+                        toDelete.append((idStr, fn))
+                    }
+                }
+                sqlite3_finalize(stmt)
+
+                for (idStr, fn) in toDelete {
+                    let delSql = "DELETE FROM screenshots WHERE id = ?;"
+                    var delStmt: OpaquePointer?
+                    if sqlite3_prepare_v2(db, delSql, -1, &delStmt, nil) == SQLITE_OK {
+                        Self.bind(delStmt, 1, idStr)
+                        if sqlite3_step(delStmt) == SQLITE_DONE {
+                            countScreenshots += 1
+                            for sub in ["Original", "Thumbnails"] {
+                                let u = baseDir.appendingPathComponent(sub).appendingPathComponent(fn)
+                                try? FileManager.default.removeItem(at: u)
+                            }
+                        }
+                        sqlite3_finalize(delStmt)
+                    }
+                }
+            }
+
+            // 2. 清理过期剪贴板数据
+            let selClips = "SELECT id, filename FROM clipboard_items WHERE created_at < ?;"
+            var clipStmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, selClips, -1, &clipStmt, nil) == SQLITE_OK {
+                sqlite3_bind_double(clipStmt, 1, cutoffSec)
+                var clipsToDelete: [(String, String?)] = []
+                while sqlite3_step(clipStmt) == SQLITE_ROW {
+                    if let idStr = sqlite3_column_text(clipStmt, 0).map({ String(cString: $0) }) {
+                        let fn = sqlite3_column_text(clipStmt, 1).map({ String(cString: $0) })
+                        clipsToDelete.append((idStr, fn))
+                    }
+                }
+                sqlite3_finalize(clipStmt)
+
+                for (idStr, fn) in clipsToDelete {
+                    let delSql = "DELETE FROM clipboard_items WHERE id = ?;"
+                    var delStmt: OpaquePointer?
+                    if sqlite3_prepare_v2(db, delSql, -1, &delStmt, nil) == SQLITE_OK {
+                        Self.bind(delStmt, 1, idStr)
+                        if sqlite3_step(delStmt) == SQLITE_DONE {
+                            countClips += 1
+                            if let fn {
+                                let u = baseDir.appendingPathComponent("Clipboard").appendingPathComponent(fn)
+                                try? FileManager.default.removeItem(at: u)
+                            }
+                        }
+                        sqlite3_finalize(delStmt)
+                    }
+                }
+            }
+
+            // 3. 清理过期便签
+            let noteFavClause = preserveFavorites ? "AND is_favorite = 0" : ""
+            let selNotes = "SELECT id FROM text_notes WHERE created_at < ? \(noteFavClause);"
+            var noteStmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, selNotes, -1, &noteStmt, nil) == SQLITE_OK {
+                sqlite3_bind_double(noteStmt, 1, cutoffSec)
+                var notesToDelete: [String] = []
+                while sqlite3_step(noteStmt) == SQLITE_ROW {
+                    if let idStr = sqlite3_column_text(noteStmt, 0).map({ String(cString: $0) }) {
+                        notesToDelete.append(idStr)
+                    }
+                }
+                sqlite3_finalize(noteStmt)
+
+                for idStr in notesToDelete {
+                    let delSql = "DELETE FROM text_notes WHERE id = ?;"
+                    var delStmt: OpaquePointer?
+                    if sqlite3_prepare_v2(db, delSql, -1, &delStmt, nil) == SQLITE_OK {
+                        Self.bind(delStmt, 1, idStr)
+                        if sqlite3_step(delStmt) == SQLITE_DONE {
+                            countNotes += 1
+                        }
+                        sqlite3_finalize(delStmt)
+                    }
+                }
+            }
+        }
+
+        let res = CleanupResult(
+            deletedScreenshots: countScreenshots,
+            deletedClipboardItems: countClips,
+            deletedTextNotes: countNotes
+        )
+
+        if res.totalDeleted > 0 {
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .libraryChanged, object: nil)
+            }
+        }
+        return res
+    }
+
+    // MARK: - Analytics (统计看板数据)
+
+    struct AnalyticsData {
+        struct DailyStat: Identifiable {
+            var id: String { dateString }
+            let date: Date
+            let dateString: String // "MM-dd"
+            let fullDateString: String // "yyyy-MM-dd"
+            let screenshotsCount: Int
+            let textCount: Int
+            var totalCount: Int { screenshotsCount + textCount }
+        }
+
+        struct HourlyStat: Identifiable {
+            var id: Int { hour }
+            let hour: Int // 0..23
+            let screenshotsCount: Int
+            let textCount: Int
+            var totalCount: Int { screenshotsCount + textCount }
+        }
+
+        struct AppStat: Identifiable {
+            var id: String { appName }
+            let appName: String
+            let count: Int
+            let percentage: Double
+        }
+
+        let totalScreenshots: Int
+        let totalTextClips: Int
+        let totalNotes: Int
+        let todayScreenshots: Int
+        let todayTextClips: Int
+        let totalDiskBytes: Int64
+        let peakHour: Int
+        let dailyStats: [DailyStat]
+        let hourlyStats: [HourlyStat]
+        let topApps: [AppStat]
+    }
+
+    func fetchAnalyticsData(scopeDays: Int = 14) -> AnalyticsData {
+        let calendar = Calendar.current
+        let now = Date()
+
+        let allRecords = (try? list()) ?? []
+        let allClips = (try? listClipboard(limit: 1000)) ?? []
+        let allNotes = (try? listTextNotes()) ?? []
+
+        var totalBytes: Int64 = 0
+        for r in allRecords { totalBytes += Int64(r.fileSize) }
+
+        var todayScreenshots = 0
+        for r in allRecords where calendar.isDateInToday(r.capturedAt) {
+            todayScreenshots += 1
+        }
+
+        var todayText = 0
+        for c in allClips where c.kind == .text && calendar.isDateInToday(c.createdAt) {
+            todayText += 1
+        }
+
+        // 1. 每日统计 (Daily)
+        let dfShort = DateFormatter()
+        dfShort.dateFormat = "MM-dd"
+        let dfFull = DateFormatter()
+        dfFull.dateFormat = "yyyy-MM-dd"
+
+        var dailyMap: [String: (date: Date, shots: Int, texts: Int)] = [:]
+        for i in 0..<scopeDays {
+            if let d = calendar.date(byAdding: .day, value: -(scopeDays - 1 - i), to: now) {
+                let key = dfFull.string(from: d)
+                dailyMap[key] = (d, 0, 0)
+            }
+        }
+
+        for r in allRecords {
+            let key = dfFull.string(from: r.capturedAt)
+            if var entry = dailyMap[key] {
+                entry.shots += 1
+                dailyMap[key] = entry
+            }
+        }
+        for c in allClips where c.kind == .text {
+            let key = dfFull.string(from: c.createdAt)
+            if var entry = dailyMap[key] {
+                entry.texts += 1
+                dailyMap[key] = entry
+            }
+        }
+
+        let sortedDailyKeys = dailyMap.keys.sorted()
+        let dailyStats: [AnalyticsData.DailyStat] = sortedDailyKeys.compactMap { key in
+            guard let entry = dailyMap[key] else { return nil }
+            return AnalyticsData.DailyStat(
+                date: entry.date,
+                dateString: dfShort.string(from: entry.date),
+                fullDateString: key,
+                screenshotsCount: entry.shots,
+                textCount: entry.texts
+            )
+        }
+
+        // 2. 24小时分布统计 (Hourly 00:00 - 23:00)
+        var hourlyShots = Array(repeating: 0, count: 24)
+        var hourlyTexts = Array(repeating: 0, count: 24)
+
+        for r in allRecords {
+            let h = calendar.component(.hour, from: r.capturedAt)
+            if h >= 0 && h < 24 { hourlyShots[h] += 1 }
+        }
+        for c in allClips where c.kind == .text {
+            let h = calendar.component(.hour, from: c.createdAt)
+            if h >= 0 && h < 24 { hourlyTexts[h] += 1 }
+        }
+
+        var peakH = 14
+        var maxTotalInHour = -1
+        var hourlyStats: [AnalyticsData.HourlyStat] = []
+        for h in 0..<24 {
+            let sCount = hourlyShots[h]
+            let tCount = hourlyTexts[h]
+            let sum = sCount + tCount
+            if sum > maxTotalInHour {
+                maxTotalInHour = sum
+                peakH = h
+            }
+            hourlyStats.append(AnalyticsData.HourlyStat(
+                hour: h,
+                screenshotsCount: sCount,
+                textCount: tCount
+            ))
+        }
+
+        // 3. 来源应用排行 Top 5
+        var appCounts: [String: Int] = [:]
+        for c in allClips {
+            let app = c.sourceApp?.trimmingCharacters(in: .whitespaces) ?? "未知应用"
+            if !app.isEmpty { appCounts[app, default: 0] += 1 }
+        }
+        for n in allNotes {
+            let app = n.sourceApp?.trimmingCharacters(in: .whitespaces) ?? "文字收纳"
+            if !app.isEmpty { appCounts[app, default: 0] += 1 }
+        }
+        appCounts["截图", default: 0] += allRecords.count
+
+        let totalAppActions = max(1, appCounts.values.reduce(0, +))
+        let sortedApps = appCounts.sorted { $0.value > $1.value }.prefix(6)
+        let topApps: [AnalyticsData.AppStat] = sortedApps.map { (k, v) in
+            AnalyticsData.AppStat(
+                appName: k,
+                count: v,
+                percentage: Double(v) / Double(totalAppActions)
+            )
+        }
+
+        return AnalyticsData(
+            totalScreenshots: allRecords.count,
+            totalTextClips: allClips.filter { $0.kind == .text }.count,
+            totalNotes: allNotes.count,
+            todayScreenshots: todayScreenshots,
+            todayTextClips: todayText,
+            totalDiskBytes: totalBytes,
+            peakHour: peakH,
+            dailyStats: dailyStats,
+            hourlyStats: hourlyStats,
+            topApps: topApps
+        )
+    }
+
     enum StoreError: LocalizedError {
         case imageEncodeFailed
         case thumbnailFailed

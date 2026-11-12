@@ -20,7 +20,7 @@ struct LensoLibraryView: View {
 
     @Environment(\.openWindow) private var openWindow
 
-    enum Section { case screenshots, text, recent, favorites }
+    enum Section { case screenshots, text, recent, favorites, analytics }
     enum ViewMode { case grid, list }
     enum TimeFilter: String, CaseIterable {
         case all = "全部时间"
@@ -89,6 +89,10 @@ struct LensoLibraryView: View {
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     feedFooter(summary: favoriteSummary)
+
+                case .analytics:
+                    AnalyticsDashboardView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .background(mainBackground)
@@ -183,6 +187,13 @@ struct LensoLibraryView: View {
                 isActive: section == .favorites
             )
             .onTapGesture { section = .favorites }
+
+            navigationItem(
+                "数据看板",
+                icon: "chart.bar.xaxis",
+                isActive: section == .analytics
+            )
+            .onTapGesture { section = .analytics }
 
             Spacer()
 

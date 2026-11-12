@@ -131,12 +131,121 @@ struct SettingsWindowView: View {
     private var content: some View {
         switch category {
         case .general:
-            settingCard {
-                SettingToggleRow(label: "开机自动启动 LENSO", subtitle: "登录系统后在后台默默运行", isOn: $settings.launchAtLogin)
-                rowDivider
-                SettingToggleRow(label: "在顶部菜单栏显示图标", subtitle: "方便随时唤出截图工具与图库", isOn: $settings.showMenuBarIcon)
-                rowDivider
-                SettingToggleRow(label: "截图保存后打开预览窗口", subtitle: "截完图后自动打开独立无极缩放预览", isOn: $settings.showPreviewAfterCapture)
+            VStack(alignment: .leading, spacing: 16) {
+                settingCard {
+                    SettingToggleRow(label: "开机自动启动 LENSO", subtitle: "登录系统后在后台默默运行", isOn: $settings.launchAtLogin)
+                    rowDivider
+                    SettingToggleRow(label: "在顶部菜单栏显示图标", subtitle: "方便随时唤出截图工具与图库", isOn: $settings.showMenuBarIcon)
+                    rowDivider
+                    SettingToggleRow(label: "截图保存后打开预览窗口", subtitle: "截完图后自动打开独立无极缩放预览", isOn: $settings.showPreviewAfterCapture)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("数据保存期限与自动清理")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.primary.opacity(0.85))
+
+                    settingCard {
+                        VStack(spacing: 0) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("数据保存时长")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundStyle(Color.primary.opacity(0.9))
+                                    Text("达到设定时间后，后台将自动清理历史截图与剪贴板数据")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(Color.secondary)
+                                }
+                                Spacer()
+                                Picker("", selection: $settings.retentionPreset) {
+                                    ForEach(RetentionPreset.allCases) { p in
+                                        Text(p.rawValue).tag(p)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .frame(width: 170)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+
+                            if settings.retentionPreset == .custom {
+                                rowDivider
+                                HStack {
+                                    Text("自定义保留时长")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundStyle(Color.primary.opacity(0.9))
+                                    Spacer()
+                                    TextField("数值", value: $settings.customRetentionValue, format: .number)
+                                        .textFieldStyle(.roundedBorder)
+                                        .frame(width: 60)
+                                    Picker("", selection: $settings.customRetentionUnit) {
+                                        ForEach(RetentionUnit.allCases) { u in
+                                            Text(u.rawValue).tag(u)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .frame(width: 100)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                            }
+
+                            rowDivider
+                            SettingToggleRow(
+                                label: "保留星标收藏的内容",
+                                subtitle: "即使超过保存期限，已收藏的截图与文字便签也绝不会被自动删除",
+                                isOn: $settings.preserveFavoritesOnCleanup
+                            )
+
+                            if settings.retentionPreset != .never {
+                                rowDivider
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("即时手动触发清理")
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundStyle(Color.primary.opacity(0.8))
+                                        if let cutoff = settings.retentionCutoffDate {
+                                            Text("早于 \(DateFormatter.lensoFullDateTime.string(from: cutoff)) 的记录将被清除")
+                                                .font(.system(size: 10))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    Spacer()
+                                    Button {
+                                        if let res = settings.runAutoCleanup() {
+                                            if res.totalDeleted > 0 {
+                                                SaveToastController.shared.show(
+                                                    title: "清理完成",
+                                                    subtitle: "已删除 \(res.totalDeleted) 项过期数据",
+                                                    thumbnail: nil
+                                                )
+                                            } else {
+                                                SaveToastController.shared.show(
+                                                    title: "已是最新",
+                                                    subtitle: "当前暂无符合清理条件的过期记录",
+                                                    thumbnail: nil
+                                                )
+                                            }
+                                        }
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "trash")
+                                            Text("立即清理过期数据")
+                                        }
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(LensoColors.kleinBlueBright)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(Capsule().fill(LensoColors.kleinBlueSoft))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 9)
+                            }
+                        }
+                    }
+                }
             }
 
         case .capture:
