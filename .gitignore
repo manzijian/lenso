@@ -6,3 +6,4 @@ LENSO.xcodeproj/
 xcuserdata/
 .swiftpm/
 .claude/
+dist/
