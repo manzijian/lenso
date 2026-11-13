@@ -23,7 +23,7 @@ struct SearchPanelScreenshotTile: View {
     let cgImage: CGImage?
     let isCopied: Bool
     let onCopy: () -> Void
-    let onPreview: (CGImage) -> Void
+    let onInspect: () -> Void
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -64,9 +64,9 @@ struct SearchPanelScreenshotTile: View {
                             .background(Capsule().fill(Color.black.opacity(0.6)))
                     }
                     Spacer()
-                    if let cgImage {
+                    if cgImage != nil {
                         Button {
-                            onPreview(cgImage)
+                            onInspect()
                         } label: {
                             Image(systemName: "eye.fill")
                                 .font(.system(size: 10))
@@ -75,7 +75,7 @@ struct SearchPanelScreenshotTile: View {
                                 .background(Circle().fill(Color.black.opacity(0.6)))
                         }
                         .buttonStyle(.plain)
-                        .help("无边框置顶预览")
+                        .help("查看图片详情")
                     }
                     Button {
                         onCopy()

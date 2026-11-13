@@ -8,4 +8,6 @@ extension Notification.Name {
     static let editorScrollWheel = Notification.Name("com.lenso.editorScrollWheel")
     /// 编辑器鼠标右键事件通知
     static let editorRightClick = Notification.Name("com.lenso.editorRightClick")
+    /// 搜索面板按下 Esc 通知（优先退出查看层）
+    static let searchPanelEscapePressed = Notification.Name("com.lenso.searchPanelEscapePressed")
 }

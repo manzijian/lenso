@@ -59,10 +59,10 @@ final class SearchPanelController {
         panel.makeKey()
         self.panel = panel
 
-        // Esc 兜底
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        // Esc 兜底：通知 SearchPanelView 优先关闭详情弹层，无弹层时关闭浮窗
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             if event.keyCode == 53 { // Esc
-                self?.hide()
+                NotificationCenter.default.post(name: .searchPanelEscapePressed, object: nil)
                 return nil
             }
             return event

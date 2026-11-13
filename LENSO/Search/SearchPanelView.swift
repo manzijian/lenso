@@ -95,16 +95,26 @@ struct SearchPanelView: View {
         .onReceive(NotificationCenter.default.publisher(for: .textNotesChanged)) { _ in reloadFeed() }
         .onReceive(NotificationCenter.default.publisher(for: .libraryChanged)) { _ in reloadFeed() }
         .onReceive(NotificationCenter.default.publisher(for: .screenshotSaved)) { _ in reloadFeed() }
-        .onExitCommand { onDismiss() }
-        .sheet(item: $inspectingItem) { item in
-            if case .text(let content) = item.kind {
-                TextDetailInspectorSheet(
-                    rawContent: content,
-                    sourceApp: item.sourceApp,
-                    createdAt: item.createdAt,
-                    onDismiss: { inspectingItem = nil }
-                )
+        .onExitCommand {
+            if inspectingItem != nil {
+                withAnimation(.easeInOut(duration: 0.2)) { inspectingItem = nil }
+            } else {
+                onDismiss()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .searchPanelEscapePressed)) { _ in
+            if inspectingItem != nil {
+                withAnimation(.easeInOut(duration: 0.2)) { inspectingItem = nil }
+            } else {
+                onDismiss()
+            }
+        }
+        .overlay {
+            SearchPanelInspectionOverlay(
+                item: $inspectingItem,
+                onCopyItem: { copyItem($0) },
+                onPinImage: { openFloatingPreview($0) }
+            )
         }
         .lensoColorScheme()
     }
@@ -270,7 +280,7 @@ struct SearchPanelView: View {
                 cgImage: cgImage,
                 isCopied: copiedID == item.id,
                 onCopy: { copyItem(item) },
-                onPreview: { openFloatingPreview($0) }
+                onInspect: { inspectingItem = item }
             )
         case .text(let content):
             SearchPanelTextTile(
