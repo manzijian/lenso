@@ -44,7 +44,7 @@ fi
 
 BUILD="$(( $(git rev-list --count HEAD) + 1 ))"
 
-echo "==> 版本 $VERSION（tag $TAG，build $BUILD）"
+echo "==> 版本 ${VERSION}（tag ${TAG}，build ${BUILD}）"
 /usr/bin/sed -i '' -E "s/^    MARKETING_VERSION: .*/    MARKETING_VERSION: \"$VERSION\"/" project.yml
 /usr/bin/sed -i '' -E "s/^    CURRENT_PROJECT_VERSION: .*/    CURRENT_PROJECT_VERSION: \"$BUILD\"/" project.yml
 
