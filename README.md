@@ -57,3 +57,10 @@ xcodebuild test -project LENSO.xcodeproj -scheme LENSO -destination 'platform=ma
 | **全局快速搜索** | `⇧ ⌘ F` | 照片墙方块展示最近截图、复制文本、富文本网址解析与代码高亮 |
 | **数据看板** | - | 每日/每小时复制与截图活跃趋势统计分析 |
 | **设置中心** | `⌘ ,` | 快捷键配置、数据保存期限（小时/天数自动清理）、MCP 服务一键接入 |
+
+---
+
+## 开源协议
+
+本项目基于 [MIT License](LICENSE) 开源，版权归 manzijian 所有。
+
