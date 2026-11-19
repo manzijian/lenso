@@ -79,6 +79,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NotificationCenter.default.post(name: .openLibraryOnLaunch, object: nil)
             NSApp.activate(ignoringOtherApps: true)
         }
+
+        // 从 GitHub Releases 静默检查更新（每天最多一次，失败不打扰）
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            UpdateChecker.shared.checkIfDue()
+        }
     }
 
     /// SwiftUI 生成的系统菜单（Edit / View / Window / Help）跟随工程开发语言，

@@ -31,6 +31,7 @@ struct SettingsSectionContentView: View {
     let category: SettingsCategory
     @State private var shortcutStore = ShortcutStore.shared
     @State private var settings = AppSettings.shared
+    @State private var updater = UpdateChecker.shared
 
     var body: some View {
         switch category {
@@ -294,6 +295,10 @@ struct SettingsSectionContentView: View {
                             .font(.system(size: 11.5))
                             .foregroundStyle(Color.secondary.opacity(0.85))
                             .fixedSize(horizontal: false, vertical: true)
+
+                        Divider()
+
+                        updateRow
                     }
                     .padding(16)
                 }
@@ -336,8 +341,93 @@ struct SettingsSectionContentView: View {
     }
 
     private var aboutVersion: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0"
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
         return "v\(version)"
+    }
+
+    // MARK: - 检查更新
+
+    private var updateRow: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(LensoColors.kleinBlueBright)
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(LensoColors.kleinBlueSoft))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("软件更新")
+                    .font(.system(size: 12, weight: .medium))
+                Text(updateSubtitle)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+
+            updateAction
+        }
+    }
+
+    private var updateSubtitle: String {
+        switch updater.status {
+        case .idle:
+            "更新来自 GitHub Releases"
+        case .checking:
+            "正在连接 GitHub…"
+        case .upToDate:
+            "当前已是最新版本"
+        case .updateAvailable(let version, _):
+            "发现新版本 v\(version)"
+        case .failed:
+            "暂时无法检查更新"
+        }
+    }
+
+    @ViewBuilder
+    private var updateAction: some View {
+        switch updater.status {
+        case .idle:
+            updateButton("检查更新") {
+                Task { await updater.check() }
+            }
+        case .checking:
+            HStack(spacing: 5) {
+                ProgressView()
+                    .controlSize(.mini)
+                Text("检查中")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+        case .upToDate:
+            HStack(spacing: 4) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("已是最新")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .foregroundStyle(LensoColors.kleinBlueBright)
+        case .updateAvailable(_, let url):
+            updateButton("前往更新") {
+                updater.openRelease(url)
+            }
+        case .failed:
+            updateButton("重试") {
+                Task { await updater.check() }
+            }
+        }
+    }
+
+    private func updateButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(LensoColors.kleinBlueBright)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(LensoColors.kleinBlueSoft))
+        }
+        .buttonStyle(.plain)
     }
 
     private func aboutRow(icon: String, title: String, detail: String) -> some View {

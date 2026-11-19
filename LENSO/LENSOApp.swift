@@ -87,6 +87,12 @@ struct LENSOApp: App {
                     NSApp.activate(ignoringOtherApps: true)
                 }
                 .keyboardShortcut(shortcut(for: .openSettings))
+
+                Divider()
+
+                Button("检查更新…") {
+                    Task { await UpdateChecker.shared.checkInteractively() }
+                }
             }
         }
     }
