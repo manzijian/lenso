@@ -49,6 +49,7 @@ targets:
         INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "lenso 需要访问图片以管理你的截图。"
         INFOPLIST_KEY_CFBundleDisplayName: "lenso"
         INFOPLIST_KEY_CFBundleName: "lenso"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: true
         SWIFT_EMIT_LOC_STRINGS: true
         ENABLE_PREVIEWS: true
