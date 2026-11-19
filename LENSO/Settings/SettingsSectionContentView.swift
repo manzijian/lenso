@@ -5,6 +5,7 @@ import AppKit
 enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Sendable {
     case general = "通用"
     case capture = "截图"
+    case tools = "工具"
     case shortcuts = "快捷键"
     case appearance = "外观"
     case mcp = "MCP 服务"
@@ -16,6 +17,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Sendable {
         switch self {
         case .general: "gearshape.fill"
         case .capture: "viewfinder"
+        case .tools: "puzzlepiece.extension.fill"
         case .shortcuts: "keyboard.fill"
         case .appearance: "paintpalette.fill"
         case .mcp: "cpu"
@@ -163,6 +165,9 @@ struct SettingsSectionContentView: View {
                 SettingToggleRow(label: "复制与保存成功后在右下角弹出提醒", subtitle: "复制文本、图片或截图保存时，在屏幕右下角显示浮动气泡反馈", isOn: $settings.showFloatingPreview)
             }
 
+        case .tools:
+            ToolCatalogView()
+
         case .shortcuts:
             VStack(alignment: .leading, spacing: 14) {
                 settingCard {
@@ -252,49 +257,109 @@ struct SettingsSectionContentView: View {
             MCPSettingsSectionView()
 
         case .about:
-            settingCard {
-                HStack(spacing: 16) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [LensoColors.kleinBlueBright, LensoColors.kleinBlue],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 54, height: 54)
-                            .shadow(color: LensoColors.kleinBlueBright.opacity(0.35), radius: 8, y: 3)
+            VStack(spacing: 14) {
+                settingCard {
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack(spacing: 16) {
+                            // 直接展示 App 真实图标，避免用 SF Symbol 拼出来的假图标
+                            Image(nsImage: NSApp.applicationIconImage)
+                                .resizable()
+                                .interpolation(.high)
+                                .frame(width: 54, height: 54)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .shadow(color: .black.opacity(0.16), radius: 8, y: 3)
 
-                        Image(systemName: "crop")
-                            .font(.system(size: 26, weight: .semibold))
-                            .foregroundStyle(.white)
-                    }
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 6) {
+                                    Text("LENSO")
+                                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                                    Text(aboutVersion)
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(LensoColors.kleinBlueBright)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 1.5)
+                                        .background(Capsule().fill(LensoColors.kleinBlueSoft))
+                                }
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 6) {
-                            Text("LENSO")
-                                .font(.system(size: 18, weight: .bold, design: .rounded))
-                            Text("v2.0")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(LensoColors.kleinBlueBright)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 1.5)
-                                .background(Capsule().fill(LensoColors.kleinBlueSoft))
+                                Text("截图、标注、剪贴板与文字收纳，一个本地优先的效率工具")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .layoutPriority(1)
+                            Spacer()
                         }
 
-                        Text("现代 macOS 原生截图、标注贴图与 OCR 文字收纳利器")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
+                        Text("所有数据保存在本机，不上传云端；截图与文本可直接被 AI 工具通过 MCP 读取。")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Color.secondary.opacity(0.85))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(16)
+                }
 
-                        Text("设计规范：克莱因蓝 + 纯白 Apple 设计风格")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color.secondary.opacity(0.8))
+                settingCard {
+                    VStack(spacing: 0) {
+                        aboutRow(icon: "crop", title: "截图与标注",
+                                 detail: "区域截图、画笔/箭头/文字/马赛克标注，支持钉图与 OCR")
+                        rowDivider
+                        aboutRow(icon: "doc.on.clipboard", title: "剪贴板历史",
+                                 detail: "自动记录复制的文字与图片，保留来源应用")
+                        rowDivider
+                        aboutRow(icon: "magnifyingglass", title: "全局搜索",
+                                 detail: "截屏与文本混合检索，回车复制、空格预览")
+                        rowDivider
+                        aboutRow(icon: "cpu", title: "AI 连接（MCP）",
+                                 detail: "向本地 AI 客户端提供只读检索与有限写入能力")
                     }
                 }
-                .padding(16)
+
+                settingCard {
+                    VStack(spacing: 0) {
+                        aboutRow(icon: "folder", title: "数据位置",
+                                 detail: "~/Library/Application Support/LENSO")
+                        rowDivider
+                        aboutRow(icon: "lock.shield", title: "隐私",
+                                 detail: "无账号、无网络上传，所有内容仅存于本机")
+                        rowDivider
+                        aboutRow(icon: "clock.arrow.circlepath", title: "自动清理",
+                                 detail: "可在「存储」中设置保留天数，收藏内容默认保留")
+                    }
+                }
+
+                Text("© 2026 LENSO · 为 macOS 打造")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.secondary.opacity(0.7))
+                    .padding(.bottom, 8)
             }
         }
+    }
+
+    private var aboutVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0"
+        return "v\(version)"
+    }
+
+    private func aboutRow(icon: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(LensoColors.kleinBlueBright)
+                .frame(width: 26, height: 26)
+                .background(Circle().fill(LensoColors.kleinBlueSoft))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 12.5, weight: .semibold))
+                Text(detail)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
     }
 
     private func settingCard<V: View>(@ViewBuilder content: @escaping () -> V) -> some View {

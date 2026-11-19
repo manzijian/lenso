@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LENSO · 原地标注（重做）</title>
+<style>
+  :root{
+    --blue:#0538E0;
+    --blue-deep:#002FA7;
+    --blue-soft:rgba(5,56,224,.08);
+    --ink:#14161B;
+    --slate:#4A5060;
+    --muted:#8B91A1;
+    --line:rgba(16,24,40,.10);
+    --line2:rgba(16,24,40,.16);
+    --page:#EEF1F7;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif;
+    background:var(--page);color:var(--ink);-webkit-font-smoothing:antialiased;
+    padding:52px 40px 100px;display:flex;flex-direction:column;align-items:center;
+  }
+  .wrap{width:100%;max-width:1060px;}
+  header{margin-bottom:40px;}
+  .eyebrow{display:inline-flex;align-items:center;gap:7px;font-size:10.5px;font-weight:650;letter-spacing:.16em;color:var(--blue);text-transform:uppercase;margin-bottom:13px;}
+  .eyebrow i{width:5px;height:5px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 3px rgba(5,56,224,.10);}
+  h1{font-size:27px;font-weight:650;letter-spacing:-.025em;}
+  .lede{margin-top:11px;font-size:13px;line-height:1.85;color:var(--slate);max-width:800px;}
+  .lede b{color:var(--ink);font-weight:600;}
+
+  .stage{
+    position:relative;width:1000px;height:600px;border-radius:18px;overflow:hidden;
+    background:
+      radial-gradient(420px 300px at 16% 14%, #B9C8EA, transparent 68%),
+      radial-gradient(520px 360px at 86% 88%, #D9C9EC, transparent 70%),
+      linear-gradient(140deg,#AEBEDF,#D6DFF2 48%,#BCC9E6);
+    box-shadow:0 0 0 .5px rgba(16,24,40,.10),0 26px 60px rgba(20,30,70,.14);
+    margin-bottom:16px;
+  }
+  .stage::after{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(180deg,rgba(255,255,255,.18),transparent 30%);
+  }
+
+  /* 选区 */
+  .sel{
+    position:absolute;left:190px;top:92px;width:620px;height:376px;
+    box-shadow:0 0 0 1px rgba(5,56,224,.92),0 0 0 2000px rgba(8,12,24,.42),0 18px 44px rgba(10,16,40,.28);
+    border-radius:1px;
+  }
+  .sel-inner{position:absolute;inset:0;overflow:hidden;background:#F7F8FB;}
+  .fake{display:flex;height:100%;}
+  .fake .side{width:25%;background:#FBFBFD;border-right:.5px solid rgba(16,24,40,.09);padding:13px 11px;display:flex;flex-direction:column;gap:7px;}
+  .fake .side i{display:block;height:8px;border-radius:4px;background:#E2E6EF;}
+  .fake .side i.w1{width:62%;background:#C7D0E3;}
+  .fake .side i.w2{width:82%;}
+  .fake .side i.w3{width:50%;}
+  .fake .main{flex:1;padding:15px 17px;display:flex;flex-direction:column;gap:11px;}
+  .fake .hd{display:flex;align-items:center;gap:9px;}
+  .fake .hd b{width:21px;height:21px;border-radius:6px;background:var(--blue);opacity:.92;display:block;}
+  .fake .hd i{height:8px;border-radius:4px;background:#DCE2EE;width:30%;display:block;}
+  .fake .hero{height:118px;border-radius:10px;background:linear-gradient(135deg,#E9EEFB,#DCE4F6);box-shadow:inset 0 0 0 1px rgba(5,56,224,.05);}
+  .fake .rowline{display:flex;gap:10px;}
+  .fake .rowline i{flex:1;height:62px;border-radius:9px;background:#EEF1F8;}
+  .fake .txt i{display:block;height:6px;border-radius:3px;background:#E4E8F1;margin-bottom:7px;}
+  .fake .txt i:nth-child(1){width:84%;}
+  .fake .txt i:nth-child(2){width:92%;}
+  .fake .txt i:nth-child(3){width:55%;}
+
+  /* 标注示例 */
+  .mark{position:absolute;pointer-events:none;}
+  .mark.red-rect{left:44%;top:34%;width:23%;height:24%;border:2px solid #E5484D;border-radius:3px;box-shadow:0 0 0 2px rgba(229,72,77,.12);}
+  .mark.arrow{left:30%;top:66%;width:96px;height:2.5px;background:var(--blue);transform:rotate(-14deg);border-radius:2px;}
+  .mark.arrow::after{content:"";position:absolute;right:-2px;top:-5px;width:10px;height:10px;border-top:2.5px solid var(--blue);border-right:2.5px solid var(--blue);transform:rotate(45deg);border-radius:1px;}
+  .mark.tag{left:47%;top:28%;background:#E5484D;color:#fff;font-size:10px;font-weight:650;padding:3px 8px;border-radius:4px;letter-spacing:.01em;}
+  .mark.mosaic{left:72%;top:64%;width:88px;height:44px;border-radius:3px;
+    background:repeating-linear-gradient(45deg,#B9C1D2 0 5px,#DFE5F0 5px 10px);
+    box-shadow:0 0 0 1.5px rgba(5,56,224,.55);}
+  .mark.stroke{left:26%;top:44%;width:120px;height:46px;}
+  .mark.stroke svg{width:100%;height:100%;}
+
+  /* 尺寸角标 */
+  .dims{
+    position:absolute;right:0;top:-27px;display:flex;align-items:center;gap:5px;
+    padding:3px 8px;border-radius:5px;background:rgba(10,14,24,.78);
+    color:#fff;font-size:10px;font-family:ui-monospace,"SF Mono",Menlo,monospace;
+    backdrop-filter:blur(8px);
+  }
+  .dims .sep{width:1px;height:9px;background:rgba(255,255,255,.25);}
+
+  /* 角点 */
+  .h{position:absolute;width:7px;height:7px;background:#fff;border:1.5px solid var(--blue);border-radius:1px;}
+  .h.tl{left:-4px;top:-4px;} .h.tr{right:-4px;top:-4px;}
+  .h.bl{left:-4px;bottom:-4px;} .h.br{right:-4px;bottom:-4px;}
+
+  /* 工具条（贴选区下方） */
+  .bar{
+    position:absolute;left:0;bottom:-46px;display:flex;align-items:center;gap:1px;
+    height:38px;padding:0 4px;border-radius:10px;
+    background:rgba(253,253,255,.97);
+    box-shadow:0 0 0 .5px rgba(16,24,40,.13),0 8px 22px rgba(10,16,40,.18);
+    backdrop-filter:blur(16px);
+  }
+  .t{
+    position:relative;width:30px;height:30px;border-radius:7px;
+    display:flex;align-items:center;justify-content:center;color:#3F4553;
+    transition:background .12s ease,color .12s ease;
+  }
+  .t svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+  .t:hover{background:rgba(16,24,40,.05);}
+  .t.on{background:var(--blue);color:#fff;box-shadow:0 2px 6px rgba(5,56,224,.32);}
+  .t.on:hover{background:var(--blue-deep);}
+  .t .tip{
+    position:absolute;left:50%;bottom:calc(100% + 7px);transform:translateX(-50%);
+    padding:2.5px 6px;border-radius:4px;background:rgba(10,14,24,.86);color:#fff;
+    font-size:9px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s ease;
+  }
+  .t:hover .tip{opacity:1;}
+  .vsep{width:1px;height:18px;background:rgba(16,24,40,.10);margin:0 3px;}
+  .swatch{
+    width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+  }
+  .swatch:hover{background:rgba(16,24,40,.05);}
+  .swatch i{width:15px;height:15px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 1.5px #fff,0 0 0 2.6px rgba(16,24,40,.16);}
+  .done{
+    display:flex;align-items:center;gap:5px;height:30px;padding:0 10px;margin-left:2px;
+    border-radius:7px;background:var(--blue);color:#fff;font-size:11px;font-weight:650;
+    box-shadow:0 2px 7px rgba(5,56,224,.30);
+  }
+  .done svg{width:12px;height:12px;stroke:#fff;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
+
+  /* 属性浮条 */
+  .props{
+    position:absolute;left:0;bottom:-88px;display:flex;align-items:center;gap:7px;
+    height:32px;padding:0 9px;border-radius:8px;background:rgba(253,253,255,.98);
+    box-shadow:0 0 0 .5px rgba(16,24,40,.12),0 4px 14px rgba(10,16,40,.14);
+  }
+  .props .pl{font-size:8.5px;font-weight:650;letter-spacing:.09em;text-transform:uppercase;color:#B6BCC9;}
+  .props .pc{width:16px;height:16px;border-radius:50%;box-shadow:0 0 0 1px rgba(16,24,40,.14);}
+  .props .pc.on{box-shadow:0 0 0 2px #fff,0 0 0 3.2px var(--blue);}
+  .props .vsep{margin:0 2px;}
+  .props .wg{display:flex;align-items:center;gap:4px;padding:2px 6px;border-radius:5px;background:rgba(16,24,40,.04);}
+  .props .wg i{display:block;border-radius:50%;background:#8B91A1;}
+  .props .wg i:nth-child(1){width:3px;height:3px;}
+  .props .wg i:nth-child(2){width:5px;height:5px;background:#4A5060;}
+  .props .wg i:nth-child(3){width:7px;height:7px;background:var(--blue);}
+
+  .hint{
+    position:absolute;right:0;top:-46px;display:flex;align-items:center;gap:9px;
+    font-size:9.5px;color:rgba(255,255,255,.86);
+    text-shadow:0 1px 2px rgba(0,0,0,.35);
+  }
+  .hint kbd{
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:9px;
+    background:rgba(255,255,255,.18);border-radius:3px;padding:1px 4px;
+  }
+
+  .caption{margin-top:12px;font-size:11.5px;color:var(--muted);line-height:1.7;}
+
+  /* 细节说明 */
+  .specs{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:44px;}
+  .spec{background:#fff;border-radius:12px;padding:16px 17px;box-shadow:0 0 0 .5px var(--line2);}
+  .spec h3{font-size:11px;font-weight:650;letter-spacing:.02em;margin-bottom:7px;}
+  .spec p{font-size:11.5px;line-height:1.7;color:var(--slate);}
+  .spec p b{color:var(--ink);font-weight:600;}
+  .spec .num{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:9.5px;color:var(--blue);margin-bottom:6px;display:block;}
+
+  .reco{margin-top:32px;border-radius:14px;background:#fff;padding:24px 28px;box-shadow:0 0 0 .5px var(--line2),0 10px 32px rgba(20,30,70,.05);}
+  .reco h2{font-size:15.5px;font-weight:650;letter-spacing:-.015em;margin-bottom:8px;}
+  .reco p{font-size:12.5px;line-height:1.85;color:var(--slate);max-width:900px;}
+  .reco p + p{margin-top:7px;}
+  .reco strong{color:var(--ink);font-weight:600;}
+  .reco .ask{margin-top:14px;padding-top:12px;border-top:.5px solid var(--line);font-size:11.5px;color:var(--muted);}
+  .reco .ask b{color:var(--blue);font-weight:600;}
+
+  @media (max-width:1080px){
+    .stage{width:100%;max-width:1000px;height:auto;aspect-ratio:1000/600;}
+    .specs{grid-template-columns:repeat(2,1fr);}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><i></i>LENSO / IN-PLACE ANNOTATION</div>
+    <h1>原地标注 · 第二版</h1>
+    <p class="lede">
+      按你的意思推翻重做：<b>不弹窗口、不切画布</b>。松手后选区就停在原地，工具条贴在选区下缘，
+      属性只在选中绘图工具时浮出。所有标注直接画在选区上，完成即落库。
+    </p>
+  </header>
+
+  <div class="stage">
+    <div class="sel">
+      <div class="sel-inner">
+        <div class="fake">
+          <div class="side">
+            <i class="w1"></i><i class="w2"></i><i class="w3"></i><i class="w2"></i><i class="w1"></i><i class="w3"></i>
+          </div>
+          <div class="main">
+            <div class="hd"><b></b><i></i></div>
+            <div class="hero"></div>
+            <div class="rowline"><i></i><i></i><i></i></div>
+            <div class="txt"><i></i><i></i><i></i></div>
+          </div>
+        </div>
+
+        <!-- 已画的标注 -->
+        <div class="mark red-rect"></div>
+        <div class="mark tag">间距不对</div>
+        <div class="mark arrow"></div>
+        <div class="mark mosaic"></div>
+        <div class="mark stroke">
+          <svg viewBox="0 0 120 46" fill="none">
+            <path d="M4 34c14-16 22 6 34-8s18 10 30-4 20 6 32-6" stroke="#0538E0" stroke-width="2.4" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="dims">
+        <span>1512 × 982</span>
+        <span class="sep"></span>
+        <span>2.4 MB</span>
+      </div>
+      <div class="hint"><kbd>⌘Z</kbd>撤销<kbd>Esc</kbd>取消<kbd>⏎</kbd>完成</div>
+
+      <span class="h tl"></span><span class="h tr"></span><span class="h bl"></span><span class="h br"></span>
+
+      <!-- 工具条 -->
+      <div class="bar">
+        <div class="t"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.6L10.4 19z"/></svg><span class="tip">选择 / 移动</span></div>
+        <div class="t"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/></svg><span class="tip">矩形</span></div>
+        <div class="t"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8" ry="6"/></svg><span class="tip">椭圆</span></div>
+        <div class="t on"><svg viewBox="0 0 24 24"><path d="M5 19L19 5M19 5h-5M19 5v5"/></svg><span class="tip">箭头</span></div>
+        <div class="t"><svg viewBox="0 0 24 24"><path d="M4 19l4-1 10-10-3-3L5 15z"/></svg><span class="tip">画笔</span></div>
+        <div class="t"><svg viewBox="0 0 24 24"><path d="M5 6h14M12 6v13"/></svg><span class="tip">文字</span></div>
+        <div class="t"><svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span class="tip">马赛克</span></div>
+        <div class="vsep"></div>
+        <div class="swatch"><i></i></div>
+        <div class="t"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 10-2.3 5.7M20 6v6h-6"/></svg><span class="tip">撤销</span></div>
+        <div class="vsep"></div>
+        <div class="t"><svg viewBox="0 0 24 24"><path d="M9 4h6l1 4h3v11a2 2 0 01-2 2H7a2 2 0 01-2-2V8h3z"/><path d="M12 12v5M9.5 14.5h5"/></svg><span class="tip">贴图</span></div>
+        <div class="t"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg><span class="tip">复制</span></div>
+        <div class="done"><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>完成</div>
+      </div>
+
+      <!-- 属性浮条 -->
+      <div class="props">
+        <span class="pl">颜色</span>
+        <span class="pc on" style="background:#0538E0"></span>
+        <span class="pc" style="background:#E5484D"></span>
+        <span class="pc" style="background:#111318"></span>
+        <span class="pc" style="background:#F5C518"></span>
+        <span class="pc" style="background:#FFFFFF"></span>
+        <span class="vsep"></span>
+        <span class="pl">粗细</span>
+        <span class="wg"><i></i><i></i><i></i></span>
+      </div>
+    </div>
+  </div>
+  <p class="caption">
+    标注期：选区 1px 蓝边 + 四角手柄；工具条贴下缘 6px；属性条浮在工具条下方，仅绘图工具激活时出现。
+    靠近屏幕底部时，工具条与属性条整体翻到选区上方，位置不变。
+  </p>
+
+  <section class="specs">
+    <div class="spec">
+      <span class="num">01</span>
+      <h3>工具条</h3>
+      <p>高 <b>38</b>，圆角 10，图标 30×30，激活态克莱因蓝实心；悬停出 9px 工具名。<b>不做常驻阴影扩散</b>，只有 0.5px 描边 + 8/22 阴影。</p>
+    </div>
+    <div class="spec">
+      <span class="num">02</span>
+      <h3>属性</h3>
+      <p>只在矩形/箭头/画笔/文字/马赛克激活时浮出，<b>高 32</b>，五个色点 + 三档粗细；不选绘图工具就收起，避免长期占位。</p>
+    </div>
+    <div class="spec">
+      <span class="num">03</span>
+      <h3>选区</h3>
+      <p>1px 蓝边不呼吸、不闪；四角 7px 白底蓝边手柄；右下角尺寸/大小角标深色半透明，不遮内容。<b>标注中隐藏取色角标。</b></p>
+    </div>
+    <div class="spec">
+      <span class="num">04</span>
+      <h3>动效</h3>
+      <p>工具条出现 120ms 淡入 + 4px 上移；属性条 100ms；完成时原图淡出 160ms。<b>全部 transform/opacity</b>，不触发布局重排。</p>
+    </div>
+  </section>
+
+  <section class="reco">
+    <div class="eyebrow"><i></i>BEHAVIOR</div>
+    <h2>流程与键位</h2>
+    <p>
+      框选 → 松手即进入标注态（已落内存，未落库）→ 完成才写库并短暂出现在屏幕右下角作为反馈；
+      不标注直接 <b>⌘C 或点「复制」</b> 也视为完成，不会丢图。
+    </p>
+    <p>
+      <strong>Esc</strong> 取消整次截图；<strong>⌘Z</strong> 逐步撤销标注；<strong>⏎</strong> 完成并保存；
+      <strong>⌘C</strong> 完成并复制；<strong>⌘S</strong> 完成并导出。贴图 = 完成并保持悬浮在屏幕上。
+    </p>
+    <p>
+      <strong>为什么不做窗口</strong>：窗口意味着一次创建 + 一次转场 + 一次焦点切换，这三步就是你感觉“不丝滑”的来源。
+      原地模式只有一次状态切换，且工具条位置固定，鼠标不需要长距离移动。
+    </p>
+    <div class="ask">这版如果方向对了，我就按这套实现；还有哪块 UI 不对，指一下我继续收。</div>
+  </section>
+
+</div>
+</body>
+</html>

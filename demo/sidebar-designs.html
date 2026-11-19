@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LENSO · 栏目导航重做</title>
+<style>
+  :root{
+    --blue:#0538E0;
+    --blue-deep:#002FA7;
+    --blue-soft:rgba(5,56,224,.08);
+    --ink:#15171C;
+    --slate:#4C5261;
+    --muted:#8A90A0;
+    --faint:#B9BEC9;
+    --line:rgba(16,24,40,.08);
+    --line-strong:rgba(16,24,40,.12);
+    --page:#F1F3F8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif;
+    background:var(--page);color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    padding:56px 40px 120px;display:flex;flex-direction:column;align-items:center;
+  }
+  .wrap{width:100%;max-width:1180px;}
+  header{margin-bottom:44px;}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:7px;
+    font-size:10.5px;font-weight:650;letter-spacing:.16em;
+    color:var(--blue);text-transform:uppercase;margin-bottom:14px;
+  }
+  .eyebrow i{width:5px;height:5px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 3px rgba(5,56,224,.10);}
+  h1{font-size:29px;font-weight:650;letter-spacing:-.025em;}
+  .lede{margin-top:12px;font-size:13px;line-height:1.85;color:var(--slate);max-width:760px;}
+  .lede b{color:var(--ink);font-weight:600;}
+
+  .case{display:grid;grid-template-columns:900px minmax(260px,1fr);gap:40px;align-items:start;margin-bottom:62px;}
+  .case-head{display:flex;align-items:baseline;gap:10px;margin-bottom:13px;}
+  .case-no{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10.5px;font-weight:600;color:var(--blue);}
+  .case-head h2{font-size:15.5px;font-weight:650;letter-spacing:-.01em;}
+  .case-head span{font-size:11px;color:var(--muted);}
+
+  .win{
+    width:900px;height:540px;border-radius:12px;background:#fff;overflow:hidden;
+    display:flex;flex-direction:column;
+    box-shadow:0 0 0 .5px rgba(16,24,40,.11),0 2px 6px rgba(16,24,40,.04),0 24px 60px rgba(20,30,70,.10);
+  }
+  .bar{
+    height:46px;flex:none;display:flex;align-items:center;gap:9px;
+    padding:0 14px;border-bottom:.5px solid var(--line);background:#fff;
+  }
+  .lights{display:flex;gap:7px;margin-right:2px;}
+  .lights i{width:9.5px;height:9.5px;border-radius:50%;display:block;}
+  .lights i:nth-child(1){background:#FF5F57;}
+  .lights i:nth-child(2){background:#FEBC2E;}
+  .lights i:nth-child(3){background:#28C840;}
+  .bar-title{font-size:12px;font-weight:650;}
+  .bar-sub{font-size:10px;font-weight:600;color:var(--muted);background:rgba(16,24,40,.045);border-radius:999px;padding:2px 7px;font-family:ui-monospace,"SF Mono",Menlo,monospace;}
+  .spacer{flex:1;}
+
+  .body{flex:1;display:flex;min-height:0;}
+
+  /* ---------- 01 分区侧栏 ---------- */
+  .sb1{
+    width:206px;flex:none;background:#FBFBFD;border-right:.5px solid var(--line);
+    display:flex;flex-direction:column;padding:14px 10px 10px;
+  }
+  .brand{display:flex;align-items:center;gap:7px;padding:0 6px 14px;}
+  .brand-mark{
+    width:20px;height:20px;border-radius:6px;background:var(--blue);
+    display:grid;place-items:center;color:#fff;font-size:10px;font-weight:700;
+  }
+  .brand-name{font-size:12.5px;font-weight:700;letter-spacing:-.01em;}
+  .brand-ver{font-size:8.5px;color:var(--faint);margin-left:auto;font-family:ui-monospace,"SF Mono",Menlo,monospace;}
+
+  .quick{
+    display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;margin-bottom:14px;
+    border-radius:7px;background:#fff;box-shadow:inset 0 0 0 .8px var(--line-strong);
+    font-size:10.5px;color:var(--muted);
+  }
+  .quick kbd{
+    margin-left:auto;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:8.5px;
+    color:var(--faint);background:rgba(16,24,40,.04);border-radius:4px;padding:1px 4px;
+  }
+  .group-label{
+    font-size:9px;font-weight:650;letter-spacing:.12em;color:var(--faint);
+    text-transform:uppercase;padding:0 9px;margin:10px 0 5px;
+  }
+  .nav{
+    display:flex;align-items:center;gap:8px;height:30px;padding:0 9px;border-radius:7px;
+    font-size:11.5px;color:var(--slate);position:relative;margin-bottom:2px;
+  }
+  .nav svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;opacity:.75;}
+  .nav .count{
+    margin-left:auto;font-family:ui-monospace,"SF Mono",Menlo,monospace;
+    font-size:9px;color:var(--faint);
+  }
+  .nav.on{background:var(--blue-soft);color:var(--blue);font-weight:600;}
+  .nav.on svg{opacity:1;}
+  .nav.on .count{color:var(--blue);opacity:.65;}
+  .nav.on::before{
+    content:"";position:absolute;left:-10px;top:7px;bottom:7px;width:2.5px;
+    border-radius:2px;background:var(--blue);
+  }
+  .sb1 .bottom{margin-top:auto;}
+  .storage{
+    margin:0 2px 8px;padding:8px 9px;border-radius:8px;background:#fff;
+    box-shadow:inset 0 0 0 .5px var(--line);
+  }
+  .storage-top{display:flex;justify-content:space-between;font-size:9px;color:var(--muted);}
+  .storage-top b{color:var(--slate);font-weight:600;}
+  .storage-bar{margin-top:6px;height:4px;border-radius:2px;background:rgba(16,24,40,.07);overflow:hidden;}
+  .storage-bar i{display:block;height:100%;width:38%;background:var(--blue);border-radius:2px;}
+
+  /* ---------- 02 图标轨道 ---------- */
+  .rail{
+    width:66px;flex:none;background:#FBFBFD;border-right:.5px solid var(--line);
+    display:flex;flex-direction:column;align-items:center;padding:12px 0 10px;gap:4px;
+  }
+  .rail .brand-mark{width:22px;height:22px;margin-bottom:10px;}
+  .rail-item{
+    width:46px;height:44px;border-radius:9px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:3px;color:var(--muted);
+  }
+  .rail-item svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
+  .rail-item span{font-size:8px;font-weight:550;}
+  .rail-item.on{background:var(--blue-soft);color:var(--blue);}
+  .rail .bottom{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:6px;}
+  .rail .avatar{width:24px;height:24px;border-radius:50%;background:rgba(16,24,40,.08);}
+
+  /* ---------- 03 顶部标签 ---------- */
+  .topnav{
+    height:44px;flex:none;display:flex;align-items:center;gap:4px;
+    padding:0 14px;border-bottom:.5px solid var(--line);background:#FCFCFE;
+  }
+  .tab{
+    display:flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:7px;
+    font-size:11.5px;color:var(--slate);
+  }
+  .tab svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;opacity:.7;}
+  .tab.on{background:#fff;color:var(--blue);font-weight:600;box-shadow:0 1px 2px rgba(20,30,70,.08),inset 0 0 0 .5px var(--line);}
+  .tab .count{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:9px;color:var(--faint);}
+  .topnav .right{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:10.5px;color:var(--muted);}
+
+  /* ---------- 内容区（三种共用，简化） ---------- */
+  .content{flex:1;min-width:0;display:flex;flex-direction:column;background:#fff;}
+  .content-head{
+    height:46px;flex:none;display:flex;align-items:center;gap:8px;
+    padding:0 16px;border-bottom:.5px solid var(--line);
+  }
+  .content-title{font-size:12.5px;font-weight:650;}
+  .content-sub{font-size:10px;color:var(--muted);}
+  .content-head .right{margin-left:auto;display:flex;gap:8px;align-items:center;}
+  .search{
+    width:168px;height:24px;border-radius:6px;display:flex;align-items:center;gap:5px;
+    padding:0 7px;font-size:10px;color:var(--faint);
+    box-shadow:inset 0 0 0 .8px var(--line-strong);background:#fff;
+  }
+  .feed{padding:6px 8px;overflow:hidden;}
+  .day{font-size:10.5px;font-weight:650;color:var(--muted);padding:9px 10px 5px;display:flex;gap:6px;}
+  .day span{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:9px;color:var(--faint);}
+  .row{display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:8px;}
+  .thumb{width:82px;height:52px;border-radius:6px;background:#DCE2EE;position:relative;overflow:hidden;flex:none;}
+  .thumb::before{content:"";position:absolute;inset:14% 11%;background:#fff;border-radius:3px;box-shadow:0 1px 3px rgba(20,30,70,.10);}
+  .thumb::after{content:"";position:absolute;left:20%;right:20%;top:37%;height:5%;background:#C7CEDD;border-radius:2px;box-shadow:0 9px 0 #D6DCE8,0 18px 0 #E2E7F0;}
+  .thumb.icon{background:var(--blue-soft);display:grid;place-items:center;}
+  .thumb.icon::before,.thumb.icon::after{display:none;}
+  .thumb.icon svg{width:19px;height:19px;stroke:var(--blue);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;}
+  .rmain{min-width:0;flex:1;}
+  .rtitle{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .rsub{margin-top:2px;font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .rmeta{flex:none;display:flex;align-items:center;gap:7px;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:9px;color:var(--faint);}
+  .badge{font-family:-apple-system,"PingFang SC",sans-serif;font-size:8.5px;font-weight:600;color:var(--muted);background:rgba(16,24,40,.05);border-radius:4px;padding:2px 4px;}
+
+  /* 注解 */
+  .notes{padding-top:2px;}
+  .ref{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.05em;color:var(--blue);background:var(--blue-soft);border-radius:5px;padding:3px 7px;margin-bottom:11px;}
+  .notes h3{font-size:16px;font-weight:650;letter-spacing:-.015em;margin-bottom:6px;}
+  .notes .pos{font-size:12.5px;line-height:1.8;color:var(--slate);margin-bottom:16px;}
+  .notes dl{display:flex;flex-direction:column;gap:12px;}
+  .notes dt{font-size:9.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:3px;}
+  .notes dd{font-size:12px;line-height:1.75;color:var(--slate);}
+  .notes dd b{color:var(--ink);font-weight:600;}
+  .pick{margin-top:16px;padding:10px 12px;border-left:2px solid var(--blue);background:rgba(5,56,224,.035);font-size:11.5px;line-height:1.7;color:var(--slate);}
+  .pick b{color:var(--blue-deep);font-weight:600;}
+
+  .compare h2{font-size:17px;font-weight:650;letter-spacing:-.015em;margin-bottom:6px;}
+  .compare .sub{font-size:12px;color:var(--muted);margin-bottom:18px;}
+  table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 0 0 .5px var(--line-strong);}
+  th,td{text-align:left;padding:12px 16px;font-size:12px;border-bottom:.5px solid var(--line);}
+  th{font-size:10.5px;font-weight:650;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);background:#FAFBFD;}
+  td:first-child{font-weight:550;width:150px;}
+  tr:last-child td{border-bottom:none;}
+
+  .reco{margin-top:36px;border-radius:14px;background:#fff;padding:26px 30px;box-shadow:0 0 0 .5px var(--line-strong),0 10px 34px rgba(20,30,70,.05);}
+  .reco h2{font-size:16px;font-weight:650;letter-spacing:-.015em;margin-bottom:10px;}
+  .reco p{font-size:13px;line-height:1.85;color:var(--slate);max-width:860px;}
+  .reco p + p{margin-top:8px;}
+  .reco strong{color:var(--ink);font-weight:600;}
+  .reco .ask{margin-top:16px;padding-top:14px;border-top:.5px solid var(--line);font-size:12px;color:var(--muted);}
+  .reco .ask b{color:var(--blue);font-weight:600;}
+
+  @media (max-width:1200px){
+    .case{grid-template-columns:1fr;gap:22px;}
+    .win{width:100%;max-width:900px;}
+    .notes{max-width:900px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><i></i>LENSO / NAVIGATION</div>
+    <h1>栏目导航重做</h1>
+    <p class="lede">
+      现在六个栏目平铺成一列，图标、字数、数量都在同一层，<b>没有主次、也没有分组</b>；
+      设置和数据看板混在内容里，存储状态完全看不到。下面三种重做方向，内容区用同一套最近列表，方便比较。
+    </p>
+  </header>
+
+  <!-- 01 分区侧栏 -->
+  <section class="case">
+    <div>
+      <div class="case-head">
+        <span class="case-no">01</span>
+        <h2>分区侧栏</h2>
+        <span>内容 / 洞察 / 系统 三层</span>
+      </div>
+      <div class="win">
+        <div class="bar">
+          <div class="lights"><i></i><i></i><i></i></div>
+          <div class="bar-title">lenso</div>
+          <div class="spacer"></div>
+          <div class="bar-sub">⌘K 搜索</div>
+        </div>
+        <div class="body">
+          <div class="sb1">
+            <div class="brand">
+              <div class="brand-mark">L</div>
+              <div class="brand-name">lenso</div>
+              <div class="brand-ver">1.0</div>
+            </div>
+
+            <div class="quick">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+              搜索截图或文字
+              <kbd>⌘K</kbd>
+            </div>
+
+            <div class="group-label">内容</div>
+            <div class="nav"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/></svg>截图<span class="count">128</span></div>
+            <div class="nav"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>文字<span class="count">24</span></div>
+            <div class="nav on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>最近 7 天<span class="count">32</span></div>
+            <div class="nav"><svg viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6-5.4-2.9-5.4 2.9 1-6L3.2 9.5l6.1-.9z"/></svg>收藏<span class="count">9</span></div>
+
+            <div class="group-label">洞察</div>
+            <div class="nav"><svg viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>数据看板</div>
+
+            <div class="bottom">
+              <div class="storage">
+                <div class="storage-top"><span>存储占用</span><b>1.2 GB</b></div>
+                <div class="storage-bar"><i></i></div>
+                <div class="storage-top" style="margin-top:5px;"><span>保留 30 天</span><span>128 张</span></div>
+              </div>
+              <div class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>设置</div>
+            </div>
+          </div>
+
+          <div class="content">
+            <div class="content-head">
+              <div class="content-title">最近 7 天</div>
+              <div class="content-sub">32 条</div>
+              <div class="right"><div class="search">搜索截图或文字</div></div>
+            </div>
+            <div class="feed">
+              <div class="day">今天 <span>6</span></div>
+              <div class="row">
+                <div class="thumb"></div>
+                <div class="rmain"><div class="rtitle">截图 · 1512 × 982</div><div class="rsub">428 KB · PNG</div></div>
+                <div class="rmeta"><span class="badge">截图</span>14:32:08</div>
+              </div>
+              <div class="row">
+                <div class="thumb icon"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></div>
+                <div class="rmain"><div class="rtitle">好的工具不应该要求用户先理解它</div><div class="rsub">打开、看见、用完、离开——这四个动作之间的摩擦…</div></div>
+                <div class="rmeta"><span class="badge">文字</span>14:18:52</div>
+              </div>
+              <div class="row">
+                <div class="thumb"></div>
+                <div class="rmain"><div class="rtitle">截图 · 1920 × 1080</div><div class="rsub">1.2 MB · PNG</div></div>
+                <div class="rmeta"><span class="badge">截图</span>11:08:20</div>
+              </div>
+              <div class="row">
+                <div class="thumb icon"><svg viewBox="0 0 24 24"><path d="M8 4l-4 8 4 8M16 4l4 8-4 8"/></svg></div>
+                <div class="rmain"><div class="rtitle">JSON 数据</div><div class="rsub">{"project": "lenso", "version": "1.0.0", …}</div></div>
+                <div class="rmeta"><span class="badge">JSON</span>10:52:44</div>
+              </div>
+              <div class="row">
+                <div class="thumb"></div>
+                <div class="rmain"><div class="rtitle">截图 · 800 × 600</div><div class="rsub">96 KB · PNG</div></div>
+                <div class="rmeta"><span class="badge">截图</span>09:20:11</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <div class="ref">参考 · Linear / Arc / 系统设置</div>
+      <h3>分组、计数、底部固定</h3>
+      <p class="pos">品牌与全局搜索置顶；内容类栏目归一组，数据看板单独一组，设置固定在底部，存储状态常驻可见。</p>
+      <dl>
+        <div><dt>解决什么</dt><dd>六个平级项变成三个层级；数量一眼可见；设置不再和内容混排。</dd></div>
+        <div><dt>高级感来源</dt><dd>品牌区、弱化的分组小标题、选中项左侧细条、底部存储条。</dd></div>
+        <div><dt>代价</dt><dd>侧栏从 180px 增到约 206px，内容区略窄。</dd></div>
+      </dl>
+      <div class="pick"><b>推荐：</b>信息层级最清楚，改动也最可控。</div>
+    </aside>
+  </section>
+
+  <!-- 02 图标轨道 -->
+  <section class="case">
+    <div>
+      <div class="case-head">
+        <span class="case-no">02</span>
+        <h2>图标轨道</h2>
+        <span>64px，宽度全给内容</span>
+      </div>
+      <div class="win">
+        <div class="bar">
+          <div class="lights"><i></i><i></i><i></i></div>
+          <div class="bar-title">lenso</div>
+          <div class="spacer"></div>
+          <div class="bar-sub">⌘K 搜索</div>
+        </div>
+        <div class="body">
+          <div class="rail">
+            <div class="brand-mark">L</div>
+            <div class="rail-item"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/></svg><span>截图</span></div>
+            <div class="rail-item"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>文字</span></div>
+            <div class="rail-item on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg><span>最近</span></div>
+            <div class="rail-item"><svg viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6-5.4-2.9-5.4 2.9 1-6L3.2 9.5l6.1-.9z"/></svg><span>收藏</span></div>
+            <div class="rail-item"><svg viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg><span>看板</span></div>
+            <div class="bottom">
+              <div class="rail-item"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg><span>设置</span></div>
+            </div>
+          </div>
+
+          <div class="content">
+            <div class="content-head">
+              <div class="content-title">最近 7 天</div>
+              <div class="content-sub">32 条</div>
+              <div class="right"><div class="search">搜索截图或文字</div></div>
+            </div>
+            <div class="feed">
+              <div class="day">今天 <span>6</span></div>
+              <div class="row">
+                <div class="thumb"></div>
+                <div class="rmain"><div class="rtitle">截图 · 1512 × 982</div><div class="rsub">428 KB · PNG</div></div>
+                <div class="rmeta"><span class="badge">截图</span>14:32:08</div>
+              </div>
+              <div class="row">
+                <div class="thumb icon"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></div>
+                <div class="rmain"><div class="rtitle">好的工具不应该要求用户先理解它</div><div class="rsub">打开、看见、用完、离开——这四个动作之间的摩擦…</div></div>
+                <div class="rmeta"><span class="badge">文字</span>14:18:52</div>
+              </div>
+              <div class="row">
+                <div class="thumb"></div>
+                <div class="rmain"><div class="rtitle">截图 · 1920 × 1080</div><div class="rsub">1.2 MB · PNG</div></div>
+                <div class="rmeta"><span class="badge">截图</span>11:08:20</div>
+              </div>
+              <div class="row">
+                <div class="thumb icon"><svg viewBox="0 0 24 24"><path d="M8 4l-4 8 4 8M16 4l4 8-4 8"/></svg></div>
+                <div class="rmain"><div class="rtitle">JSON 数据</div><div class="rsub">{"project": "lenso", "version": "1.0.0", …}</div></div>
+                <div class="rmeta"><span class="badge">JSON</span>10:52:44</div>
+              </div>
+              <div class="row">
+                <div class="thumb"></div>
+                <div class="rmain"><div class="rtitle">截图 · 800 × 600</div><div class="rsub">96 KB · PNG</div></div>
+                <div class="rmeta"><span class="badge">截图</span>09:20:11</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <div class="ref">参考 · Raycast / Things / 邮件</div>
+      <h3>最窄的导航，最多的内容</h3>
+      <p class="pos">图标 + 两字标签竖排在 64px 轨道里，内容区多出约 140px。适合窗口经常开得不大、或内容密度优先的场景。</p>
+      <dl>
+        <div><dt>解决什么</dt><dd>内容宽度最大化；栏目永远可见，不占横向阅读空间。</dd></div>
+        <div><dt>高级感来源</dt><dd>克制的轨道、图标选中底、底部固定设置。</dd></div>
+        <div><dt>代价</dt><dd>数量与存储状态没地方放；「数据看板」只能缩成「看板」，语义变弱。</dd></div>
+      </dl>
+      <div class="pick"><b>选它如果：</b>你经常把窗口拖窄，或更在意内容宽度。</div>
+    </aside>
+  </section>
+
+  <!-- 03 顶部标签 -->
+  <section class="case">
+    <div>
+      <div class="case-head">
+        <span class="case-no">03</span>
+        <h2>顶部标签栏</h2>
+        <span>取消侧栏，全宽内容</span>
+      </div>
+      <div class="win">
+        <div class="bar">
+          <div class="lights"><i></i><i></i><i></i></div>
+          <div class="bar-title">lenso</div>
+          <div class="spacer"></div>
+          <div class="bar-sub">⌘K 搜索</div>
+        </div>
+        <div class="topnav">
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/></svg>截图 <span class="count">128</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>文字 <span class="count">24</span></div>
+          <div class="tab on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>最近 7 天 <span class="count">32</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6-5.4-2.9-5.4 2.9 1-6L3.2 9.5l6.1-.9z"/></svg>收藏 <span class="count">9</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>看板</div>
+          <div class="right">1.2 GB · 保留 30 天</div>
+        </div>
+        <div class="body">
+          <div class="content">
+            <div class="content-head">
+              <div class="content-title">最近 7 天</div>
+              <div class="content-sub">32 条</div>
+              <div class="right"><div class="search">搜索截图或文字</div></div>
+            </div>
+            <div class="feed">
+              <div class="day">今天 <span>6</span></div>
+              <div class="row">
+                <div class="thumb"></div>
+                <div class="rmain"><div class="rtitle">截图 · 1512 × 982</div><div class="rsub">428 KB · PNG</div></div>
+                <div class="rmeta"><span class="badge">截图</span>14:32:08</div>
+              </div>
+              <div class="row">
+                <div class="thumb icon"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></div>
+                <div class="rmain"><div class="rtitle">好的工具不应该要求用户先理解它</div><div class="rsub">打开、看见、用完、离开——这四个动作之间的摩擦…</div></div>
+                <div class="rmeta"><span class="badge">文字</span>14:18:52</div>
+              </div>
+              <div class="row">
+                <div class="thumb"></div>
+                <div class="rmain"><div class="rtitle">截图 · 1920 × 1080</div><div class="rsub">1.2 MB · PNG</div></div>
+                <div class="rmeta"><span class="badge">截图</span>11:08:20</div>
+              </div>
+              <div class="row">
+                <div class="thumb icon"><svg viewBox="0 0 24 24"><path d="M8 4l-4 8 4 8M16 4l4 8-4 8"/></svg></div>
+                <div class="rmain"><div class="rtitle">JSON 数据</div><div class="rsub">{"project": "lenso", "version": "1.0.0", …}</div></div>
+                <div class="rmeta"><span class="badge">JSON</span>10:52:44</div>
+              </div>
+              <div class="row">
+                <div class="thumb"></div>
+                <div class="rmain"><div class="rtitle">截图 · 800 × 600</div><div class="rsub">96 KB · PNG</div></div>
+                <div class="rmeta"><span class="badge">截图</span>09:20:11</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <div class="ref">参考 · CleanShot / Finder 标签 / 浏览器</div>
+      <h3>横向标签，内容占满整窗</h3>
+      <p class="pos">栏目变成顶部标签，选中项白底浮起；存储与保留策略放在标签栏右侧常驻。侧栏空间全部还给内容。</p>
+      <dl>
+        <div><dt>解决什么</dt><dd>内容宽度最大；栏目切换符合浏览器/Finder 直觉。</dd></div>
+        <div><dt>高级感来源</dt><dd>顶部一条轻标签带，底下全宽内容，窗口看起来更「大」。</dd></div>
+        <div><dt>代价</dt><dd>栏目数量一多就挤；设置入口需要另找位置（右上角头像或菜单）。</dd></div>
+      </dl>
+      <div class="pick"><b>选它如果：</b>你希望窗口彻底以内容为主，导航只是切换器。</div>
+    </aside>
+  </section>
+
+  <section class="compare">
+    <h2>比较</h2>
+    <p class="sub">三种都能解决「六个栏目平铺」的问题，差别在层级、宽度和习惯。</p>
+    <table>
+      <thead><tr><th>维度</th><th>01 分区侧栏</th><th>02 图标轨道</th><th>03 顶部标签</th></tr></thead>
+      <tbody>
+        <tr><td>信息层级</td><td>强 · 分组 + 数量 + 存储</td><td>中 · 只有图标</td><td>中 · 标签 + 数量</td></tr>
+        <tr><td>内容宽度</td><td>−206px</td><td>−66px</td><td>0</td></tr>
+        <tr><td>栏目可发现性</td><td>最强（文字 + 数量）</td><td>较弱（两字标签）</td><td>强（文字 + 数量）</td></tr>
+        <tr><td>扩展到 8+ 栏目</td><td>好</td><td>好</td><td>差</td></tr>
+        <tr><td>改动成本</td><td>中</td><td>中</td><td>较大（设置入口要迁移）</td></tr>
+        <tr><td>桌面应用观感</td><td>最专业</td><td>工具感强</td><td>偏浏览器</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="reco">
+    <div class="eyebrow"><i></i>RECOMMENDATION</div>
+    <h2>我建议 01：分区侧栏</h2>
+    <p>
+      现在的问题不是侧栏不好看，而是<b>六个栏目没有层级</b>：设置和截图平级、存储状态缺失、数量信息全丢了。
+      分区侧栏把它们分成「内容 / 洞察 / 系统」三层，加上数量徽标和底部存储条，栏目本身就开始承担信息，而不只是导航。
+    </p>
+    <p>
+      具体做法：侧栏 206px；顶部品牌 + ⌘K 搜索框；内容组四项带数量；洞察组放数据看板；底部固定存储占用（已用 / 上限）与设置。
+      现有栏目和路由不变，只改容器结构和视觉。
+    </p>
+    <div class="ask">回复 <b>01 / 02 / 03</b> 选方案，或说「按 01 做」，我就改栏目导航。</div>
+  </section>
+
+</div>
+</body>
+</html>

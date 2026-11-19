@@ -79,6 +79,7 @@ struct SettingShortcutRow: View {
 /// MCP 服务设置页签
 struct MCPSettingsSectionView: View {
     @State private var settings = AppSettings.shared
+    @State private var usageEntries: [MCPUsageLog.Entry] = []
 
     private var agentGuidePrompt: String {
         """
@@ -253,7 +254,262 @@ struct MCPSettingsSectionView: View {
                     }
                 }
             }
+
+            usageLogSection
         }
+        .onAppear { refreshUsageLog() }
+        .onReceive(NotificationCenter.default.publisher(for: .mcpUsageLogDidChange)) { _ in
+            usageEntries = MCPUsageLog.shared.snapshot()
+        }
+    }
+
+    // MARK: - 使用记录
+
+    private var usageLogSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("MCP 使用记录")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.primary.opacity(0.85))
+
+                Text("\(usageEntries.count)")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(LensoColors.kleinBlueBright)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1.5)
+                    .background(Capsule().fill(LensoColors.kleinBlueSoft))
+
+                Spacer()
+
+                UsageIconButton(symbol: "folder", help: "在 Finder 中显示日志") {
+                    let url = MCPUsageLog.shared.fileURL
+                    if FileManager.default.fileExists(atPath: url.path) {
+                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                    } else {
+                        NSWorkspace.shared.open(url.deletingLastPathComponent())
+                    }
+                }
+
+                UsageIconButton(symbol: "trash", help: "清空使用记录", enabled: !usageEntries.isEmpty) {
+                    MCPUsageLog.shared.clear()
+                    usageEntries = []
+                }
+            }
+
+            SettingCardContainer {
+                VStack(spacing: 0) {
+                    if usageEntries.isEmpty {
+                        VStack(spacing: 6) {
+                            Image(systemName: "waveform.path.ecg")
+                                .font(.system(size: 16, weight: .light))
+                                .foregroundStyle(LensoColors.kleinBlueBright.opacity(0.55))
+                            Text("暂无调用记录")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.secondary)
+                            Text("AI Agent 调用工具后，会实时出现在这里")
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 22)
+                    } else {
+                        if !todayUsage.isEmpty {
+                            usageSummaryStrip
+                            Divider().opacity(0.4)
+                        }
+
+                        let visible = Array(usageEntries.prefix(10))
+                        ForEach(visible) { entry in
+                            MCPUsageLogRow(entry: entry)
+                            if entry.id != visible.last?.id {
+                                Divider().padding(.leading, 48).opacity(0.5)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Text("列表展示最近 10 条 · 仅保留最近 200 条，数据只保存在本机。")
+                .font(.system(size: 10.5))
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private var todayUsage: [MCPUsageLog.Entry] {
+        usageEntries.filter { Calendar.current.isDateInToday($0.date) }
+    }
+
+    private var usageSummaryStrip: some View {
+        let today = todayUsage
+        let successCount = today.filter(\.success).count
+        let rate = Int((Double(successCount) / Double(max(today.count, 1)) * 100).rounded())
+        let average = today.reduce(0) { $0 + $1.durationMS } / max(today.count, 1)
+
+        return HStack(spacing: 16) {
+            summaryItem(label: "今日调用", value: "\(today.count)", unit: "次")
+            Rectangle().fill(Color.black.opacity(0.06)).frame(width: 0.5, height: 12)
+            summaryItem(label: "成功率", value: "\(rate)", unit: "%")
+            Rectangle().fill(Color.black.opacity(0.06)).frame(width: 0.5, height: 12)
+            summaryItem(label: "平均耗时", value: "\(average)", unit: "ms")
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(LensoColors.kleinBlueBright.opacity(0.032))
+    }
+
+    private func summaryItem(label: String, value: String, unit: String) -> some View {
+        HStack(spacing: 3) {
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                .foregroundStyle(LensoColors.kleinBlueBright)
+            Text(unit)
+                .font(.system(size: 9.5))
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    // MARK: - 行组件
+
+    private struct UsageIconButton: View {
+        let symbol: String
+        let help: String
+        var enabled: Bool = true
+        let action: () -> Void
+        @State private var hovering = false
+
+        var body: some View {
+            Button(action: action) {
+                Image(systemName: symbol)
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(enabled ? Color.secondary : Color.secondary.opacity(0.35))
+                    .frame(width: 24, height: 24)
+                    .background(
+                        Circle().fill(hovering && enabled
+                                      ? LensoColors.kleinBlueSoft
+                                      : Color.black.opacity(0.035))
+                    )
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!enabled)
+            .onHover { hovering = $0 }
+            .help(help)
+        }
+    }
+
+    private struct MCPUsageLogRow: View {
+        let entry: MCPUsageLog.Entry
+        @State private var hovering = false
+
+        private static let todayFormatter: DateFormatter = {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "zh_CN")
+            formatter.dateFormat = "HH:mm:ss"
+            return formatter
+        }()
+
+        private static let fullFormatter: DateFormatter = {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "zh_CN")
+            formatter.dateFormat = "M/d HH:mm:ss"
+            return formatter
+        }()
+
+        var body: some View {
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(entry.success ? LensoColors.kleinBlueSoft : Color.red.opacity(0.1))
+                        .frame(width: 26, height: 26)
+                    Image(systemName: symbol)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(entry.success ? LensoColors.kleinBlueBright : Color.red)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 5) {
+                        Text(title)
+                            .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(Color.primary.opacity(0.88))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+
+                        if !entry.success {
+                            Text("失败")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(.red)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Capsule().fill(Color.red.opacity(0.09)))
+                        }
+                    }
+
+                    Text(subtitle)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(timeText)
+                        .font(.system(size: 10.5, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                    Text("\(entry.durationMS) ms")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(hovering ? LensoColors.kleinBlueBright.opacity(0.045) : Color.clear)
+            .onHover { hovering = $0 }
+            .help(entry.detail ?? "")
+        }
+
+        private var symbol: String {
+            switch entry.method {
+            case "initialize": "bolt.horizontal.circle.fill"
+            case "resources/read": "doc.text.fill"
+            default: "wrench.and.screwdriver.fill"
+            }
+        }
+
+        private var title: String {
+            switch entry.method {
+            case "initialize": "客户端连接"
+            case "resources/read": entry.name.isEmpty ? "读取资源" : entry.name
+            default: entry.name.isEmpty ? "工具调用" : entry.name
+            }
+        }
+
+        private var subtitle: String {
+            let client = (entry.client?.isEmpty == false ? entry.client! : "本机 Agent")
+            let kind: String
+            switch entry.method {
+            case "initialize": kind = "建立连接"
+            case "resources/read": kind = "读取资源"
+            default: kind = "工具调用"
+            }
+            return "\(client) · \(kind)"
+        }
+
+        private var timeText: String {
+            let formatter = Calendar.current.isDateInToday(entry.date)
+                ? Self.todayFormatter
+                : Self.fullFormatter
+            return formatter.string(from: entry.date)
+        }
+    }
+
+    private func refreshUsageLog() {
+        MCPUsageLog.shared.reload()
+        usageEntries = MCPUsageLog.shared.snapshot()
     }
 
     private var toolDivider: some View {

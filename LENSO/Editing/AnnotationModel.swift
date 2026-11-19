@@ -58,16 +58,83 @@ final class AnnotationState {
     var undoStack: [[Annotation]] = []
     var redoStack: [[Annotation]] = []
     var activeKind: AnnotationKind? = nil
-    var colorIndex = 3 // 默认蓝
+    /// 标注色：记住上一次使用的颜色，下次截图继续沿用
+    var colorIndex: Int {
+        didSet { UserDefaults.standard.set(colorIndex, forKey: Self.colorIndexKey) }
+    }
     var strokeWidth: CGFloat = 2
     var mosaicEnabled = false
     var highlightEnabled = false
     var draft: Annotation? = nil   // 正在绘制的
     /// 正在输入文字的标注落点（归一化坐标）；非 nil 时编辑器显示输入框
     var textEditingPoint: CGPoint? = nil
+    /// 选择工具下被选中的标注（可拖动位置）
+    var selectedAnnotationID: UUID? = nil
+
+    private static let colorIndexKey = "lenso.annotation.colorIndex"
+
+    init() {
+        let saved = UserDefaults.standard.object(forKey: Self.colorIndexKey) as? Int ?? 3
+        colorIndex = (0..<AnnotationPalette.count).contains(saved) ? saved : 3
+    }
 
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
+
+    /// 拖动标注前先压一次快照，整段拖动只产生一步撤销
+    func snapshotForInteraction() {
+        undoStack.append(annotations)
+        redoStack.removeAll()
+    }
+
+    /// 选区变化（移动/缩放）时重算标注的归一化坐标：
+    /// 让标注始终钉在画面内容上，而不是相对选区被拉伸变形。
+    func remapAnnotations(from old: CGRect, to new: CGRect) {
+        guard old != new, old.width > 0, old.height > 0, new.width > 0, new.height > 0 else { return }
+        for index in annotations.indices {
+            let start = CGPoint(
+                x: old.minX + annotations[index].start.x * old.width,
+                y: old.minY + annotations[index].start.y * old.height
+            )
+            let end = CGPoint(
+                x: old.minX + annotations[index].end.x * old.width,
+                y: old.minY + annotations[index].end.y * old.height
+            )
+            annotations[index].start = CGPoint(
+                x: (start.x - new.minX) / new.width,
+                y: (start.y - new.minY) / new.height
+            )
+            annotations[index].end = CGPoint(
+                x: (end.x - new.minX) / new.width,
+                y: (end.y - new.minY) / new.height
+            )
+            // 文字是固定字号渲染的，包围盒按新选区重算，避免拖动热区/选中框对不上
+            if annotations[index].kind == .text, !annotations[index].text.isEmpty {
+                let font = NSFont.systemFont(ofSize: 16, weight: .semibold)
+                let size = NSAttributedString(
+                    string: annotations[index].text,
+                    attributes: [.font: font]
+                ).size()
+                annotations[index].end = CGPoint(
+                    x: annotations[index].start.x + size.width / new.width,
+                    y: annotations[index].start.y + size.height / new.height
+                )
+            }
+        }
+    }
+
+    /// 绝对定位某条标注（拖动时按起点快照计算，避免逐帧累积误差），并夹在选区内
+    func setPositions(id: UUID, start: CGPoint, end: CGPoint) {
+        guard let index = annotations.firstIndex(where: { $0.id == id }) else { return }
+        let minX = min(start.x, end.x), maxX = max(start.x, end.x)
+        let minY = min(start.y, end.y), maxY = max(start.y, end.y)
+        var dx: CGFloat = 0
+        var dy: CGFloat = 0
+        if minX < 0 { dx = -minX } else if maxX > 1 { dx = 1 - maxX }
+        if minY < 0 { dy = -minY } else if maxY > 1 { dy = 1 - maxY }
+        annotations[index].start = CGPoint(x: start.x + dx, y: start.y + dy)
+        annotations[index].end = CGPoint(x: end.x + dx, y: end.y + dy)
+    }
 
     func push(_ annotation: Annotation) {
         undoStack.append(annotations)
@@ -93,6 +160,7 @@ final class AnnotationState {
         redoStack = []
         draft = nil
         textEditingPoint = nil
+        selectedAnnotationID = nil
     }
 }
 
@@ -104,7 +172,7 @@ enum AnnotationRenderer {
         ctx.addLine(to: to)
         ctx.strokePath()
         let angle = atan2(to.y - from.y, to.x - from.x)
-        for delta in [2.5, -2.5] {
+        for delta in [0.42, -0.42] {
             let hx = to.x - headLen * cos(angle + delta)
             let hy = to.y - headLen * sin(angle + delta)
             ctx.move(to: to)

@@ -48,17 +48,13 @@ final class RegionSelectorController: NSObject {
             panel.setFrame(panel.screenFrameForDisplay, display: true)
             panel.orderFrontRegardless()
         }
-        NSCursor.crosshair.set()
+        LensoCursor.crosshair.set()
         // 键盘（Esc 取消 / Return 确认）依赖面板是 key window。
-        // 从别的 App 按热键时，NSApp.activate 是异步的，立刻 makeKey 会失败，
-        // 表现就是「浮层出来了但 Esc / 回车没反应」。所以激活后下一拍再 makeKey。
-        NSApp.activate(ignoringOtherApps: true)
-        DispatchQueue.main.async { [weak self] in
-            guard let self, !self.isDismissed else { return }
-            self.panels.first(where: { $0.screenFrameForDisplay.contains(NSEvent.mouseLocation) })?
-                .makeKey()
-            if NSApp.keyWindow == nil { self.panels.first?.makeKey() }
-        }
+        // 面板是 .nonactivatingPanel，可以不激活 App 直接成为 key window，
+        // 这样按热键时 lenso 的图库等窗口不会被带到前面，不打断当前正在操作的应用。
+        let mousePanel = panels.first { $0.screenFrameForDisplay.contains(NSEvent.mouseLocation) }
+        mousePanel?.makeKey()
+        if NSApp.keyWindow == nil { panels.first?.makeKey() }
         freezeDisplays()
         // 窗口枚举（CGWindowListCopyWindowInfo）放到下一拍再做：
         // 它会阻塞主线程十几毫秒，挡在浮层上屏之后、第一次鼠标事件之前，
@@ -139,20 +135,33 @@ final class RegionSelectorController: NSObject {
     func mouseMovedOrHovered(at globalPoint: CGPoint) {
         // 悬停吸附高亮（未按下、还没选区时）
         guard origin == nil, selection == nil else { return }
-        let hit = hitTestWindow(at: globalPoint)
+        var hit = hitTestWindow(at: globalPoint)
+        // 满屏窗口（最大化应用 / 桌面）不做吸附高亮：
+        // 高亮框会贴着屏幕四周画一整圈蓝线，既没有信息量也很干扰。
+        if let frame = hit, isFullScreenWindow(frame, containing: globalPoint) {
+            hit = nil
+        }
         if hit != hoverWindowFrame {
             hoverWindowFrame = hit
             panels.forEach { $0.drawHoverHighlight(hit) }
         }
     }
 
+    /// 目标窗口是否几乎占满它所在的整块屏幕
+    private func isFullScreenWindow(_ frame: CGRect, containing point: CGPoint) -> Bool {
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(point) })?.frame else {
+            return false
+        }
+        return frame.width >= screen.width - 16 && frame.height >= screen.height - 16
+    }
+
     /// 该点的光标：手柄上是缩放光标，选区内是抓手，其余十字线
     func cursor(at globalPoint: CGPoint) -> NSCursor {
-        guard let selection else { return .crosshair }
+        guard let selection else { return LensoCursor.crosshair }
         if let handle = SelectorRectEditor.resizeHandle(at: globalPoint, for: selection) {
             return handle.cursor
         }
-        return selection.contains(globalPoint) ? .openHand : .crosshair
+        return selection.contains(globalPoint) ? .openHand : LensoCursor.crosshair
     }
 
     func mouseDown(at globalPoint: CGPoint, panel: RegionSelectorPanel) {
@@ -175,12 +184,12 @@ final class RegionSelectorController: NSObject {
                 self.selection = nil
                 refreshSelectionViews()
                 hoverWindowFrame = hitTestWindow(at: globalPoint)
-                NSCursor.crosshair.set()
+                LensoCursor.crosshair.set()
             }
         } else {
             dragMode = .creating
             hoverWindowFrame = hitTestWindow(at: globalPoint)
-            NSCursor.crosshair.set()
+            LensoCursor.crosshair.set()
         }
         selLog.info("selector mouseDown at \(NSStringFromPoint(globalPoint), privacy: .public)")
     }
@@ -321,7 +330,7 @@ final class RegionSelectorController: NSObject {
     private func enterSelectedState() {
         refreshSelectionViews()
         downPanel?.setHandlesVisible(true)
-        NSCursor.crosshair.set()
+        LensoCursor.crosshair.set()
     }
 
     private func refreshSelectionViews() {

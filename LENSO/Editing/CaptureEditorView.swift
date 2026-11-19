@@ -15,11 +15,13 @@ struct CaptureEditorView: View {
     @State var state = AnnotationState()
     @State var selection: CGRect
     @State private var drawingAnnotation = false
+    /// 正在输入的文字（提到父层持有：点画面确认时也能拿到内容）
+    @State private var editingText = ""
 
-    /// 是否显示右侧属性面板（可关闭，避免遮挡）
-    @State private var isSidePanelVisible = true
+    /// 是否显示右侧面板（默认收起，只在需要看 OCR / 翻译结果时打开，避免遮挡画面）
+    @State private var isSidePanelVisible = false
     /// 右侧面板页签
-    @State private var panelTab: PanelTab = .annotation
+    @State private var panelTab: PanelTab = .ocr
     /// OCR 与翻译的运行状态
     @State private var ocrLines: [RecognizedText] = []
     @State private var ocrPhase: OCRPhase = .idle
@@ -30,6 +32,9 @@ struct CaptureEditorView: View {
     @State private var ocrTask: Task<Void, Never>?
     @State private var translationTask: Task<Void, Never>?
     @State private var justSavedNote = false
+    @State private var keyMonitor: Any?
+    /// 马赛克预览用的块状图（整屏冻结帧的低分辨率重采样，只算一次）
+    private let mosaicPreview: CGImage?
 
     /// 冻结图与屏幕的像素比
     var imageScale: CGFloat {
@@ -50,6 +55,35 @@ struct CaptureEditorView: View {
         // 传进来的 initialSelection 是 AppKit 全局坐标（原点左下），这里换算一次，
         // 之后所有绘制/裁剪/标注都在这一个坐标系里做。
         _selection = State(initialValue: Self.localTopDown(initialSelection, in: screenFrame))
+        let scale = CGFloat(frozenImage.width) / max(1, screenFrame.width)
+        self.mosaicPreview = Self.makePixelatedPreview(
+            frozenImage, blockPx: max(6, Int(14 * scale))
+        )
+    }
+
+    /// 生成马赛克预览图：先缩到 1/block，再用最近邻放回半尺寸。
+    /// 半尺寸是为了省内存，绘制时块仍然是清晰的方块。
+    static func makePixelatedPreview(_ image: CGImage, blockPx: Int) -> CGImage? {
+        let w = image.width, h = image.height
+        let smallW = max(1, w / blockPx), smallH = max(1, h / blockPx)
+        guard let smallCtx = CGContext(
+            data: nil, width: smallW, height: smallH, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        smallCtx.interpolationQuality = .medium
+        smallCtx.draw(image, in: CGRect(x: 0, y: 0, width: smallW, height: smallH))
+        guard let small = smallCtx.makeImage() else { return nil }
+
+        let outW = max(1, w / 2), outH = max(1, h / 2)
+        guard let outCtx = CGContext(
+            data: nil, width: outW, height: outH, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        outCtx.interpolationQuality = .none
+        outCtx.draw(small, in: CGRect(x: 0, y: 0, width: outW, height: outH))
+        return outCtx.makeImage()
     }
 
     /// AppKit 全局坐标 → 屏幕内坐标（原点左上，y 向下）
@@ -63,7 +97,7 @@ struct CaptureEditorView: View {
     }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topLeading) {
             // 冻结画面
             Image(decorative: frozenImage, scale: 1)
                 .resizable()
@@ -77,52 +111,43 @@ struct CaptureEditorView: View {
                 screenFrame: screenFrame,
                 selection: selection,
                 state: state,
+                mosaicPreview: mosaicPreview,
                 imageScale: imageScale,
-                onSelectionChange: { selection = $0 },
+                onSelectionChange: { updateSelection($0) },
                 onConfirm: { finishEditing() }
             )
+            .frame(width: screenFrame.width, height: screenFrame.height)
+
+            // 文字输入中：点画面上任意位置即确认（不用再按回车）
+            if state.textEditingPoint != nil {
+                Color.black.opacity(0.001)
+                    .frame(width: screenFrame.width, height: screenFrame.height)
+                    .contentShape(Rectangle())
+                    .onTapGesture { commitCurrentText() }
+                    .zIndex(15)
+            }
 
             // 工具栏：紧贴选区下方（随选区移动），右侧属性面板紧贴选区右侧
             toolbarAndPanel
 
-            // 文字标注输入框（文字工具点按后出现）
+            // 文字标注输入框：与 Snipaste 一样直接落在点击位置，
+            // 透明底 + 细边框，边打字边在原位看到文字（不是弹一个白色输入条）
             if let point = state.textEditingPoint {
+                let origin = textFieldOrigin(for: point)
                 AnnotationTextField(
-                    color: NSColor(AnnotationPalette[state.colorIndex]),
+                    text: $editingText,
+                    color: AnnotationPalette[state.colorIndex],
                     onCommit: { commitTextEditing($0) },
                     onCancel: { state.textEditingPoint = nil }
                 )
-                .frame(width: 260, height: 30)
-                .position(x: textFieldCenter(for: point).x, y: textFieldCenter(for: point).y)
+                .offset(x: origin.x, y: origin.y)
+                .zIndex(20)
             }
         }
         .frame(width: screenFrame.width, height: screenFrame.height)
         .background(Color.black.opacity(0.001)) // 接管点击
-        .onExitCommand { discard() }           // Esc 取消
-        .onKeyPress(.return) {
-            finishEditing()
-            return .handled
-        }
-        .onKeyPress(.leftArrow) {
-            nudgeSelection(dx: -1, dy: 0)
-            return .handled
-        }
-        .onKeyPress(.rightArrow) {
-            nudgeSelection(dx: 1, dy: 0)
-            return .handled
-        }
-        .onKeyPress(.upArrow) {
-            nudgeSelection(dx: 0, dy: -1)
-            return .handled
-        }
-        .onKeyPress(.downArrow) {
-            nudgeSelection(dx: 0, dy: 1)
-            return .handled
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .editorScrollWheel)) { note in
-            guard let event = note.object as? NSEvent else { return }
-            handleScrollWheel(event)
-        }
+        .onAppear { installKeyMonitor() }
+        .onDisappear { removeKeyMonitor() }
         .onReceive(NotificationCenter.default.publisher(for: .editorRightClick)) { _ in
             if state.textEditingPoint != nil {
                 state.textEditingPoint = nil
@@ -132,36 +157,69 @@ struct CaptureEditorView: View {
                 discard()
             }
         }
+        .onChange(of: state.textEditingPoint) { oldValue, point in
+            // 开始写字时清空上一条内容，并确保编辑器是 key window，
+            // 否则 SwiftUI TextField 拿不到输入焦点
+            guard point != nil else { return }
+            if oldValue == nil { editingText = "" }
+            NSApp.activate(ignoringOtherApps: true)
+            for window in NSApp.windows where window is EditorPanel && window.isVisible {
+                window.makeKeyAndOrderFront(nil)
+            }
+        }
     }
 
-    /// 鼠标滚轮缩放选区大小（以鼠标指针所在位置为锚点缩放）
-    private func handleScrollWheel(_ event: NSEvent) {
-        guard state.textEditingPoint == nil else { return }
-        let delta = event.scrollingDeltaY
-        guard abs(delta) > 0.05 else { return }
+    /// 键盘统一由本地事件监听处理：
+    /// - 文字输入框是第一响应者（field editor 为 NSTextView）时，所有按键原样放行，
+    ///   这样中文输入法的候选、回车确认、方向键选词都不会被截走；
+    /// - 其余情况才接管 ⏎ / 方向键 / Esc。
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard let window = event.window, window.level == .screenSaver else { return event }
+            // 正在输入文字时所有按键原样放行（回车交给 TextField 提交，Esc 交给 onExitCommand）
+            if state.textEditingPoint != nil || Self.isTextInputActive(in: window) { return event }
 
-        let factor: CGFloat = delta > 0 ? 1.04 : 0.96
-        let loc = event.locationInWindow
-        // AppKit 窗口坐标原点在左下，转换为屏幕内坐标（原点在左上）
-        let mouseInScreen = CGPoint(
-            x: loc.x,
-            y: screenFrame.height - loc.y
-        )
+            switch event.keyCode {
+            case 53: // Esc
+                if state.textEditingPoint != nil {
+                    state.textEditingPoint = nil
+                } else {
+                    discard()
+                }
+                return nil
+            case 36, 76: // Return / Enter
+                guard state.textEditingPoint == nil else { return event }
+                finishEditing()
+                return nil
+            case 123: nudgeSelection(dx: -1, dy: 0); return nil
+            case 124: nudgeSelection(dx: 1, dy: 0); return nil
+            case 125: nudgeSelection(dx: 0, dy: 1); return nil
+            case 126: nudgeSelection(dx: 0, dy: -1); return nil
+            default:
+                return event
+            }
+        }
+    }
 
-        let newWidth = max(24, min(screenFrame.width, selection.width * factor))
-        let newHeight = max(24, min(screenFrame.height, selection.height * factor))
+    /// 当前窗口是否处于文字输入状态（field editor / NSTextField 的输入视图）
+    private static func isTextInputActive(in window: NSWindow) -> Bool {
+        guard let responder = window.firstResponder else { return false }
+        if responder is NSTextView { return true }
+        if let text = responder as? NSText, text.isEditable { return true }
+        return false
+    }
 
-        // 以鼠标为中心缩放（如果鼠标在选区内），否则以选区中心缩放
-        let anchorX = selection.contains(mouseInScreen) ? mouseInScreen.x : selection.midX
-        let anchorY = selection.contains(mouseInScreen) ? mouseInScreen.y : selection.midY
+    private func removeKeyMonitor() {
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        keyMonitor = nil
+    }
 
-        let relX = (anchorX - selection.minX) / max(1, selection.width)
-        let relY = (anchorY - selection.minY) / max(1, selection.height)
-
-        let newX = min(max(0, anchorX - newWidth * relX), screenFrame.width - newWidth)
-        let newY = min(max(0, anchorY - newHeight * relY), screenFrame.height - newHeight)
-
-        selection = CGRect(x: newX, y: newY, width: newWidth, height: newHeight)
+    /// 选区移动/缩放：先按绝对位置重算标注，保证标注钉在画面内容上、不被拉变形
+    private func updateSelection(_ newSelection: CGRect) {
+        guard newSelection != selection else { return }
+        state.remapAnnotations(from: selection, to: newSelection)
+        selection = newSelection
     }
 
     /// 方向键微调选区
@@ -174,7 +232,7 @@ struct CaptureEditorView: View {
             width: moved.width,
             height: moved.height
         )
-        selection = clamped
+        updateSelection(clamped)
     }
 
     /// 丢弃本次截图
@@ -188,6 +246,7 @@ struct CaptureEditorView: View {
     private func commitTextEditing(_ text: String) {
         guard let point = state.textEditingPoint else { return }
         state.textEditingPoint = nil
+        editingText = ""
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let font = NSFont.systemFont(ofSize: 16, weight: .semibold)
@@ -196,21 +255,31 @@ struct CaptureEditorView: View {
             x: min(1, point.x + size.width / max(1, selection.width)),
             y: min(1, point.y + size.height / max(1, selection.height))
         )
-        state.push(Annotation(
+        let annotation = Annotation(
             kind: .text, start: point, end: end,
             colorIndex: state.colorIndex, strokeWidth: state.strokeWidth, text: trimmed
-        ))
+        )
+        state.push(annotation)
+        // 刚写好的文字直接选中并切回选择工具，可以立刻拖动位置
+        state.activeKind = nil
+        state.selectedAnnotationID = annotation.id
     }
 
-    /// 输入框中心点：落点 + 半个框宽/高，夹在屏幕内
-    private func textFieldCenter(for point: CGPoint) -> CGPoint {
+    /// 点击画面空白处结束输入（Snipaste 习惯：不用按回车）
+    private func commitCurrentText() {
+        guard state.textEditingPoint != nil else { return }
+        commitTextEditing(editingText)
+    }
+
+    /// 输入框左上角：直接落在点击点上（Snipaste 原位输入），夹在屏幕内
+    private func textFieldOrigin(for point: CGPoint) -> CGPoint {
         let topLeft = CGPoint(
             x: selection.minX + point.x * selection.width,
             y: selection.minY + point.y * selection.height
         )
         return CGPoint(
-            x: min(max(topLeft.x + 130, 130), screenFrame.width - 130),
-            y: min(max(topLeft.y + 15, 15), screenFrame.height - 15)
+            x: min(max(0, topLeft.x), max(0, screenFrame.width - 140)),
+            y: min(max(0, topLeft.y), max(0, screenFrame.height - 26))
         )
     }
 
@@ -231,8 +300,9 @@ struct CaptureEditorView: View {
     @ViewBuilder
     private var toolbarAndPanel: some View {
         let localSel = selection
-        let toolbarSize = CGSize(width: 610, height: 52)
-        let panelSize = CGSize(width: 270, height: 410)
+        let showOptions = state.activeKind != nil
+        let toolbarSize = CGSize(width: 610, height: showOptions ? 94 : 52)
+        let panelSize = CGSize(width: 300, height: 430)
         let layout = CaptureEditorLayout.calculateLayout(
             selection: localSel,
             screenSize: screenFrame.size,
@@ -241,17 +311,27 @@ struct CaptureEditorView: View {
         )
 
         Group {
-            if isSidePanelVisible {
-                sidePanel
-                    .frame(width: panelSize.width)
-                    .position(x: layout.panelFrame.midX, y: layout.panelFrame.midY)
-                    .zIndex(1)
+            // 右侧面板只承载 OCR / 翻译结果，标注属性已经收进工具栏上方的属性条
+            if isSidePanelVisible && panelTab != .annotation {
+                LayerHostedPanel(
+                    content: AnyView(sidePanel),
+                    panelSize: panelSize,
+                    origin: layout.panelFrame.origin
+                )
+                .frame(width: screenFrame.width, height: screenFrame.height)
+                .position(x: screenFrame.width / 2, y: screenFrame.height / 2)
+                .zIndex(1)
             }
 
-            bottomToolbar
-                .frame(width: toolbarSize.width)
-                .position(x: layout.toolbarFrame.midX, y: layout.toolbarFrame.midY)
-                .zIndex(10)
+            VStack(spacing: 8) {
+                if showOptions {
+                    CaptureEditorOptionsBar(state: state)
+                }
+                bottomToolbar
+            }
+            .frame(width: toolbarSize.width, height: toolbarSize.height)
+            .position(x: layout.toolbarFrame.midX, y: layout.toolbarFrame.midY)
+            .zIndex(10)
         }
     }
 
@@ -274,7 +354,6 @@ struct CaptureEditorView: View {
 
     private var sidePanel: some View {
         CaptureEditorSidePanelView(
-            state: state,
             isSidePanelVisible: $isSidePanelVisible,
             panelTab: $panelTab,
             ocrPhase: ocrPhase,
@@ -287,8 +366,7 @@ struct CaptureEditorView: View {
             onRunOCR: { runOCR() },
             onRunTranslation: { runTranslation() },
             onCopyText: { copyText($0) },
-            onSaveOCRToNotes: { saveOCRToNotes() },
-            onQuickCopy: { quickCopy() }
+            onSaveOCRToNotes: { saveOCRToNotes() }
         )
     }
 

@@ -88,7 +88,7 @@ extension CaptureEditorView {
         ctx.addLine(to: to)
         ctx.strokePath()
         let angle = atan2(to.y - from.y, to.x - from.x)
-        for delta in [2.5, -2.5] {
+        for delta in [0.42, -0.42] {
             let hx = to.x - headLen * cos(angle + delta)
             let hy = to.y - headLen * sin(angle + delta)
             ctx.move(to: to)
@@ -97,23 +97,30 @@ extension CaptureEditorView {
         }
     }
 
-    /// 马赛克：选区内 16px 块取平均色
+    /// 马赛克：把目标区域压成低分辨率再按最近邻放大，得到块状像素
     func applyMosaic(_ ctx: CGContext, image: CGImage, rect: CGRect) {
-        let blockSize = max(8, 16 * Int(imageScale) / 2)
-        guard let data = ctx.makeImage() else { return }
-        // 简化：用低分辨率重采样回贴
-        let smallW = max(1, Int(rect.width) / blockSize)
-        let smallH = max(1, Int(rect.height) / blockSize)
+        let blockPx = max(6, 14 * imageScale)
+        // 上下文坐标原点在左下，CGImage 裁剪原点在左上，先换算
+        let crop = CGRect(
+            x: rect.minX,
+            y: CGFloat(image.height) - rect.maxY,
+            width: rect.width,
+            height: rect.height
+        ).integral
+        guard crop.width >= 1, crop.height >= 1,
+              let region = image.cropping(to: crop) else { return }
+
+        let smallW = max(1, Int(crop.width / blockPx))
+        let smallH = max(1, Int(crop.height / blockPx))
         guard let smallCtx = CGContext(
             data: nil, width: smallW, height: smallH, bitsPerComponent: 8, bytesPerRow: 0,
             space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return }
-        smallCtx.interpolationQuality = .low
-        smallCtx.draw(image, in: CGRect(x: -rect.origin.x / CGFloat(blockSize), y: -rect.origin.y / CGFloat(blockSize),
-                                        width: CGFloat(smallW) + rect.width / CGFloat(blockSize),
-                                        height: CGFloat(smallH) + rect.height / CGFloat(blockSize)))
+        smallCtx.interpolationQuality = .medium
+        smallCtx.draw(region, in: CGRect(x: 0, y: 0, width: smallW, height: smallH))
         guard let small = smallCtx.makeImage() else { return }
+
         ctx.saveGState()
         ctx.clip(to: [rect])
         ctx.interpolationQuality = .none

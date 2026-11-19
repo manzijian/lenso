@@ -18,9 +18,13 @@ final class CaptureCoordinator: NSObject {
 
     private var selector: RegionSelectorController?
     private var editorPanel: NSPanel?
+    /// 进入编辑器前的前台应用，截图结束后把焦点还回去，避免 lenso 被顶到最前
+    private var previousFrontApp: NSRunningApplication?
     private var editorHost: NSHostingView<CaptureEditorView>?
     /// 钉图控制器集合（持有引用防止释放）
     private var pinnedControllers: [PinnedScreenshotController] = []
+    /// 热键触发瞬间的前台应用，作为本次截图的来源标识
+    private(set) var lastSourceApp: String?
 
     init(
         capture: ScreenCapturing = ScreenCaptureService(),
@@ -37,6 +41,13 @@ final class CaptureCoordinator: NSObject {
 
     func startRegionCapture() {
         log.info("startRegionCapture triggered")
+        // 在遮罩上屏之前记录当前前台应用，作为本次截图的来源
+        if let front = NSWorkspace.shared.frontmostApplication,
+           front.bundleIdentifier != Bundle.main.bundleIdentifier {
+            lastSourceApp = front.localizedName
+        } else {
+            lastSourceApp = nil
+        }
         // 已经有一轮选区在进行：先把它收掉再重开，而不是默默不理
         // （用户按了热键却什么都没发生，会以为应用卡住了）
         if let selector {
@@ -158,7 +169,9 @@ final class CaptureCoordinator: NSObject {
 
         let panel = EditorPanel(
             contentRect: screenFrame,
-            styleMask: [.borderless, .nonactivatingPanel],
+            // 这里刻意不用 .nonactivatingPanel：非激活面板拿不到输入法上下文，
+            // 中文候选框挂不上来。编辑器需要文字标注，所以必须是普通可激活面板。
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
@@ -172,7 +185,22 @@ final class CaptureCoordinator: NSObject {
             self?.closeEditor()
         }
         panel.orderFrontRegardless()
-        panel.makeKey()
+        // 选区阶段刻意不激活 App（否则会把自己的窗口顶到最前，盖住要截的应用）。
+        // 但编辑器需要接管键盘、输入法和标注，所以进编辑器时再激活；
+        // 这时画面已经冻结，激活不会影响截取内容。
+        // 记录截图前的前台应用，结束时把焦点还回去
+        if let front = NSWorkspace.shared.frontmostApplication,
+           front.bundleIdentifier != Bundle.main.bundleIdentifier {
+            previousFrontApp = front
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        panel.makeKeyAndOrderFront(nil)
+        // 激活是异步协作的：等一拍再确认一次 key 状态，
+        // 否则面板可能没拿到键盘焦点，文字标注就完全打不进字。
+        DispatchQueue.main.async { [weak panel] in
+            guard let panel, panel.isVisible, !panel.isKeyWindow else { return }
+            panel.makeKey()
+        }
         editorPanel = panel
         log.info("full editor shown on display \(NSStringFromRect(panel.screen?.frame ?? .zero), privacy: .public)")
     }
@@ -182,6 +210,11 @@ final class CaptureCoordinator: NSObject {
         editorPanel?.close()
         editorPanel = nil
         editorHost = nil
+        // 把焦点还给截图前的那个应用，lenso 不留在最前面
+        if let app = previousFrontApp, !app.isTerminated {
+            app.activate(options: [.activateIgnoringOtherApps])
+        }
+        previousFrontApp = nil
     }
 
     func handleFinish(finalImage: CGImage?) {
@@ -190,11 +223,9 @@ final class CaptureCoordinator: NSObject {
             return
         }
         do {
-            let record = try store.save(image: image, capturedAt: Date())
+            let record = try store.save(image: image, capturedAt: Date(), sourceApp: lastSourceApp)
             // 截图确定之后：默认 100% 自动复制到剪贴板，支持所有现代 App 直接 ⌘V 粘贴
             copyToClipboard(image: image)
-            // 记录到剪贴板历史，使唤出搜索时能立即在最顶部看到并滚到
-            _ = try? store.saveClipboardImage(image, sourceApp: "截图")
             NotificationCenter.default.post(name: .screenshotSaved, object: record)
             if AppSettings.shared.showFloatingPreview {
                 SaveToastController.shared.show(
@@ -211,7 +242,6 @@ final class CaptureCoordinator: NSObject {
         } catch {
             // 即使保存到磁盘出现异常，剪贴板也 100% 确保复制成功
             copyToClipboard(image: image)
-            _ = try? store.saveClipboardImage(image, sourceApp: "截图")
             if AppSettings.shared.showFloatingPreview {
                 SaveToastController.shared.show(
                     title: "已复制到剪贴板",

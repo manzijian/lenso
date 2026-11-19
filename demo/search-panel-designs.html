@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LENSO 全局搜索 · 展示方案</title>
+<style>
+  :root{
+    --blue:#0538E0;
+    --blue-soft:#E9EDFD;
+    --ink:#0F1222;
+    --ink-2:#5B6079;
+    --ink-3:#8C91A8;
+    --line:rgba(15,18,34,.07);
+    --bg:#EEF0F6;
+    --panel:#FBFBFE;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  body{
+    margin:0;padding:44px 40px 80px;
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif;
+    background:radial-gradient(1200px 600px at 20% -10%, #fff 0%, var(--bg) 55%, #E7EAF3 100%);
+    color:var(--ink);
+  }
+  .page-head{max-width:1320px;margin:0 auto 30px}
+  .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--blue);font-weight:700}
+  h1{margin:10px 0 8px;font-size:30px;letter-spacing:-.02em}
+  .sub{margin:0;color:var(--ink-2);font-size:13.5px;line-height:1.7;max-width:760px}
+
+  .grid{
+    max-width:1320px;margin:0 auto;
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:34px 30px;
+  }
+  .demo{display:flex;flex-direction:column;gap:12px}
+  .demo-head{display:flex;align-items:baseline;gap:10px}
+  .tag{
+    width:22px;height:22px;border-radius:7px;background:var(--ink);color:#fff;
+    font-size:11.5px;font-weight:700;display:grid;place-items:center;flex:none;
+  }
+  .demo-head h2{margin:0;font-size:15.5px;letter-spacing:-.01em}
+  .demo-head p{margin:0;font-size:11.5px;color:var(--ink-3)}
+
+  /* ============ 面板通用 ============ */
+  .panel{
+    border-radius:20px;background:linear-gradient(180deg,#FFFFFF 0%, var(--panel) 100%);
+    border:1px solid rgba(255,255,255,.9);
+    box-shadow:0 0 0 1px rgba(15,18,34,.06), 0 18px 44px -18px rgba(15,18,34,.35), 0 2px 6px rgba(15,18,34,.05);
+    overflow:hidden;display:flex;flex-direction:column;
+  }
+  .search-row{display:flex;align-items:center;gap:11px;padding:14px 16px 12px}
+  .mag{
+    width:26px;height:26px;border-radius:50%;background:var(--blue);color:#fff;
+    display:grid;place-items:center;font-size:13px;flex:none;
+    box-shadow:0 4px 10px rgba(5,56,224,.28);
+  }
+  .search-text{font-size:15px;color:var(--ink);flex:1}
+  .search-text span{color:#B9BDCE}
+  .hint{font-size:10.5px;color:var(--ink-3);white-space:nowrap}
+  .close{
+    width:24px;height:24px;border-radius:50%;background:rgba(15,18,34,.05);
+    display:grid;place-items:center;color:var(--ink-3);font-size:11px;flex:none;
+  }
+  .chips{display:flex;gap:6px;padding:0 16px 12px;align-items:center}
+  .chip{
+    display:flex;gap:5px;align-items:center;font-size:11.5px;color:var(--ink-2);
+    background:rgba(15,18,34,.045);border-radius:999px;padding:5px 11px;
+  }
+  .chip b{font-weight:600;opacity:.55;font-size:10.5px}
+  .chip.on{background:var(--blue);color:#fff}
+  .chip.on b{opacity:.8}
+  .chip .dots{margin-left:auto}
+
+  /* 缩略图 */
+  .thumb{position:relative;border-radius:10px;overflow:hidden;background:#DFE3EE}
+  .thumb:after{
+    content:"";position:absolute;inset:0;
+    background:
+      linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,0) 42%),
+      repeating-linear-gradient(90deg,rgba(255,255,255,.5) 0 6px,rgba(255,255,255,0) 6px 13px);
+    opacity:.5;
+    mask-image:linear-gradient(180deg,rgba(0,0,0,.9),rgba(0,0,0,.15));
+  }
+  .t1{background:linear-gradient(135deg,#C9D6FF,#8FA7F8 55%,#5C7BE8)}
+  .t2{background:linear-gradient(135deg,#FFD9C2,#F2A97E 60%,#C97A4E)}
+  .t3{background:linear-gradient(135deg,#D3F1E4,#93D3BB 60%,#4F9E80)}
+  .t4{background:linear-gradient(135deg,#E7DDFB,#B79CEB 60%,#7A5AC4)}
+  .t5{background:linear-gradient(135deg,#DCE6F2,#9FB2CB 60%,#6B7F99)}
+  .t6{background:linear-gradient(135deg,#FBE3EA,#EDA0B4 60%,#B85B74)}
+
+  /* 应用图标（纯 CSS 近似） */
+  .ic{
+    width:14px;height:14px;border-radius:4px;flex:none;display:grid;place-items:center;
+    font-size:8px;font-weight:800;color:#fff;letter-spacing:-.02em;
+  }
+  .ic.safari{background:linear-gradient(160deg,#3BC7FB,#0A6BE0)}
+  .ic.chrome{background:linear-gradient(160deg,#F7C34D,#E05C43 55%,#3FA36B)}
+  .ic.idea{background:linear-gradient(160deg,#F97B5C,#C7392B)}
+  .ic.lenso{background:linear-gradient(160deg,#2E6BFF,#0538E0)}
+  .ic.notes{background:linear-gradient(160deg,#FFD25C,#F2A03D);color:#7A4A00}
+  .ic.term{background:linear-gradient(160deg,#4A4F60,#1E2130)}
+
+  .meta{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--ink-3);min-width:0}
+  .meta .src{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .meta .time{margin-left:auto;font-variant-numeric:tabular-nums;font-family:ui-monospace,"SF Mono",monospace;font-size:9.5px}
+
+  .btn{
+    display:inline-flex;align-items:center;gap:5px;border-radius:999px;
+    font-size:11px;font-weight:600;padding:6px 11px;
+    background:rgba(15,18,34,.055);color:var(--ink-2);
+  }
+  .btn.primary{background:var(--blue);color:#fff;box-shadow:0 6px 14px -4px rgba(5,56,224,.45)}
+
+  /* ============ A 列表流 ============ */
+  .list{padding:4px 10px 10px;overflow:hidden}
+  .group-head{
+    display:flex;align-items:center;gap:7px;
+    font-size:10.5px;color:var(--ink-3);font-weight:600;
+    padding:10px 8px 6px;
+  }
+  .group-head .rule{flex:1;height:1px;background:var(--line)}
+  .row{
+    display:flex;align-items:center;gap:11px;padding:8px;
+    border-radius:12px;transition:background .15s;
+  }
+  .row:hover{background:rgba(5,56,224,.055)}
+  .row .thumb{width:52px;height:38px;flex:none;border-radius:7px}
+  .row .glyph{
+    width:52px;height:38px;flex:none;border-radius:7px;display:grid;place-items:center;
+    background:rgba(15,18,34,.04);color:var(--ink-3);font-size:14px;
+  }
+  .row .main{flex:1;min-width:0}
+  .row .title{
+    font-size:12.5px;line-height:1.45;color:var(--ink);
+    display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;
+  }
+  .row .title.mono{font-family:ui-monospace,"SF Mono",monospace;font-size:11.5px;color:#2B2F45}
+  .row .meta{margin-top:4px}
+  .row .quick{display:flex;gap:2px;opacity:0;transition:opacity .15s}
+  .row:hover .quick{opacity:1}
+  .icon-btn{
+    width:24px;height:24px;border-radius:8px;display:grid;place-items:center;
+    background:#fff;border:1px solid var(--line);color:var(--ink-2);font-size:11px;
+    box-shadow:0 2px 5px rgba(15,18,34,.06);
+  }
+  .hl{background:var(--blue-soft);box-shadow:inset 0 0 0 1px rgba(5,56,224,.18)}
+
+  /* ============ B 分组画廊 ============ */
+  .section{padding:2px 16px 14px}
+  .sec-head{display:flex;align-items:center;gap:7px;padding:10px 0 9px;font-size:11px;color:var(--ink-2);font-weight:600}
+  .sec-head .count{color:var(--ink-3);font-weight:500}
+  .sec-head .more{margin-left:auto;font-size:10.5px;color:var(--blue);font-weight:600}
+  .gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .g-card{border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 0 0 1px var(--line),0 4px 10px -6px rgba(15,18,34,.3)}
+  .g-card .thumb{height:86px;border-radius:0}
+  .g-card .cap{padding:6px 8px 7px}
+  .g-card .cap .meta{gap:4px}
+  .g-card .cap .meta .time{font-size:9px}
+
+  /* ============ C 主次分栏 ============ */
+  .split{display:grid;grid-template-columns:1.06fr .94fr;min-height:322px;border-top:1px solid var(--line)}
+  .split .left{padding:6px 8px;border-right:1px solid var(--line);overflow:hidden}
+  .split .right{padding:14px;display:flex;flex-direction:column;gap:11px;background:linear-gradient(180deg,#fff,#F7F8FD)}
+  .sel{background:var(--blue-soft);box-shadow:inset 0 0 0 1px rgba(5,56,224,.2)}
+  .preview{
+    flex:1;border-radius:12px;overflow:hidden;background:#DFE3EE;
+    box-shadow:0 0 0 1px var(--line),0 10px 24px -14px rgba(15,18,34,.5);
+  }
+  .preview .thumb{width:100%;height:100%;border-radius:0}
+  .p-title{font-size:12.5px;font-weight:600;letter-spacing:-.01em}
+  .p-sub{font-size:10.5px;color:var(--ink-3);margin-top:3px}
+  .actions{display:flex;gap:7px;align-items:center}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:10.5px;color:var(--ink-3)}
+  .kv b{color:var(--ink-2);font-weight:600}
+
+  /* ============ D 瀑布流 ============ */
+  .masonry-wrap{display:flex;gap:12px;padding:4px 16px 14px}
+  .date-rail{display:flex;flex-direction:column;gap:8px;padding-top:2px;flex:none}
+  .date-pill{font-size:9.5px;color:var(--ink-3);font-weight:600;white-space:nowrap}
+  .date-pill.on{color:var(--blue)}
+  .cols{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;flex:1}
+  .m-card{border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 0 0 1px var(--line),0 5px 12px -8px rgba(15,18,34,.35);display:flex;flex-direction:column}
+  .m-card .thumb{border-radius:0}
+  .m-card .cap{padding:7px 8px 8px}
+  .m-card .txt{font-size:11px;line-height:1.5;color:var(--ink);display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+  .h1{height:64px}.h2{height:92px}.h3{height:118px}
+
+  /* 对比表 */
+  .compare{max-width:1320px;margin:44px auto 0;background:#fff;border-radius:18px;padding:6px 4px;box-shadow:0 0 0 1px var(--line),0 14px 34px -22px rgba(15,18,34,.4)}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{text-align:left;padding:11px 16px;border-bottom:1px solid var(--line)}
+  th{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
+  tr:last-child td{border-bottom:none}
+  td:first-child{font-weight:700;width:76px}
+  .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--blue);margin-right:6px;vertical-align:1px}
+  .rec{max-width:1320px;margin:22px auto 0;font-size:12.5px;color:var(--ink-2);line-height:1.8}
+  .rec b{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<header class="page-head">
+  <div class="eyebrow">LENSO · Global Search</div>
+  <h1>全局搜索面板 · 四种展示方案</h1>
+  <p class="sub">同一份数据（截图 / 文字 / 代码 / 剪贴板）在四种布局下的观感对比。重点看：图片是否完整可读、浏览效率、来源信息的位置，以及在 700×520 这个实际尺寸下的信息密度。</p>
+</header>
+
+<main class="grid">
+
+  <!-- ================= A ================= -->
+  <section class="demo">
+    <div class="demo-head">
+      <span class="tag">A</span>
+      <h2>列表流 · 一屏看最多条</h2>
+      <p>扫描效率最高</p>
+    </div>
+    <div class="panel">
+      <div class="search-row">
+        <div class="mag">⌕</div>
+        <div class="search-text">搜索截图、复制文字、来源应用…</div>
+        <div class="hint">⏎ 复制首项</div>
+        <div class="close">✕</div>
+      </div>
+      <div class="chips">
+        <div class="chip on">全部 <b>194</b></div>
+        <div class="chip">文字 <b>168</b></div>
+        <div class="chip">图片 <b>26</b></div>
+      </div>
+      <div class="list">
+        <div class="group-head"><span class="ic lenso">L</span>今天 · 截图<span class="rule"></span><span>3</span></div>
+        <div class="row">
+          <div class="thumb t1"></div>
+          <div class="main">
+            <div class="title">全局搜索的页面需要优化下，目前这个是我用的最多的</div>
+            <div class="meta"><span class="ic lenso">L</span><span class="src">LENSO</span><span class="time">18:18</span></div>
+          </div>
+          <div class="quick"><div class="icon-btn">⧉</div><div class="icon-btn">◉</div></div>
+        </div>
+        <div class="row">
+          <div class="thumb t2"></div>
+          <div class="main">
+            <div class="title">数据看板 · 最近 7 天趋势</div>
+            <div class="meta"><span class="ic safari">S</span><span class="src">Safari</span><span class="time">17:42</span></div>
+          </div>
+          <div class="quick"><div class="icon-btn">⧉</div><div class="icon-btn">◉</div></div>
+        </div>
+        <div class="row">
+          <div class="thumb t3"></div>
+          <div class="main">
+            <div class="title">设置 · 截图快捷键与保存路径</div>
+            <div class="meta"><span class="ic lenso">L</span><span class="src">LENSO</span><span class="time">16:08</span></div>
+          </div>
+          <div class="quick"><div class="icon-btn">⧉</div><div class="icon-btn">◉</div></div>
+        </div>
+
+        <div class="group-head"><span class="ic idea">I</span>今天 · 文字<span class="rule"></span><span>4</span></div>
+        <div class="row">
+          <div class="glyph">“</div>
+          <div class="main">
+            <div class="title">全局搜索的页面需要优化下，目前这个是我用的最多的功能…</div>
+            <div class="meta"><span class="ic notes">N</span><span class="src">备忘录</span><span class="time">09:48</span></div>
+          </div>
+          <div class="quick"><div class="icon-btn">⧉</div><div class="icon-btn">◉</div></div>
+        </div>
+        <div class="row">
+          <div class="glyph">{ }</div>
+          <div class="main">
+            <div class="title mono">WITH win AS ( SELECT user_id, package_id …</div>
+            <div class="meta"><span class="ic idea">I</span><span class="src">IntelliJ IDEA</span><span class="time">09:33</span></div>
+          </div>
+          <div class="quick"><div class="icon-btn">⧉</div><div class="icon-btn">◉</div></div>
+        </div>
+        <div class="row hl">
+          <div class="glyph">≡</div>
+          <div class="main">
+            <div class="title mono">dryRun</div>
+            <div class="meta"><span class="ic term">T</span><span class="src">iTerm</span><span class="time">09:32</span></div>
+          </div>
+          <div class="quick" style="opacity:1"><div class="icon-btn">⧉</div><div class="icon-btn">◉</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= B ================= -->
+  <section class="demo">
+    <div class="demo-head">
+      <span class="tag">B</span>
+      <h2>分组画廊 · 主界面同一套卡片</h2>
+      <p>视觉统一，图片完整</p>
+    </div>
+    <div class="panel">
+      <div class="search-row">
+        <div class="mag">⌕</div>
+        <div class="search-text">搜索截图、复制文字、来源应用…</div>
+        <div class="close">✕</div>
+      </div>
+      <div class="chips">
+        <div class="chip on">全部 <b>194</b></div>
+        <div class="chip">文字 <b>168</b></div>
+        <div class="chip">图片 <b>26</b></div>
+      </div>
+
+      <div class="section">
+        <div class="sec-head"><span class="ic lenso">L</span>今天 · 截图 <span class="count">3</span><span class="more">查看全部 ›</span></div>
+        <div class="gallery">
+          <div class="g-card">
+            <div class="thumb t1"></div>
+            <div class="cap"><div class="meta"><span class="ic lenso">L</span><span class="src">LENSO</span><span class="time">18:18</span></div></div>
+          </div>
+          <div class="g-card">
+            <div class="thumb t2"></div>
+            <div class="cap"><div class="meta"><span class="ic safari">S</span><span class="src">Safari</span><span class="time">17:42</span></div></div>
+          </div>
+          <div class="g-card">
+            <div class="thumb t3"></div>
+            <div class="cap"><div class="meta"><span class="ic lenso">L</span><span class="src">LENSO</span><span class="time">16:08</span></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="sec-head"><span class="ic note">N</span>今天 · 文字 <span class="count">4</span><span class="more">查看全部 ›</span></div>
+        <div class="gallery">
+          <div class="g-card">
+            <div class="thumb t4" style="height:86px"></div>
+            <div class="cap"><div class="meta"><span class="ic notes">N</span><span class="src">备忘录</span><span class="time">09:48</span></div></div>
+          </div>
+          <div class="g-card">
+            <div class="thumb t5" style="height:86px"></div>
+            <div class="cap"><div class="meta"><span class="ic idea">I</span><span class="src">IDEA</span><span class="time">09:33</span></div></div>
+          </div>
+          <div class="g-card">
+            <div class="thumb t6" style="height:86px"></div>
+            <div class="cap"><div class="meta"><span class="ic term">T</span><span class="src">iTerm</span><span class="time">09:32</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= C ================= -->
+  <section class="demo">
+    <div class="demo-head">
+      <span class="tag">C</span>
+      <h2>主次分栏 · 选中即预览</h2>
+      <p>最像效率工具，适合搜索场景</p>
+    </div>
+    <div class="panel">
+      <div class="search-row">
+        <div class="mag">⌕</div>
+        <div class="search-text">全局搜索的页面<span style="color:#0F1222">｜</span></div>
+        <div class="hint">↑↓ 选择 · ⏎ 复制</div>
+        <div class="close">✕</div>
+      </div>
+      <div class="chips">
+        <div class="chip on">全部 <b>6</b></div>
+        <div class="chip">文字 <b>4</b></div>
+        <div class="chip">图片 <b>2</b></div>
+      </div>
+
+      <div class="split">
+        <div class="left">
+          <div class="row sel">
+            <div class="thumb t1"></div>
+            <div class="main">
+              <div class="title">全局搜索的页面需要优化下，目前这个是我用的最多</div>
+              <div class="meta"><span class="ic lenso">L</span><span class="src">LENSO</span><span class="time">18:18</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="glyph">“</div>
+            <div class="main">
+              <div class="title">全局搜索的页面需要优化下，目前这个是我用的最多的功能</div>
+              <div class="meta"><span class="ic notes">N</span><span class="src">备忘录</span><span class="time">09:48</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="glyph">{ }</div>
+            <div class="main">
+              <div class="title mono">WITH win AS ( SELECT user_id, package_id …</div>
+              <div class="meta"><span class="ic idea">I</span><span class="src">IntelliJ IDEA</span><span class="time">09:33</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="thumb t2"></div>
+            <div class="main">
+              <div class="title">数据看板 · 最近 7 天趋势</div>
+              <div class="meta"><span class="ic safari">S</span><span class="src">Safari</span><span class="time">17:42</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="glyph">≡</div>
+            <div class="main">
+              <div class="title mono">dryRun</div>
+              <div class="meta"><span class="ic term">T</span><span class="src">iTerm</span><span class="time">09:32</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="right">
+          <div class="preview"><div class="thumb t1"></div></div>
+          <div>
+            <div class="p-title">全局搜索的页面需要优化下</div>
+            <div class="p-sub">截图 · 1512 × 982 · 386 KB</div>
+          </div>
+          <div class="kv">
+            <span>来源</span><b>LENSO</b>
+            <span>时间</span><b>今天 18:18:42</b>
+          </div>
+          <div class="actions">
+            <div class="btn primary">⧉ 复制</div>
+            <div class="btn">◉ 打开</div>
+            <div class="btn">⌫</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= D ================= -->
+  <section class="demo">
+    <div class="demo-head">
+      <span class="tag">D</span>
+      <h2>瀑布流 · 时间轴分组</h2>
+      <p>浏览感强，图片大小不一</p>
+    </div>
+    <div class="panel">
+      <div class="search-row">
+        <div class="mag">⌕</div>
+        <div class="search-text">搜索截图、复制文字、来源应用…</div>
+        <div class="hint">⏎ 复制首项</div>
+        <div class="close">✕</div>
+      </div>
+      <div class="chips">
+        <div class="chip on">全部 <b>194</b></div>
+        <div class="chip">文字 <b>168</b></div>
+        <div class="chip">图片 <b>26</b></div>
+      </div>
+
+      <div class="masonry-wrap">
+        <div class="date-rail">
+          <div class="date-pill on">今天</div>
+          <div class="date-pill">昨天</div>
+          <div class="date-pill">11/17</div>
+        </div>
+        <div class="cols">
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div class="m-card">
+              <div class="thumb t1 h2"></div>
+              <div class="cap"><div class="meta"><span class="ic lenso">L</span><span class="src">LENSO</span><span class="time">18:18</span></div></div>
+            </div>
+            <div class="m-card">
+              <div class="cap" style="padding:9px 9px 10px">
+                <div class="txt">WITH win AS (<br/>SELECT user_id,<br/>package_id, id,<br/>start_date, end_date<br/>FROM g.pkg_end</div>
+                <div class="meta" style="margin-top:7px"><span class="ic idea">I</span><span class="src">IDEA</span><span class="time">09:33</span></div>
+              </div>
+            </div>
+            <div class="m-card">
+              <div class="thumb t5 h1"></div>
+              <div class="cap"><div class="meta"><span class="ic safari">S</span><span class="src">Safari</span><span class="time">17:42</span></div></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div class="m-card">
+              <div class="cap" style="padding:9px 9px 10px">
+                <div class="txt">全局搜索的页面需要优化下，目前这个是我用的最多的功能，一定要把这个功能做好。目前的话我觉得 ui 设计不好，界面看起来不舒服。</div>
+                <div class="meta" style="margin-top:7px"><span class="ic notes">N</span><span class="src">备忘录</span><span class="time">09:48</span></div>
+              </div>
+            </div>
+            <div class="m-card">
+              <div class="thumb t3 h3"></div>
+              <div class="cap"><div class="meta"><span class="ic lenso">L</span><span class="src">LENSO</span><span class="time">16:08</span></div></div>
+            </div>
+            <div class="m-card">
+              <div class="cap" style="padding:9px 9px 10px">
+                <div class="txt mono" style="font-family:ui-monospace,monospace;font-size:10.5px">dryRun</div>
+                <div class="meta" style="margin-top:7px"><span class="ic term">T</span><span class="src">iTerm</span><span class="time">09:32</span></div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div class="m-card">
+              <div class="thumb t2 h3"></div>
+              <div class="cap"><div class="meta"><span class="ic chrome">C</span><span class="src">Chrome</span><span class="time">18:02</span></div></div>
+            </div>
+            <div class="m-card">
+              <div class="cap" style="padding:9px 9px 10px">
+                <div class="txt">CREATE OR REPLACE VIEW v_service_period AS WITH win AS ( …</div>
+                <div class="meta" style="margin-top:7px"><span class="ic idea">I</span><span class="src">IDEA</span><span class="time">09:30</span></div>
+              </div>
+            </div>
+            <div class="m-card">
+              <div class="thumb t6 h1"></div>
+              <div class="cap"><div class="meta"><span class="ic chrome">C</span><span class="src">Chrome</span><span class="time">09:30</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div class="compare">
+  <table>
+    <tr><th>方案</th><th>一屏信息量</th><th>图片可读性</th><th>键盘流</th><th>实现成本</th><th>适合场景</th></tr>
+    <tr><td><span class="dot"></span>A 列表流</td><td>最高（8–10 条）</td><td>缩略图，需打开</td><td>最好</td><td>低</td><td>回忆“我刚复制的那段话”</td></tr>
+    <tr><td><span class="dot"></span>B 分组画廊</td><td>中（6–9 条）</td><td>完整、较大</td><td>一般</td><td>低（与主界面一致）</td><td>找某张截图</td></tr>
+    <tr><td><span class="dot"></span>C 主次分栏</td><td>中（5–7 条）</td><td>最大，直接看清</td><td>最好（↑↓ + ⏎）</td><td>中</td><td>搜索为主、确认后再用</td></tr>
+    <tr><td><span class="dot"></span>D 瀑布流</td><td>中（7–9 条）</td><td>大小不一，视觉强</td><td>一般</td><td>中高</td><td>浏览、翻看历史</td></tr>
+  </table>
+</div>
+
+<p class="rec">
+  <b>我的建议：C 为主，A 为辅。</b>搜索面板的核心任务是“快速定位并拿走”，C 的右侧预览让你不用打开新窗口就能确认是不是要的那张图/那段字；如果更看重一次看到更多结果，选 A。<br/>
+  B 与主界面卡片一致、实现最快；D 更像“浏览历史”，不太像搜索，建议留给你们以后的历史页。
+</p>
+
+</body>
+</html>

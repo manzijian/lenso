@@ -191,71 +191,70 @@ struct MiniButton: View {
     }
 }
 
-// MARK: - 文字标注输入框（NSTextField 包装：回车/失焦提交，Esc 取消）
+// MARK: - 文字标注输入框（SwiftUI TextField + FocusState）
 
-/// Esc 键不走默认行为，交给 onEscape 处理，避免触发编辑器整体的 Esc 取消。
-final class CancelableTextField: NSTextField {
-    var onEscape: (() -> Void)?
-
-    override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 {
-            onEscape?()
-            return
-        }
-        super.keyDown(with: event)
-    }
-}
-
-struct AnnotationTextField: NSViewRepresentable {
-    var color: NSColor
+/// 之前这里包的是 NSTextField，NSHostingView 会在下一帧把第一响应者抢回去，
+/// 输入框刚出现就失焦并被空提交，看起来就是「根本没有输入的地方」。
+/// 现在改用 SwiftUI 原生 TextField + FocusState，焦点由 SwiftUI 自己管，稳定得多。
+struct AnnotationTextField: View {
+    @Binding var text: String
+    var color: Color
     var onCommit: (String) -> Void
     var onCancel: () -> Void
 
-    func makeNSView(context: Context) -> NSTextField {
-        let field = CancelableTextField()
-        field.font = NSFont.systemFont(ofSize: 16, weight: .semibold)
-        field.textColor = color
-        field.isBordered = false
-        field.drawsBackground = true
-        field.backgroundColor = color.withAlphaComponent(0.12)
-        field.focusRingType = .none
-        field.delegate = context.coordinator
-        field.wantsLayer = true
-        field.layer?.cornerRadius = 6
-        field.layer?.borderColor = color.withAlphaComponent(0.5).cgColor
-        field.layer?.borderWidth = 1
-        let coordinator = context.coordinator
-        field.onEscape = { [weak coordinator] in
-            guard let coordinator, !coordinator.finished else { return }
-            coordinator.finished = true
-            onCancel()
-        }
-        // 入场即聚焦，等一帧让窗口完成布局
-        DispatchQueue.main.async {
-            field.window?.makeFirstResponder(field)
-        }
-        return field
+    @State private var finished = false
+    @FocusState private var focused: Bool
+
+    /// 输入框宽度跟着内容走（和最终画上去的文字同宽，不会出现被截断的窄框）
+    private var measuredWidth: CGFloat {
+        let font = NSFont.systemFont(ofSize: 16, weight: .semibold)
+        let width = (text as NSString).size(withAttributes: [.font: font]).width
+        return max(96, ceil(width) + 10)
     }
 
-    func updateNSView(_ nsView: NSTextField, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onCommit: onCommit)
+    var body: some View {
+        TextField("", text: $text)
+            .textFieldStyle(.plain)
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 4)
+            .frame(width: measuredWidth, height: 24)
+            .background(
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color.white.opacity(0.10))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 3)
+                    .strokeBorder(
+                        color.opacity(0.7),
+                        style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                    )
+            )
+            .focused($focused)
+            .onSubmit { commit() }
+            .onExitCommand { cancel() }
+            .onAppear {
+                // 等视图挂进窗口后再拿焦点，避免首个按键丢失
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
+                    focused = true
+                }
+            }
+            .onChange(of: focused) { _, isFocused in
+                // 点到别处 = 确认这条文字
+                if !isFocused { commit() }
+            }
     }
 
-    final class Coordinator: NSObject, NSTextFieldDelegate {
-        var onCommit: (String) -> Void
-        var finished = false
+    private func commit() {
+        guard !finished else { return }
+        finished = true
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { onCancel() } else { onCommit(trimmed) }
+    }
 
-        init(onCommit: @escaping (String) -> Void) {
-            self.onCommit = onCommit
-        }
-
-        /// 回车与失焦都会走到这里；Esc 已在 keyDown 拦截，不会重复提交。
-        func controlTextDidEndEditing(_ obj: Notification) {
-            guard !finished, let field = obj.object as? NSTextField else { return }
-            finished = true
-            onCommit(field.stringValue)
-        }
+    private func cancel() {
+        guard !finished else { return }
+        finished = true
+        onCancel()
     }
 }

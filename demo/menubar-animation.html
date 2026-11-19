@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LENSO · 状态栏面板动效方案</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue: #2b5cff;
+    --purple: #8b5cf6;
+
+    /* 动效参数（慢放模式会覆盖） */
+    --open-dur: .34s;
+    --close-dur: .20s;
+    --row-delay: 22ms;
+    --row-dur: .30s;
+    --ease-spring: cubic-bezier(.16, 1, .3, 1);
+    --ease-out: cubic-bezier(.22, .61, .36, 1);
+  }
+
+  body.slow {
+    --open-dur: 1.3s;
+    --close-dur: .7s;
+    --row-delay: 85ms;
+    --row-dur: 1.1s;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    min-height: 100vh; padding: 34px 20px 44px;
+    color: #fff;
+    background:
+      radial-gradient(900px 500px at 20% -10%, #4d5c86 0%, transparent 60%),
+      radial-gradient(800px 600px at 90% 110%, #6f5286 0%, transparent 62%),
+      linear-gradient(160deg, #222a3c 0%, #151a26 100%);
+  }
+
+  .page-title { text-align: center; font-size: 14px; font-weight: 600; margin-bottom: 4px; color: rgba(255,255,255,.92); }
+  .page-sub { text-align: center; font-size: 11px; color: rgba(255,255,255,.4); margin-bottom: 22px; }
+
+  /* ============ 模拟桌面 ============ */
+  .desktop {
+    position: relative;
+    width: 880px; height: 520px; margin: 0 auto;
+    border-radius: 16px; overflow: hidden;
+    background:
+      radial-gradient(600px 300px at 25% 15%, #3d4f78 0%, transparent 62%),
+      radial-gradient(500px 380px at 78% 88%, #5c4478 0%, transparent 66%),
+      linear-gradient(150deg, #2b3448 0%, #1a2030 100%);
+    box-shadow: 0 24px 60px rgba(0,0,0,.42), 0 0 0 .5px rgba(255,255,255,.1);
+    border: .5px solid rgba(255,255,255,.1);
+  }
+
+  /* 顶部菜单栏 */
+  .menubar {
+    height: 26px; display: flex; align-items: center; justify-content: flex-end;
+    gap: 16px; padding: 0 14px;
+    background: rgba(255,255,255,.08);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: .5px solid rgba(255,255,255,.08);
+    font-size: 11px; color: rgba(255,255,255,.72);
+  }
+  .mb-icon {
+    width: 22px; height: 18px; border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; cursor: pointer;
+    background: rgba(255,255,255,.06);
+    transition: background .15s, transform .15s;
+  }
+  .mb-icon:hover { background: rgba(255,255,255,.16); }
+  .mb-icon.active { background: rgba(43,92,255,.55); color: #fff; }
+
+  /* ============ 面板 ============ */
+  .stage {
+    position: absolute; top: 26px; right: 10px;
+    width: 348px;
+    transform-origin: top right;
+    pointer-events: none;
+  }
+  .stage.visible { pointer-events: auto; }
+
+  .panel {
+    width: 100%; border-radius: 15px; overflow: hidden;
+    background: rgba(30, 30, 34, .88);
+    backdrop-filter: blur(30px) saturate(180%);
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
+    border: .5px solid rgba(255,255,255,.13);
+    box-shadow: 0 24px 56px rgba(0,0,0,.5), 0 0 0 .5px rgba(255,255,255,.05) inset;
+    color: #f2f2f7;
+    position: relative;
+  }
+
+  /* 开合过渡（各方案在这里覆写初始/终态） */
+  .panel {
+    transition:
+      transform var(--open-dur) var(--ease-spring),
+      opacity calc(var(--open-dur) * .6) ease,
+      filter var(--open-dur) ease,
+      box-shadow var(--open-dur) ease;
+  }
+  .stage.closing .panel {
+    transition:
+      transform var(--close-dur) cubic-bezier(.4, 0, 1, 1),
+      opacity calc(var(--close-dur) * .8) ease,
+      filter var(--close-dur) ease;
+  }
+
+  /* ---- 方案 1：丝滑弹簧（推荐）---- */
+  .stage[data-anim="spring"] .panel {
+    transform: translateY(-6px) scale(.93);
+    opacity: 0; filter: blur(10px);
+  }
+  .stage[data-anim="spring"] .panel.open {
+    transform: translateY(0) scale(1);
+    opacity: 1; filter: blur(0);
+    box-shadow: 0 24px 56px rgba(0,0,0,.5), 0 0 0 .5px rgba(255,255,255,.06) inset;
+  }
+
+  /* ---- 方案 2：上浮淡入 ---- */
+  .stage[data-anim="rise"] .panel {
+    transform: translateY(14px) scale(.985);
+    opacity: 0; filter: blur(6px);
+  }
+  .stage[data-anim="rise"] .panel.open {
+    transform: translateY(0) scale(1); opacity: 1; filter: blur(0);
+  }
+
+  /* ---- 方案 3：液态玻璃（3D 轻翻 + 光扫）---- */
+  .stage[data-anim="liquid"] .panel {
+    transform: perspective(900px) rotateX(-9deg) translateY(-10px) scale(.9);
+    opacity: 0; filter: blur(12px) saturate(140%);
+    transform-origin: top right;
+  }
+  .stage[data-anim="liquid"] .panel.open {
+    transform: perspective(900px) rotateX(0deg) translateY(0) scale(1);
+    opacity: 1; filter: blur(0) saturate(180%);
+  }
+  .stage[data-anim="liquid"] .panel::after {
+    content: ''; position: absolute; inset: 0; border-radius: 15px;
+    background: linear-gradient(115deg, transparent 25%, rgba(255,255,255,.16) 45%, transparent 62%);
+    transform: translateX(-120%);
+    pointer-events: none; opacity: 0;
+  }
+  .stage[data-anim="liquid"] .panel.open::after {
+    animation: sweep calc(var(--open-dur) * 1.25) var(--ease-out) .04s;
+  }
+  @keyframes sweep {
+    0%   { transform: translateX(-120%); opacity: 0; }
+    35%  { opacity: .9; }
+    100% { transform: translateX(120%); opacity: 0; }
+  }
+
+  /* ---- 方案 4：极简缩放（无位移）---- */
+  .stage[data-anim="zoom"] .panel {
+    transform: scale(.88); opacity: 0; filter: blur(4px);
+  }
+  .stage[data-anim="zoom"] .panel.open {
+    transform: scale(1); opacity: 1; filter: blur(0);
+  }
+
+  /* ============ 面板内部 ==== */
+  .rc-search {
+    display: flex; align-items: center; gap: 9px;
+    padding: 11px 13px; border-bottom: .5px solid rgba(255,255,255,.09);
+  }
+  .rc-search .ico { color: rgba(255,255,255,.5); font-size: 12.5px; }
+  .rc-search input {
+    flex: 1; background: transparent; border: none; outline: none;
+    color: #f2f2f7; font-size: 12.5px; font-family: inherit;
+  }
+  .rc-search input::placeholder { color: rgba(255,255,255,.35); }
+  .rc-search .kbd {
+    font-size: 9px; color: rgba(255,255,255,.45);
+    border: .5px solid rgba(255,255,255,.18);
+    padding: 1px 5px; border-radius: 4px; font-family: "SF Mono", Menlo, monospace;
+  }
+
+  .rc-group-label {
+    font-size: 9.5px; font-weight: 600; letter-spacing: .6px;
+    color: rgba(255,255,255,.33); text-transform: uppercase;
+    padding: 8px 15px 4px;
+  }
+
+  .rc-row {
+    display: flex; align-items: center; gap: 9px;
+    margin: 0 8px 2px; padding: 6.5px 8px; border-radius: 8px;
+    cursor: pointer;
+    transition: background .14s, transform .14s;
+  }
+  .rc-row:hover { background: rgba(255,255,255,.07); }
+  .rc-row.sel { background: linear-gradient(90deg, rgba(43,92,255,.85), rgba(139,92,246,.72)); }
+  .rc-row .ri {
+    width: 25px; height: 25px; border-radius: 7px; flex: none;
+    background: rgba(255,255,255,.1);
+    display: flex; align-items: center; justify-content: center; font-size: 12px;
+  }
+  .rc-row.sel .ri { background: rgba(255,255,255,.22); }
+  .rc-row .rt { font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 5px; }
+  .rc-row .rs { font-size: 9.5px; color: rgba(255,255,255,.43); margin-top: 1px; }
+  .rc-row.sel .rs { color: rgba(255,255,255,.72); }
+  .rc-row .rk {
+    margin-left: auto; font-size: 9px; font-family: "SF Mono", Menlo, monospace;
+    color: rgba(255,255,255,.38);
+  }
+  .rc-row.sel .rk { color: rgba(255,255,255,.8); }
+  .rc-tag {
+    font-size: 8px; padding: 1px 4px; border-radius: 3px;
+    background: rgba(255,255,255,.16); color: rgba(255,255,255,.85); font-weight: 600;
+  }
+
+  .rc-footer {
+    display: flex; gap: 12px; padding: 7px 13px;
+    border-top: .5px solid rgba(255,255,255,.09);
+    font-size: 9px; color: rgba(255,255,255,.4);
+    background: rgba(0,0,0,.18);
+  }
+
+  /* ---- 行错峰入场 ---- */
+  .rc-row, .rc-group-label {
+    opacity: 0;
+    transform: translateY(7px);
+    transition:
+      opacity var(--row-dur) var(--ease-out),
+      transform var(--row-dur) var(--ease-spring);
+  }
+  .panel.open .rc-row,
+  .panel.open .rc-group-label {
+    opacity: 1; transform: translateY(0);
+  }
+  .panel.open .rc-row:nth-child(1), .panel.open .rc-group-label:nth-child(1) { transition-delay: calc(var(--row-delay) * 0); }
+  .panel.open .rc-row:nth-child(2), .panel.open .rc-group-label:nth-child(2) { transition-delay: calc(var(--row-delay) * 1); }
+  .panel.open .rc-row:nth-child(3), .panel.open .rc-group-label:nth-child(3) { transition-delay: calc(var(--row-delay) * 2); }
+  .panel.open .rc-row:nth-child(4), .panel.open .rc-group-label:nth-child(4) { transition-delay: calc(var(--row-delay) * 3); }
+  .panel.open .rc-row:nth-child(5), .panel.open .rc-group-label:nth-child(5) { transition-delay: calc(var(--row-delay) * 4); }
+  .panel.open .rc-row:nth-child(6), .panel.open .rc-group-label:nth-child(6) { transition-delay: calc(var(--row-delay) * 5); }
+  .panel.open .rc-row:nth-child(7), .panel.open .rc-group-label:nth-child(7) { transition-delay: calc(var(--row-delay) * 6); }
+  .panel.open .rc-row:nth-child(8), .panel.open .rc-group-label:nth-child(8) { transition-delay: calc(var(--row-delay) * 7); }
+
+  /* 关闭时去掉错峰，整体快速收起 */
+  .stage.closing .rc-row,
+  .stage.closing .rc-group-label {
+    opacity: 0; transform: translateY(-3px);
+    transition: opacity calc(var(--close-dur) * .5) ease, transform calc(var(--close-dur) * .6) ease;
+    transition-delay: 0s !important;
+  }
+
+  /* ============ 控制区 ============ */
+  .controls {
+    width: 880px; margin: 20px auto 0;
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    padding: 14px 16px; border-radius: 12px;
+    background: rgba(255,255,255,.06);
+    border: .5px solid rgba(255,255,255,.1);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+  .controls .label { font-size: 11px; color: rgba(255,255,255,.5); margin-right: 2px; }
+  .opt {
+    border: .5px solid rgba(255,255,255,.16); background: rgba(255,255,255,.07);
+    color: rgba(255,255,255,.78); font-family: inherit; font-size: 11.5px;
+    padding: 6px 13px; border-radius: 8px; cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s;
+  }
+  .opt:hover { background: rgba(255,255,255,.13); }
+  .opt.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .divider-v { width: 1px; height: 20px; background: rgba(255,255,255,.12); margin: 0 4px; }
+  .replay {
+    margin-left: auto; border: none; cursor: pointer;
+    background: linear-gradient(135deg, var(--blue), var(--purple));
+    color: #fff; font-family: inherit; font-size: 11.5px; font-weight: 600;
+    padding: 7px 16px; border-radius: 8px;
+  }
+  .replay:hover { filter: brightness(1.08); }
+
+  .note {
+    width: 880px; margin: 14px auto 0; font-size: 11px; line-height: 1.75;
+    color: rgba(255,255,255,.42);
+  }
+  .note b { color: rgba(255,255,255,.68); font-weight: 600; }
+  .note code {
+    font-family: "SF Mono", Menlo, monospace; font-size: 10.5px;
+    background: rgba(255,255,255,.08); padding: 1px 5px; border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+
+<div class="page-title">LENSO · 状态栏面板开合动效</div>
+<div class="page-sub">点右上角菜单栏图标开合 · 切换方案对比 · 可慢放逐帧观察</div>
+
+<div class="desktop" id="desktop">
+  <div class="menubar">
+    <span>22:17</span>
+    <span>􀇿</span>
+    <span>􀙨</span>
+    <div class="mb-icon" id="mbIcon">◉</div>
+  </div>
+
+  <div class="stage" id="stage" data-anim="spring">
+    <div class="panel" id="panel">
+      <div class="rc-search">
+        <span class="ico">⌕</span>
+        <input placeholder="搜索或输入命令…" readonly>
+        <span class="kbd">⌘ K</span>
+      </div>
+
+      <div class="rc-group-label">快捷操作</div>
+      <div class="rc-row"><div class="ri">⛶</div><div><div class="rt">区域截图</div><div class="rs">框选屏幕任意区域</div></div><span class="rk">⇧⌘1</span></div>
+      <div class="rc-row"><div class="ri">⌕</div><div><div class="rt">全局搜索</div><div class="rs">截图 · 文字 · 剪贴板</div></div><span class="rk">⇧⌘F</span></div>
+      <div class="rc-row"><div class="ri">▥</div><div><div class="rt">打开图库</div><div class="rs">全部截图与文字收纳</div></div><span class="rk">⌘L</span></div>
+      <div class="rc-row"><div class="ri">📋</div><div><div class="rt">剪贴板历史</div><div class="rs">最近复制的图片与文字</div></div><span class="rk">⇧⌘B</span></div>
+
+      <div class="rc-group-label">工具</div>
+      <div class="rc-row sel"><div class="ri">{ }</div><div><div class="rt">JSON 格式化 <span class="rc-tag">↗ 打开</span></div><div class="rs">在独立工作台中编辑</div></div><span class="rk">⌘J</span></div>
+      <div class="rc-row"><div class="ri">.*</div><div><div class="rt">正则测试 <span class="rc-tag">↗ 打开</span></div><div class="rs">实时匹配与替换</div></div><span class="rk">⌘R</span></div>
+
+      <div class="rc-footer"><span>↩ 执行</span><span>⌘K 命令</span><span>esc 关闭</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <span class="label">动画方案</span>
+  <button class="opt on" data-anim="spring">丝滑弹簧</button>
+  <button class="opt" data-anim="rise">上浮淡入</button>
+  <button class="opt" data-anim="liquid">液态玻璃</button>
+  <button class="opt" data-anim="zoom">极简缩放</button>
+  <div class="divider-v"></div>
+  <button class="opt" id="slowBtn">慢放 0.25×</button>
+  <button class="replay" id="replayBtn">▶ 重播</button>
+</div>
+
+<div class="note">
+  <b>SwiftUI 实现建议：</b>
+  用 <code>scaleEffect(0.93)</code> + <code>opacity</code> + <code>blur(radius: 10)</code>，配合
+  <code>.spring(response: 0.34, dampingFraction: 0.82)</code>；<code>transformOrigin</code> 对齐菜单栏图标（topTrailing），
+  行内容用 <code>.transition(.offset(y: 7).combined(with: .opacity))</code> 加 <code>delay(0.02 × index)</code> 错峰；关闭用 <code>easeIn</code> 0.2s 收得干脆。
+  记得 <code>accessibilityReduceMotion</code> 时降级为纯淡入。
+</div>
+
+<script>
+  const stage = document.getElementById('stage');
+  const panel = document.getElementById('panel');
+  const icon = document.getElementById('mbIcon');
+  const slowBtn = document.getElementById('slowBtn');
+  let isOpen = false;
+  let closeTimer = null;
+
+  function openPanel() {
+    clearTimeout(closeTimer);
+    stage.classList.remove('closing');
+    stage.classList.add('visible');
+    // 强制回流，保证从初始态过渡
+    void panel.offsetWidth;
+    panel.classList.add('open');
+    icon.classList.add('active');
+    isOpen = true;
+  }
+
+  function closePanel() {
+    stage.classList.add('closing');
+    panel.classList.remove('open');
+    icon.classList.remove('active');
+    isOpen = false;
+    const dur = getComputedStyle(document.body).getPropertyValue('--close-dur').trim();
+    const ms = dur.endsWith('ms') ? parseFloat(dur) : parseFloat(dur) * 1000;
+    clearTimeout(closeTimer);
+    closeTimer = setTimeout(() => {
+      stage.classList.remove('visible', 'closing');
+    }, ms + 20);
+  }
+
+  function toggle() { isOpen ? closePanel() : openPanel(); }
+
+  icon.onclick = toggle;
+
+  // 点击面板外部关闭
+  document.getElementById('desktop').addEventListener('click', (e) => {
+    if (!isOpen) return;
+    if (panel.contains(e.target) || icon.contains(e.target)) return;
+    closePanel();
+  });
+
+  // 方案切换
+  document.querySelectorAll('[data-anim]').forEach(btn => {
+    btn.onclick = () => {
+      if (btn.id === 'slowBtn') return;
+      document.querySelectorAll('[data-anim]').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      stage.dataset.anim = btn.dataset.anim;
+      if (isOpen) {
+        // 立刻按新方案重播一次
+        panel.classList.remove('open');
+        void panel.offsetWidth;
+        requestAnimationFrame(() => panel.classList.add('open'));
+      }
+    };
+  });
+
+  // 慢放
+  slowBtn.onclick = () => {
+    const slow = document.body.classList.toggle('slow');
+    slowBtn.classList.toggle('on', slow);
+    slowBtn.textContent = slow ? '慢放 0.25×（已开）' : '慢放 0.25×';
+  };
+
+  // 重播
+  document.getElementById('replayBtn').onclick = () => {
+    if (isOpen) {
+      panel.classList.remove('open');
+      void panel.offsetWidth;
+      requestAnimationFrame(() => panel.classList.add('open'));
+    } else {
+      openPanel();
+    }
+  };
+
+  // 首次自动演示
+  setTimeout(() => {
+    openPanel();
+    setTimeout(() => {
+      if (isOpen) closePanel();
+    }, 1600);
+  }, 500);
+</script>
+</body>
+</html>

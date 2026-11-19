@@ -17,6 +17,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+echo "==> 生成 Xcode 项目 (XcodeGen)"
+xcodegen generate
+
 echo "==> 编译"
 xcodebuild -project LENSO.xcodeproj -scheme LENSO -configuration Debug build \
   | tail -3
@@ -30,3 +33,53 @@ fi
 echo
 echo "==> 用固定身份重新签名"
 bash scripts/setup-dev-signing.sh "$APP_PATH" | tail -12
+
+# ── 小组件扩展签名 ────────────────────────────────────────────────
+# 顺序必须是：先签 .appex，再回签 .app，让 App 的外层封条把扩展的最新哈希算进去。
+# 反过来会让 App 的签名立刻失效。
+# ───────────────────────────────────────────────────────────────────
+APPEX_PATH="$APP_PATH/Contents/PlugIns/LensoWidgets.appex"
+if [ -d "$APPEX_PATH" ]; then
+  echo
+  echo "==> 签名小组件扩展"
+  # 必须带上沙盒 entitlement：pkd 只注册带 App Sandbox 的扩展
+  codesign --force --sign "LENSO Dev Signing" \
+    --entitlements "LENSOWidgets/LensoWidgets.entitlements" \
+    "$APPEX_PATH"
+  codesign --force --sign "LENSO Dev Signing" "$APP_PATH"
+  echo "  ✅ 已签名：$(basename "$APPEX_PATH")"
+fi
+
+# ── 部署到固定位置 ────────────────────────────────────────────────
+# 为什么：macOS TCC 权限按「路径 + 签名哈希」识别，DerivedData 是临时目录，
+# 每次可能变，系统会把它当新 App 反复弹授权。固定到 ~/Applications 就一次搞定。
+# ───────────────────────────────────────────────────────────────────
+DEPLOY_DIR="$HOME/Applications"
+DEPLOY_PATH="$DEPLOY_DIR/lenso.app"
+
+echo
+echo "==> 部署到固定位置：$DEPLOY_PATH"
+mkdir -p "$DEPLOY_DIR"
+
+# 如果旧的已在运行，先退出
+if pgrep -x lenso >/dev/null 2>&1; then
+  echo "  检测到 lenso 正在运行，先退出..."
+  osascript -e 'tell application "lenso" to quit' 2>/dev/null || true
+  sleep 1
+fi
+
+# 用 rsync 替换，保留属性
+pkill -f "LensoWidgets.appex/Contents/MacOS/LensoWidgets" 2>/dev/null || true
+rsync -a --delete "$APP_PATH/" "$DEPLOY_PATH/"
+echo "  ✅ 已部署"
+
+# 把小组件扩展注册进插件数据库，让它出现在「编辑小组件」里
+if [ -d "$DEPLOY_PATH/Contents/PlugIns/LensoWidgets.appex" ]; then
+  pluginkit -a "$DEPLOY_PATH/Contents/PlugIns/LensoWidgets.appex" 2>/dev/null || true
+  echo "  ✅ 小组件扩展已注册"
+fi
+
+echo
+echo "==> 启动 lenso"
+open "$DEPLOY_PATH"
+echo "  ✅ 已启动，不会再弹授权（固定签名 + 固定路径）"

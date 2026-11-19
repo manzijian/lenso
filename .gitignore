@@ -7,3 +7,4 @@ xcuserdata/
 .swiftpm/
 .claude/
 dist/
+.trae-html-share-packages/

@@ -19,6 +19,7 @@ struct SelectionContent: View {
     let screenFrame: CGRect
     let selection: CGRect
     let state: AnnotationState
+    let mosaicPreview: CGImage?
     let imageScale: CGFloat
     let onSelectionChange: (CGRect) -> Void
     let onConfirm: () -> Void
@@ -26,17 +27,23 @@ struct SelectionContent: View {
     @State private var dragOrigin: CGPoint? = nil
     @State private var selectionOrigin: CGRect? = nil
     @State private var handleDragOrigin: CGPoint? = nil
+    /// 正在拖动的标注（选择工具下点中标注时优先拖标注，而不是挪整个选区）
+    @State private var draggedAnnotation: Annotation? = nil
 
     var body: some View {
         ZStack {
-            // 暗幕层（全屏，选区挖空）：底层完整冻结图透出来，零延迟零卡顿
+            // 编辑器阶段：选区外压暗，突出截取范围（选区阶段保持完全不暗）
             Canvas { context, size in
                 let localSel = selection
-                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.black.opacity(0.3)))
+                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.black.opacity(0.42)))
                 context.blendMode = .clear
                 context.fill(Path(localSel), with: .color(.white))
                 context.blendMode = .normal
-                context.stroke(Path(localSel), with: .color(.white.opacity(0.9)), lineWidth: 1.5)
+                context.stroke(
+                    Path(localSel),
+                    with: .color(Color(red: 5 / 255, green: 56 / 255, blue: 224 / 255).opacity(0.92)),
+                    lineWidth: 1.5
+                )
             }
             .frame(width: screenFrame.width, height: screenFrame.height)
             .position(x: screenFrame.midX - screenFrame.origin.x, y: screenFrame.midY - screenFrame.origin.y)
@@ -46,20 +53,26 @@ struct SelectionContent: View {
             if state.activeKind != nil {
                 SelectionInner(
                     selection: selection,
-                    state: state
+                    state: state,
+                    mosaicPreview: mosaicPreview,
+                    imageScale: imageScale
                 )
                 .frame(width: max(1, selection.width), height: max(1, selection.height))
                 .position(x: selection.midX, y: selection.midY)
                 .contentShape(Rectangle())
+                .cursorRect(LensoCursor.crosshair)
                 .gesture(annotationGesture)
             } else {
                 SelectionInner(
                     selection: selection,
-                    state: state
+                    state: state,
+                    mosaicPreview: mosaicPreview,
+                    imageScale: imageScale
                 )
                 .frame(width: max(1, selection.width), height: max(1, selection.height))
                 .position(x: selection.midX, y: selection.midY)
                 .contentShape(Rectangle())
+                .cursorRect(LensoCursor.crosshair)
                 .gesture(moveGesture)
                 .simultaneousGesture(
                     TapGesture(count: 2).onEnded {
@@ -181,7 +194,7 @@ struct SelectionContent: View {
             }
     }
 
-    /// 拖拽选区整体平移
+    /// 拖拽选区整体平移；若按下点落在某条标注上，则拖动那条标注（选择工具下可调整位置）
     private var moveGesture: some Gesture {
         DragGesture(minimumDistance: 1, coordinateSpace: .global)
             .onChanged { value in
@@ -189,16 +202,58 @@ struct SelectionContent: View {
                 if dragOrigin == nil {
                     dragOrigin = value.startLocation
                     selectionOrigin = selection
+                    // 注意：拖动开始时不改任何可观察状态（否则会触发重绘，
+                    // 极端情况下打断手势，表现为「选区拖不动」）。只在真拖到标注时才记录。
+                    if let hit = hitTestAnnotation(at: value.startLocation) {
+                        draggedAnnotation = hit
+                        state.snapshotForInteraction()
+                        state.selectedAnnotationID = hit.id
+                    }
                 }
-                guard let origin = dragOrigin, let selOrigin = selectionOrigin else { return }
+                guard let origin = dragOrigin else { return }
                 let delta = CGPoint(x: value.location.x - origin.x, y: value.location.y - origin.y)
+
+                if let hit = draggedAnnotation {
+                    let dx = delta.x / max(1, selection.width)
+                    let dy = delta.y / max(1, selection.height)
+                    state.setPositions(
+                        id: hit.id,
+                        start: CGPoint(x: hit.start.x + dx, y: hit.start.y + dy),
+                        end: CGPoint(x: hit.end.x + dx, y: hit.end.y + dy)
+                    )
+                    return
+                }
+
+                guard let selOrigin = selectionOrigin else { return }
                 let newSel = adjustedSelection(handle: nil, origin: selOrigin, delta: delta)
                 onSelectionChange(newSel)
             }
             .onEnded { _ in
+                // 拖的是空白区域（没有拖到文字）时，顺手取消文字选中态
+                if draggedAnnotation == nil {
+                    state.selectedAnnotationID = nil
+                }
                 dragOrigin = nil
                 selectionOrigin = nil
+                draggedAnnotation = nil
             }
+    }
+
+    /// 命中测试：只对文字标注生效（其它标注不抢拖拽，保证拖选区内任意位置都能移动截图区域）
+    private func hitTestAnnotation(at local: CGPoint) -> Annotation? {
+        let norm = normalizedPoint(local, current: local).start
+        let padX = 4 / max(1, selection.width)
+        let padY = 4 / max(1, selection.height)
+        return state.annotations.reversed().first { annotation in
+            guard annotation.kind == .text else { return false }
+            let rect = CGRect(
+                x: min(annotation.start.x, annotation.end.x),
+                y: min(annotation.start.y, annotation.end.y),
+                width: abs(annotation.end.x - annotation.start.x),
+                height: abs(annotation.end.y - annotation.start.y)
+            ).insetBy(dx: -padX, dy: -padY)
+            return rect.contains(norm)
+        }
     }
 
     private func adjustedSelection(handle: SelectionHandle?, origin: CGRect, delta: CGPoint) -> CGRect {
@@ -278,14 +333,10 @@ struct SelectionContent: View {
         DragGesture(minimumDistance: 0, coordinateSpace: .global)
             .onChanged { value in
                 guard let kind = state.activeKind, state.textEditingPoint == nil else { return }
-                if kind == .text {
-                    guard selection.contains(value.startLocation) else { return }
-                    let norm = normalizedPoint(value.startLocation, current: value.location)
-                    state.textEditingPoint = norm.start
-                    return
-                }
-                let localStart = value.startLocation
-                let norm = normalizedPoint(localStart, current: value.location)
+                // 文字工具不在这里创建草稿：拖拽过程中反复重建输入框会抢走焦点，
+                // 统一放到手势结束（松手）时落点。
+                guard kind != .text else { return }
+                let norm = normalizedPoint(value.startLocation, current: value.location)
                 if state.draft == nil {
                     state.draft = Annotation(
                         kind: kind, start: norm.start, end: norm.end,
@@ -295,7 +346,14 @@ struct SelectionContent: View {
                     state.draft?.end = norm.end
                 }
             }
-            .onEnded { _ in
+            .onEnded { value in
+                guard let kind = state.activeKind else { return }
+                if kind == .text {
+                    guard state.textEditingPoint == nil, selection.contains(value.startLocation) else { return }
+                    let norm = normalizedPoint(value.startLocation, current: value.startLocation)
+                    state.textEditingPoint = norm.start
+                    return
+                }
                 if let draft = state.draft {
                     state.push(draft)
                     state.draft = nil
@@ -325,6 +383,8 @@ struct SelectionContent: View {
 struct SelectionInner: View {
     let selection: CGRect
     let state: AnnotationState
+    let mosaicPreview: CGImage?
+    let imageScale: CGFloat
 
     var body: some View {
         Canvas { context, size in
@@ -344,6 +404,16 @@ struct SelectionInner: View {
                     case .arrow:
                         path.move(to: p1)
                         path.addLine(to: p2)
+                        // 箭头必须是「箭头」：实时预览也画两条箭头翅，不能只画一根线
+                        let angle = atan2(p2.y - p1.y, p2.x - p1.x)
+                        let headLen = max(10, annotation.strokeWidth * 6)
+                        for delta in [0.42, -0.42] {
+                            path.move(to: p2)
+                            path.addLine(to: CGPoint(
+                                x: p2.x - headLen * cos(angle + delta),
+                                y: p2.y - headLen * sin(angle + delta)
+                            ))
+                        }
                     case .brush, .highlight: path.addRect(rect)
                     case .mosaic: path.addRect(rect)
                     case .text: path.addRect(rect)
@@ -353,7 +423,12 @@ struct SelectionInner: View {
                 if annotation.kind == .highlight {
                     context.fill(stroke, with: .color(color.opacity(alpha)))
                 } else if annotation.kind == .mosaic {
-                    context.fill(stroke, with: .color(.gray.opacity(0.5)))
+                    // 真正的马赛克预览：从块状图里裁出对应区域贴回去
+                    if let blocky = mosaicCrop(for: rect) {
+                        context.draw(Image(decorative: blocky, scale: 1), in: rect)
+                    } else {
+                        context.fill(stroke, with: .color(.gray.opacity(0.5)))
+                    }
                 } else if annotation.kind == .text {
                     let text = Text(annotation.text)
                         .font(.system(size: 16, weight: .semibold))
@@ -362,7 +437,38 @@ struct SelectionInner: View {
                 } else {
                     context.stroke(stroke, with: .color(color.opacity(alpha)), lineWidth: annotation.strokeWidth)
                 }
+
+                // 选中的标注给出可拖动的虚线提示
+                if state.selectedAnnotationID == annotation.id {
+                    let box = rect.insetBy(dx: -4, dy: -4)
+                    context.stroke(
+                        Path(box),
+                        with: .color(.white.opacity(0.9)),
+                        style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                    )
+                    context.stroke(
+                        Path(box),
+                        with: .color(Color(red: 5 / 255, green: 56 / 255, blue: 224 / 255).opacity(0.9)),
+                        style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                    )
+                }
             }
         }
+    }
+
+    /// 从块状预览图里裁出与马赛克矩形对应的区域（预览图是冻结帧的一半分辨率）
+    private func mosaicCrop(for rect: CGRect) -> CGImage? {
+        guard let mosaicPreview else { return nil }
+        let k = imageScale / 2
+        let crop = CGRect(
+            x: (selection.minX + rect.minX) * k,
+            y: (selection.minY + rect.minY) * k,
+            width: max(1, rect.width * k),
+            height: max(1, rect.height * k)
+        ).integral
+        guard crop.minX >= 0, crop.minY >= 0,
+              crop.maxX <= CGFloat(mosaicPreview.width),
+              crop.maxY <= CGFloat(mosaicPreview.height) else { return nil }
+        return mosaicPreview.cropping(to: crop)
     }
 }

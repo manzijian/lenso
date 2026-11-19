@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LENSO 状态栏面板 · 设计方案</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue: #2b5cff;
+    --blue-soft: rgba(43, 92, 255, 0.10);
+    --ink: #1d1d1f;
+    --ink-2: #3a3a3c;
+    --gray: #86868b;
+    --line: rgba(0, 0, 0, 0.08);
+    --card: #ffffff;
+    --radius: 16px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    min-height: 100vh;
+    padding: 48px 24px 72px;
+    color: var(--ink);
+    /* 模拟桌面壁纸，衬托面板的玻璃质感 */
+    background:
+      radial-gradient(1200px 600px at 15% 0%, #4a5f8a 0%, transparent 55%),
+      radial-gradient(900px 700px at 85% 100%, #7a5f8a 0%, transparent 60%),
+      linear-gradient(160deg, #232a3d 0%, #1a1f2e 100%);
+  }
+
+  .page-title {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    margin-bottom: 6px;
+  }
+  .page-sub {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 12px;
+    margin-bottom: 34px;
+  }
+
+  .stage {
+    display: flex;
+    gap: 28px;
+    justify-content: center;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .demo { width: 348px; }
+
+  .demo-label {
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    padding-left: 4px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .demo-label .tagline {
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.38);
+  }
+
+  /* ===== 面板外壳 ===== */
+  .panel {
+    width: 348px;
+    background: rgba(255, 255, 255, 0.93);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    border-radius: var(--radius);
+    box-shadow:
+      0 18px 50px rgba(0, 0, 0, 0.35),
+      0 0 0 0.5px rgba(255, 255, 255, 0.6) inset;
+    overflow: hidden;
+    border: 0.5px solid rgba(0, 0, 0, 0.12);
+  }
+
+  /* ===== 方案 A：快捷入口 + JSON 卡片 ===== */
+  .quick-row {
+    display: flex;
+    padding: 12px 10px 10px;
+    gap: 6px;
+  }
+  .quick-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 4px 6px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+  .quick-btn:hover { background: rgba(0, 0, 0, 0.05); }
+  .quick-btn:hover .q-icon { background: var(--blue); color: #fff; }
+  .q-icon {
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, 0.045);
+    color: var(--ink-2);
+    font-size: 16px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .q-label { font-size: 10.5px; color: var(--ink-2); font-weight: 500; }
+  .q-key { font-size: 9px; color: var(--gray); font-family: "SF Mono", Menlo, monospace; }
+
+  .divider {
+    height: 0.5px;
+    background: var(--line);
+    margin: 0 12px;
+  }
+
+  .json-card { padding: 12px 14px 14px; }
+  .json-head {
+    display: flex; align-items: center; gap: 7px;
+    margin-bottom: 9px;
+  }
+  .json-head .title {
+    font-size: 12px; font-weight: 600; color: var(--ink);
+  }
+  .json-head .badge {
+    font-size: 9px; font-weight: 700; padding: 1.5px 5px;
+    border-radius: 4px; background: var(--blue-soft); color: var(--blue);
+  }
+  .json-head .right { margin-left: auto; display: flex; gap: 4px; }
+
+  .seg {
+    display: flex; background: rgba(0, 0, 0, 0.05); border-radius: 6px; padding: 2px;
+  }
+  .seg button {
+    border: none; background: transparent; cursor: pointer;
+    font-family: inherit; font-size: 10px; padding: 3px 8px;
+    border-radius: 4px; color: var(--gray); font-weight: 500;
+  }
+  .seg button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+
+  .json-input {
+    width: 100%;
+    height: 74px;
+    resize: none;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    background: #fbfbfd;
+    border-radius: 8px;
+    padding: 9px 10px;
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .json-input:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(43, 92, 255, 0.12);
+    background: #fff;
+  }
+  .json-input::placeholder { color: #b0b0b6; }
+
+  .actions { display: flex; gap: 6px; margin-top: 8px; }
+  .btn {
+    border: none; cursor: pointer; font-family: inherit;
+    font-size: 11px; font-weight: 500;
+    padding: 6px 12px; border-radius: 7px;
+    transition: background 0.15s, opacity 0.15s;
+  }
+  .btn.primary { background: var(--blue); color: #fff; }
+  .btn.primary:hover { background: #1f4ae0; }
+  .btn.ghost { background: rgba(0, 0, 0, 0.05); color: var(--ink-2); }
+  .btn.ghost:hover { background: rgba(0, 0, 0, 0.09); }
+  .actions .spacer { flex: 1; }
+
+  .result {
+    margin-top: 8px;
+    background: #1b1c26;
+    border-radius: 8px;
+    padding: 10px 11px;
+    max-height: 116px;
+    overflow: auto;
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 10.5px;
+    line-height: 1.65;
+    color: #cdd6f4;
+    white-space: pre;
+  }
+  .result:empty { display: none; }
+  .k { color: #89b4fa; }
+  .s { color: #a6e3a1; }
+  .n { color: #fab387; }
+  .b { color: #cba6f7; }
+  .err { color: #f38ba8; }
+
+  .status {
+    display: flex; align-items: center; gap: 5px;
+    margin-top: 7px; font-size: 10px; color: var(--gray);
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: #34c759; }
+  .dot.bad { background: #ff5f57; }
+
+  /* ===== 方案 B：Tab 切换 ===== */
+  .tabbar {
+    display: flex; gap: 2px; padding: 8px 10px 0;
+  }
+  .tabbar button {
+    flex: 1; border: none; background: transparent; cursor: pointer;
+    font-family: inherit; font-size: 11.5px; font-weight: 500;
+    color: var(--gray); padding: 7px 0 8px;
+    border-bottom: 2px solid transparent;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+  }
+  .tabbar button.on { color: var(--blue); border-bottom-color: var(--blue); }
+  .tabbody { padding: 12px 14px 14px; min-height: 268px; display: flex; flex-direction: column; }
+  .tabbody.hidden { display: none; }
+
+  .dock {
+    display: flex; justify-content: space-around;
+    padding: 9px 10px;
+    border-top: 0.5px solid var(--line);
+    background: rgba(0, 0, 0, 0.02);
+  }
+  .dock button {
+    border: none; background: transparent; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    font-family: inherit; padding: 4px 10px; border-radius: 8px;
+    color: var(--ink-2);
+  }
+  .dock button:hover { background: rgba(0, 0, 0, 0.05); color: var(--blue); }
+  .dock .di { font-size: 15px; }
+  .dock .dl { font-size: 9.5px; }
+
+  /* ===== 方案 C：命令面板风 ===== */
+  .cmd-wrap { padding: 12px 12px 6px; }
+  .cmd-box {
+    display: flex; align-items: center; gap: 9px;
+    background: rgba(0, 0, 0, 0.045);
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 9px 11px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .cmd-box:focus-within {
+    background: #fff;
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(43, 92, 255, 0.12);
+  }
+  .cmd-box input {
+    flex: 1; border: none; background: transparent; outline: none;
+    font-family: inherit; font-size: 12px; color: var(--ink);
+  }
+  .cmd-box input::placeholder { color: #a8a8ae; }
+  .cmd-box .hint {
+    font-size: 9px; font-family: "SF Mono", Menlo, monospace;
+    color: var(--gray); border: 0.5px solid var(--line);
+    padding: 1px 4px; border-radius: 4px;
+  }
+
+  .cmd-list { padding: 4px 8px 8px; }
+  .cmd-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 8px; cursor: pointer;
+  }
+  .cmd-item:hover, .cmd-item.hl { background: var(--blue); color: #fff; }
+  .cmd-item:hover .ci-sub, .cmd-item.hl .ci-sub { color: rgba(255,255,255,0.75); }
+  .cmd-item:hover .ci-icon, .cmd-item.hl .ci-icon { background: rgba(255,255,255,0.2); color: #fff; }
+  .ci-icon {
+    width: 26px; height: 26px; border-radius: 7px;
+    background: rgba(0, 0, 0, 0.05); color: var(--ink-2);
+    display: flex; align-items: center; justify-content: center; font-size: 12px;
+  }
+  .ci-main { flex: 1; }
+  .ci-title { font-size: 12px; font-weight: 500; }
+  .ci-sub { font-size: 10px; color: var(--gray); margin-top: 1px; }
+  .ci-key { font-size: 9.5px; font-family: "SF Mono", Menlo, monospace; color: var(--gray); }
+  .cmd-item:hover .ci-key, .cmd-item.hl .ci-key { color: rgba(255,255,255,0.7); }
+
+  .cmd-result {
+    margin: 0 12px 10px;
+    border-radius: 8px; background: #1b1c26; padding: 9px 11px;
+    font-family: "SF Mono", Menlo, monospace; font-size: 10.5px;
+    line-height: 1.65; color: #cdd6f4; white-space: pre;
+    max-height: 104px; overflow: auto;
+  }
+  .cmd-result:empty { display: none; }
+
+  .footer-note {
+    padding: 7px 14px 10px;
+    font-size: 9.5px; color: var(--gray);
+    display: flex; gap: 10px;
+    border-top: 0.5px solid var(--line);
+  }
+</style>
+</head>
+<body>
+
+<div class="page-title">LENSO · 状态栏面板设计方案</div>
+<div class="page-sub">三个方案的 JSON 格式化功能都可以实际试用</div>
+
+<div class="stage">
+
+  <!-- ================= 方案 A ================= -->
+  <div class="demo">
+    <div class="demo-label">方案 A <span class="tagline">快捷入口 + JSON 卡片</span></div>
+    <div class="panel">
+      <div class="quick-row">
+        <button class="quick-btn"><div class="q-icon">⛶</div><div class="q-label">截图</div><div class="q-key">⇧⌘1</div></button>
+        <button class="quick-btn"><div class="q-icon">⌕</div><div class="q-label">搜索</div><div class="q-key">⇧⌘F</div></button>
+        <button class="quick-btn"><div class="q-icon">▥</div><div class="q-label">图库</div><div class="q-key">⌘L</div></button>
+        <button class="quick-btn"><div class="q-icon">⚙</div><div class="q-label">设置</div><div class="q-key">⌘,</div></button>
+      </div>
+      <div class="divider"></div>
+      <div class="json-card">
+        <div class="json-head">
+          <span class="title">{ } JSON</span>
+          <span class="badge">格式化</span>
+          <div class="right">
+            <div class="seg" id="segA">
+              <button class="on" data-mode="pretty">美化</button>
+              <button data-mode="minify">压缩</button>
+            </div>
+          </div>
+        </div>
+        <textarea class="json-input" id="inA" spellcheck="false" placeholder='粘贴 JSON，例如 {"a":1}'></textarea>
+        <div class="actions">
+          <button class="btn primary" id="fmtA">✨ 格式化</button>
+          <button class="btn ghost" id="pasteA">粘贴</button>
+          <div class="spacer"></div>
+          <button class="btn ghost" id="copyA">复制</button>
+        </div>
+        <div class="result" id="outA"></div>
+        <div class="status"><span class="dot" id="dotA"></span><span id="msgA">等待输入</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 方案 B ================= -->
+  <div class="demo">
+    <div class="demo-label">方案 B <span class="tagline">Tab 分页 + 底部 Dock</span></div>
+    <div class="panel">
+      <div class="tabbar" id="tabsB">
+        <button class="on" data-tab="quick">⚡ 快捷</button>
+        <button data-tab="json">{ } JSON</button>
+        <button data-tab="tools">🛠 工具</button>
+      </div>
+
+      <!-- Tab 1 快捷 -->
+      <div class="tabbody" id="tab-quick">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <button class="btn ghost" style="padding:14px 8px; text-align:left;">⛶&nbsp; 区域截图<br><span style="font-size:9px;color:var(--gray);">⇧⌘1</span></button>
+          <button class="btn ghost" style="padding:14px 8px; text-align:left;">⌕&nbsp; 全局搜索<br><span style="font-size:9px;color:var(--gray);">⇧⌘F</span></button>
+          <button class="btn ghost" style="padding:14px 8px; text-align:left;">▥&nbsp; 打开图库<br><span style="font-size:9px;color:var(--gray);">⌘L</span></button>
+          <button class="btn ghost" style="padding:14px 8px; text-align:left;">📋&nbsp; 剪贴板<br><span style="font-size:9px;color:var(--gray);">⇧⌘B</span></button>
+        </div>
+        <div style="margin-top:auto; padding-top:10px; font-size:10px; color:var(--gray);">最近使用的工具会出现在这里</div>
+      </div>
+
+      <!-- Tab 2 JSON -->
+      <div class="tabbody hidden" id="tab-json">
+        <textarea class="json-input" id="inB" style="height:88px;" spellcheck="false" placeholder='粘贴 JSON 后按 ⌘↩ 格式化'></textarea>
+        <div class="actions">
+          <button class="btn primary" id="fmtB">✨ 格式化</button>
+          <button class="btn ghost" id="minB">压缩</button>
+          <div class="spacer"></div>
+          <button class="btn ghost" id="copyB">复制</button>
+        </div>
+        <div class="result" id="outB" style="max-height:96px;"></div>
+        <div class="status"><span class="dot" id="dotB"></span><span id="msgB">等待输入</span></div>
+      </div>
+
+      <!-- Tab 3 工具 -->
+      <div class="tabbody hidden" id="tab-tools">
+        <div class="cmd-list" style="padding:0;">
+          <div class="cmd-item hl"><div class="ci-icon">{ }</div><div class="ci-main"><div class="ci-title">JSON 格式化</div><div class="ci-sub">美化 / 压缩 / 校验</div></div><span class="ci-key">⌘J</span></div>
+          <div class="cmd-item"><div class="ci-icon">.*</div><div class="ci-main"><div class="ci-title">正则测试</div><div class="ci-sub">实时匹配预览</div></div><span class="ci-key">⌘R</span></div>
+          <div class="cmd-item"><div class="ci-icon">🔗</div><div class="ci-main"><div class="ci-title">URL 解码</div><div class="ci-sub">query 参数拆解</div></div><span class="ci-key">⌘U</span></div>
+          <div class="cmd-item"><div class="ci-icon">#</div><div class="ci-main"><div class="ci-title">Base64</div><div class="ci-sub">编码 / 解码</div></div><span class="ci-key">⌘B</span></div>
+        </div>
+      </div>
+
+      <div class="dock">
+        <button><span class="di">⛶</span><span class="dl">截图</span></button>
+        <button><span class="di">⌕</span><span class="dl">搜索</span></button>
+        <button><span class="di">▥</span><span class="dl">图库</span></button>
+        <button><span class="di">⚙</span><span class="dl">设置</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 方案 C ================= -->
+  <div class="demo">
+    <div class="demo-label">方案 C <span class="tagline">命令面板风（自动识别 JSON）</span></div>
+    <div class="panel">
+      <div class="cmd-wrap">
+        <div class="cmd-box">
+          <span style="color:var(--gray); font-size:13px;">⌕</span>
+          <input id="cmdInput" placeholder="搜索功能，或直接粘贴 JSON…">
+          <span class="hint">⌘K</span>
+        </div>
+      </div>
+
+      <div class="cmd-result" id="cmdResult"></div>
+
+      <div class="cmd-list" id="cmdList">
+        <div class="cmd-item hl"><div class="ci-icon">{ }</div><div class="ci-main"><div class="ci-title">JSON 格式化</div><div class="ci-sub">粘贴内容后自动美化</div></div><span class="ci-key">⌘J</span></div>
+        <div class="cmd-item"><div class="ci-icon">🗜</div><div class="ci-main"><div class="ci-title">JSON 压缩</div><div class="ci-sub">移除所有空白字符</div></div><span class="ci-key">⌥⌘J</span></div>
+        <div class="cmd-item"><div class="ci-icon">✓</div><div class="ci-main"><div class="ci-title">JSON 校验</div><div class="ci-sub">定位语法错误位置</div></div><span class="ci-key">⇧⌘V</span></div>
+        <div class="cmd-item"><div class="ci-icon">⛶</div><div class="ci-main"><div class="ci-title">区域截图</div><div class="ci-sub">框选屏幕区域</div></div><span class="ci-key">⇧⌘1</span></div>
+        <div class="cmd-item"><div class="ci-icon">⌕</div><div class="ci-main"><div class="ci-title">全局搜索</div><div class="ci-sub">截图 / 文字 / 剪贴板</div></div><span class="ci-key">⇧⌘F</span></div>
+        <div class="cmd-item"><div class="ci-icon">⠿</div><div class="ci-main"><div class="ci-title">打开设置</div><div class="ci-sub">在主窗口中打开</div></div><span class="ci-key">⌘,</span></div>
+      </div>
+
+      <div class="footer-note">
+        <span>↑↓ 选择</span><span>↩ 执行</span><span>esc 关闭</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  /* ---------- 通用：JSON 处理 ---------- */
+  function escapeHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function highlight(json) {
+    const esc = escapeHtml(json);
+    return esc.replace(
+      /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g,
+      (m) => {
+        let cls = 'n';
+        if (/^"/.test(m)) cls = /:$/.test(m.trim()) ? 'k' : 's';
+        else if (/true|false|null/.test(m)) cls = 'b';
+        return `<span class="${cls}">${m}</span>`;
+      }
+    );
+  }
+
+  function processJSON(inputEl, outEl, dotEl, msgEl, mode) {
+    const raw = inputEl.value.trim();
+    if (!raw) {
+      outEl.innerHTML = '';
+      dotEl.classList.remove('bad');
+      msgEl.textContent = '等待输入';
+      return;
+    }
+    try {
+      const obj = JSON.parse(raw);
+      const text = mode === 'minify'
+        ? JSON.stringify(obj)
+        : JSON.stringify(obj, null, 2);
+      outEl.innerHTML = highlight(text);
+      dotEl.classList.remove('bad');
+      const keys = (text.match(/":/g) || []).length;
+      msgEl.textContent = mode === 'minify'
+        ? `✓ 有效 · 压缩后 ${text.length} 字符`
+        : `✓ 有效 JSON · ${keys} 个字段 · ${text.split('\n').length} 行`;
+      outEl.dataset.plain = text;
+    } catch (e) {
+      outEl.innerHTML = `<span class="err">✗ ${escapeHtml(e.message)}</span>`;
+      dotEl.classList.add('bad');
+      msgEl.textContent = '解析失败';
+      outEl.dataset.plain = '';
+    }
+  }
+
+  async function copyFrom(el, btn) {
+    const text = el.dataset.plain || el.textContent;
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); ta.remove();
+    }
+    const old = btn.textContent;
+    btn.textContent = '✓ 已复制';
+    setTimeout(() => btn.textContent = old, 1200);
+  }
+
+  /* ---------- 方案 A ---------- */
+  const inA = document.getElementById('inA');
+  const outA = document.getElementById('outA');
+  const dotA = document.getElementById('dotA');
+  const msgA = document.getElementById('msgA');
+  let modeA = 'pretty';
+
+  document.querySelectorAll('#segA button').forEach(b => {
+    b.onclick = () => {
+      document.querySelectorAll('#segA button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      modeA = b.dataset.mode;
+      processJSON(inA, outA, dotA, msgA, modeA);
+    };
+  });
+  document.getElementById('fmtA').onclick = () => processJSON(inA, outA, dotA, msgA, modeA);
+  document.getElementById('copyA').onclick = (e) => copyFrom(outA, e.target);
+  document.getElementById('pasteA').onclick = async () => {
+    try {
+      const t = await navigator.clipboard.readText();
+      inA.value = t;
+      processJSON(inA, outA, dotA, msgA, modeA);
+    } catch (e) {
+      msgA.textContent = '无法读取剪贴板，请手动粘贴';
+    }
+  };
+  inA.addEventListener('input', () => processJSON(inA, outA, dotA, msgA, modeA));
+  inA.value = '{"name":"LENSO","version":2.0,"features":["screenshot","json","mcp"],"active":true}';
+  processJSON(inA, outA, dotA, msgA, modeA);
+
+  /* ---------- 方案 B ---------- */
+  document.querySelectorAll('#tabsB button').forEach(b => {
+    b.onclick = () => {
+      document.querySelectorAll('#tabsB button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      ['quick', 'json', 'tools'].forEach(t => {
+        document.getElementById('tab-' + t).classList.toggle('hidden', t !== b.dataset.tab);
+      });
+    };
+  });
+
+  const inB = document.getElementById('inB');
+  const outB = document.getElementById('outB');
+  const dotB = document.getElementById('dotB');
+  const msgB = document.getElementById('msgB');
+  document.getElementById('fmtB').onclick = () => processJSON(inB, outB, dotB, msgB, 'pretty');
+  document.getElementById('minB').onclick = () => processJSON(inB, outB, dotB, msgB, 'minify');
+  document.getElementById('copyB').onclick = (e) => copyFrom(outB, e.target);
+  inB.addEventListener('input', () => processJSON(inB, outB, dotB, msgB, 'pretty'));
+  inB.value = '{"user":{"id":42,"roles":["admin","dev"]},"ok":true}';
+  processJSON(inB, outB, dotB, msgB, 'pretty');
+
+  /* ---------- 方案 C ---------- */
+  const cmdInput = document.getElementById('cmdInput');
+  const cmdResult = document.getElementById('cmdResult');
+  const cmdList = document.getElementById('cmdList');
+
+  function handleCmd() {
+    const v = cmdInput.value.trim();
+    if (!v) {
+      cmdResult.innerHTML = '';
+      cmdList.style.display = '';
+      return;
+    }
+    // 自动判断是否为 JSON
+    if (/^[\[{]/.test(v)) {
+      try {
+        const obj = JSON.parse(v);
+        const text = JSON.stringify(obj, null, 2);
+        cmdResult.innerHTML = highlight(text);
+        cmdResult.dataset.plain = text;
+        cmdList.style.display = 'none';
+      } catch (e) {
+        cmdResult.innerHTML = `<span class="err">✗ ${escapeHtml(e.message)}</span>`;
+        cmdList.style.display = 'none';
+      }
+    } else {
+      cmdResult.innerHTML = '';
+      cmdList.style.display = '';
+      // 简单过滤
+      [...cmdList.children].forEach(item => {
+        const t = item.querySelector('.ci-title').textContent;
+        item.style.display = t.includes(v) ? '' : 'none';
+      });
+    }
+  }
+  cmdInput.addEventListener('input', handleCmd);
+  cmdInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.metaKey) { handleCmd(); }
+  });
+  cmdInput.value = '{"api":"lenso","port":52888,"tools":["json","ocr"],"enabled":true}';
+  handleCmd();
+  setTimeout(() => cmdInput.select(), 200);
+</script>
+</body>
+</html>

@@ -226,9 +226,10 @@ struct LibraryScreenshotListRow: View {
                     .font(.system(size: 13, weight: .medium))
                     .lineLimit(1)
                 if let record {
-                    Text("\(record.width) × \(record.height) · \(record.capturedAt.formatted(date: .abbreviated, time: .shortened))")
+                    Text("\(record.sourceApp ?? "截图") · \(record.capturedAt.lensoRelativeDayTime) · \(record.width) × \(record.height)")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
 
@@ -349,6 +350,14 @@ struct LibraryImageCell: View {
 
     @State private var hovering = false
 
+    /// 截图卡片上的精确时间（时:分:秒）
+    private static let clockFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter
+    }()
+
     var body: some View {
         Color.clear
             .aspectRatio(16 / 10, contentMode: .fit)
@@ -393,13 +402,14 @@ struct LibraryImageCell: View {
             }
             .overlay(alignment: .bottomLeading) {
                 if let record {
-                    Text("\(record.width) × \(record.height)")
+                    Text("\(Self.clockFormatter.string(from: record.capturedAt)) · \(record.sourceApp ?? "截图")")
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundStyle(.white)
+                        .lineLimit(1)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2.5)
                         .background(Capsule().fill(Color.black.opacity(0.65)))
-                        .opacity(hovering ? 1 : 0.85)
+                        .opacity(hovering ? 1 : 0.9)
                         .padding(6)
                 }
             }

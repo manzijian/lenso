@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LENSO · 文字查看页 四个设计方向</title>
+<style>
+  :root{
+    --blue:#0538E0;
+    --blue-deep:#002FA7;
+    --blue-soft:rgba(5,56,224,.07);
+    --ink:#15171C;
+    --slate:#4C5261;
+    --muted:#8A90A0;
+    --faint:#B9BEC9;
+    --line:rgba(16,24,40,.08);
+    --line-strong:rgba(16,24,40,.12);
+    --bg:#F2F4F9;
+    --paper:#FBFAF6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{-webkit-font-smoothing:antialiased;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    padding:56px 40px 120px;
+    display:flex;flex-direction:column;align-items:center;
+  }
+  ::selection{background:rgba(5,56,224,.16);}
+
+  .wrap{width:100%;max-width:1160px;}
+
+  /* ── 页头 ───────────────────────────── */
+  header{margin-bottom:54px;}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:7px;
+    font-size:10.5px;font-weight:650;letter-spacing:.16em;
+    color:var(--blue);text-transform:uppercase;margin-bottom:14px;
+  }
+  .eyebrow i{width:5px;height:5px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 3px rgba(5,56,224,.10);}
+  h1{font-size:29px;font-weight:650;letter-spacing:-.025em;line-height:1.3;}
+  .lede{margin-top:12px;font-size:13px;line-height:1.85;color:var(--slate);max-width:640px;}
+  .lede b{color:var(--ink);font-weight:600;}
+
+  /* ── 案例行 ─────────────────────────── */
+  .case{
+    display:grid;grid-template-columns:780px minmax(260px,1fr);
+    gap:40px;align-items:start;margin-bottom:70px;
+  }
+  .case-head{
+    display:flex;align-items:baseline;gap:10px;margin-bottom:16px;
+  }
+  .case-no{
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;
+    font-size:10.5px;font-weight:600;color:var(--blue);
+    letter-spacing:.06em;
+  }
+  .case-head h2{font-size:15.5px;font-weight:650;letter-spacing:-.01em;}
+  .case-head span{font-size:11px;color:var(--muted);}
+
+  /* ── 窗口外壳 ───────────────────────── */
+  .win{
+    position:relative;width:780px;height:560px;
+    background:#fff;border-radius:13px;overflow:hidden;
+    display:flex;flex-direction:column;
+    box-shadow:
+      0 0 0 .5px rgba(16,24,40,.11),
+      0 2px 6px rgba(16,24,40,.04),
+      0 26px 64px rgba(20,30,70,.10);
+  }
+  .win-bar{
+    height:50px;flex:none;display:flex;align-items:center;gap:12px;
+    padding:0 18px;border-bottom:.5px solid var(--line);
+    background:#fff;
+  }
+  .lights{display:flex;gap:8px;margin-right:4px;}
+  .lights i{width:10px;height:10px;border-radius:50%;display:block;}
+  .lights i:nth-child(1){background:#FF5F57;}
+  .lights i:nth-child(2){background:#FEBC2E;}
+  .lights i:nth-child(3){background:#28C840;}
+  .bar-note{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.02em;}
+  .bar-spacer{flex:1;}
+  .bar-time{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10.5px;color:var(--faint);}
+  .close-x{
+    width:22px;height:22px;border-radius:50%;background:rgba(16,24,40,.045);
+    display:grid;place-items:center;color:var(--muted);font-size:9px;font-weight:700;
+  }
+
+  /* ── 01 文档式 ──────────────────────── */
+  .doc-body{
+    flex:1;overflow:hidden;padding:34px 24px 0;
+    display:flex;justify-content:center;
+    background:#fff;
+  }
+  .doc-col{width:100%;max-width:548px;}
+  .doc-meta{
+    font-size:10px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--faint);margin-bottom:12px;
+  }
+  .doc-title{
+    font-size:21px;font-weight:640;letter-spacing:-.018em;line-height:1.45;
+    color:var(--ink);margin-bottom:16px;
+  }
+  .doc-p{
+    font-size:13.5px;line-height:1.9;color:#2E323B;margin-bottom:13px;
+    letter-spacing:.002em;
+  }
+  .dock{
+    position:absolute;left:50%;bottom:22px;transform:translateX(-50%);
+    display:flex;align-items:center;gap:2px;padding:5px;
+    background:rgba(255,255,255,.92);
+    border:.5px solid var(--line-strong);border-radius:12px;
+    box-shadow:0 6px 22px rgba(20,30,70,.10),0 1px 2px rgba(20,30,70,.05);
+    backdrop-filter:blur(10px);
+  }
+  .dock button{
+    display:flex;align-items:center;gap:6px;
+    font-size:11.5px;font-weight:550;color:var(--slate);
+    padding:6px 11px;border-radius:8px;background:none;border:none;cursor:default;
+  }
+  .dock button svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
+  .dock .sep{width:.5px;height:16px;background:var(--line-strong);margin:0 3px;}
+  .dock button.primary{background:var(--blue);color:#fff;}
+  .dock button.primary svg{stroke:#fff;}
+
+  /* ── 02 检查器式 ─────────────────────── */
+  .chip{
+    display:inline-flex;align-items:center;gap:5px;
+    font-size:11px;font-weight:600;color:var(--blue);
+    background:var(--blue-soft);border-radius:999px;padding:3.5px 8px;
+  }
+  .chip svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.7;}
+  .pill{
+    font-size:10.5px;font-weight:500;color:var(--slate);
+    background:rgba(16,24,40,.045);border-radius:999px;padding:3px 8px;
+  }
+  .insp-main{flex:1;display:flex;min-height:0;}
+  .insp-content{flex:1;display:flex;flex-direction:column;min-width:0;padding:18px 20px 0;}
+  .text-card{
+    flex:1;min-height:0;overflow:hidden;
+    border:.5px solid var(--line);border-radius:10px;
+    background:#FCFCFD;padding:22px 24px;
+  }
+  .text-card p{font-size:13px;line-height:1.82;color:#2E323B;margin-bottom:12px;}
+  .text-card p:last-child{margin-bottom:0;}
+  .insp-foot{
+    height:60px;flex:none;display:flex;align-items:center;gap:14px;
+  }
+  .stat-mono{
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;
+    font-size:10.5px;color:var(--faint);letter-spacing:.02em;
+  }
+  .stat-mono b{color:var(--slate);font-weight:600;}
+  .btn-ghost{
+    display:inline-flex;align-items:center;gap:5px;
+    font-size:11px;font-weight:550;color:var(--slate);
+    padding:5.5px 10px;border-radius:7px;
+    background:rgba(16,24,40,.045);border:none;cursor:default;
+  }
+  .btn-blue{
+    display:inline-flex;align-items:center;gap:5px;
+    font-size:11px;font-weight:600;color:#fff;
+    padding:6px 12px;border-radius:7px;
+    background:var(--blue);border:none;cursor:default;
+    box-shadow:0 1px 2px rgba(5,56,224,.22);
+  }
+  .insp-side{
+    width:190px;flex:none;border-left:.5px solid var(--line);
+    background:#F8F9FC;padding:16px 14px;display:flex;flex-direction:column;
+  }
+  .side-label{
+    font-size:9.5px;font-weight:650;letter-spacing:.11em;text-transform:uppercase;
+    color:var(--faint);margin-bottom:9px;
+  }
+  .side-rows{display:flex;flex-direction:column;gap:0;}
+  .side-row{
+    display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+    padding:7px 0;border-bottom:.5px solid rgba(16,24,40,.055);
+    font-size:11px;
+  }
+  .side-row:last-child{border-bottom:none;}
+  .side-row span{color:var(--muted);}
+  .side-row b{font-weight:550;color:var(--ink);font-size:11px;}
+  .side-actions{margin-top:22px;display:flex;flex-direction:column;gap:2px;}
+  .side-action{
+    display:flex;align-items:center;gap:8px;
+    font-size:11.5px;color:var(--slate);
+    padding:7px 8px;border-radius:6px;
+  }
+  .side-action svg{width:12px;height:12px;stroke:var(--muted);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
+  .side-action.danger{color:#B0443B;}
+  .side-action.danger svg{stroke:#B0443B;}
+  .side-hint{
+    margin-top:auto;font-size:10px;color:var(--faint);
+    display:flex;align-items:center;gap:6px;
+  }
+  .kbd{
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:9.5px;
+    padding:2px 5px;border-radius:4px;background:rgba(16,24,40,.055);color:var(--slate);
+  }
+
+  /* ── 03 便签式 ───────────────────────── */
+  .win.note{background:var(--paper);}
+  .win.note .win-bar{background:var(--paper);border-bottom-color:rgba(20,20,20,.06);}
+  .note-body{flex:1;display:flex;min-height:0;padding:26px 30px 22px 18px;}
+  .note-rail{
+    width:34px;flex:none;display:flex;flex-direction:column;align-items:center;
+    padding-top:6px;position:relative;
+  }
+  .note-rail::before{
+    content:"";position:absolute;top:10px;bottom:10px;left:50%;
+    width:.5px;background:rgba(20,20,20,.09);
+  }
+  .note-dot{
+    width:8px;height:8px;border-radius:50%;background:var(--blue);
+    position:relative;z-index:1;box-shadow:0 0 0 4px var(--paper);
+  }
+  .note-dot.ghost{
+    width:5px;height:5px;background:rgba(20,20,20,.16);
+    margin-top:16px;box-shadow:0 0 0 4px var(--paper);
+  }
+  .note-col{flex:1;min-width:0;padding-left:6px;}
+  .note-meta{
+    font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+    color:#A8A491;margin-bottom:10px;
+  }
+  .note-lead{
+    font-size:16.5px;font-weight:640;letter-spacing:-.012em;line-height:1.5;
+    color:#1D1F24;margin-bottom:14px;
+  }
+  .note-col p{font-size:14px;line-height:1.92;color:#2A2D33;margin-bottom:12px;}
+  .note-foot{
+    margin-top:auto;padding-top:14px;border-top:.5px solid rgba(20,20,20,.07);
+    display:flex;align-items:center;gap:16px;
+  }
+  .note-foot .stat-mono{color:#B0AB99;}
+  .note-link{
+    font-size:11.5px;font-weight:550;color:var(--blue);margin-left:auto;
+  }
+  .note-link + .note-link{margin-left:14px;color:var(--slate);}
+
+  /* ── 04 工具阅读式 ──────────────────── */
+  .win.code .win-bar{background:#FAFBFD;}
+  .seg{
+    display:flex;background:rgba(16,24,40,.055);border-radius:7px;padding:2px;gap:2px;
+  }
+  .seg span{
+    font-size:11px;font-weight:550;color:var(--muted);
+    padding:3.5px 10px;border-radius:5px;
+  }
+  .seg span.on{background:#fff;color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.10);}
+  .search{
+    display:flex;align-items:center;gap:6px;
+    background:rgba(16,24,40,.045);border-radius:7px;padding:5px 9px;
+  }
+  .search svg{width:11px;height:11px;stroke:var(--faint);fill:none;stroke-width:1.8;}
+  .search span{font-size:11px;color:var(--faint);}
+  .code-body{
+    flex:1;display:flex;min-height:0;background:#fff;
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;
+  }
+  .gutter{
+    width:46px;flex:none;padding:18px 10px 18px 0;text-align:right;
+    font-size:11px;line-height:22px;color:#C3C8D2;
+    border-right:.5px solid rgba(16,24,40,.06);
+  }
+  .code-area{flex:1;padding:18px 20px;font-size:12.5px;line-height:22px;color:#2A2F3A;white-space:pre;overflow:hidden;}
+  .t-key{color:#1B3FBF;}
+  .t-str{color:#0B7A45;}
+  .t-num{color:#B45309;}
+  .t-punc{color:#8A90A0;}
+  .statusbar{
+    height:32px;flex:none;display:flex;align-items:center;gap:14px;
+    padding:0 16px;background:#F6F7FA;border-top:.5px solid var(--line);
+  }
+  .statusbar .stat-mono{font-size:10px;color:var(--muted);}
+  .statusbar .right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+
+  /* ── 右侧注解 ───────────────────────── */
+  .notes{padding-top:2px;}
+  .ref{
+    display:inline-block;font-size:10px;font-weight:600;letter-spacing:.06em;
+    color:var(--blue);background:var(--blue-soft);
+    padding:3px 7px;border-radius:5px;margin-bottom:12px;
+  }
+  .notes h3{font-size:16px;font-weight:650;letter-spacing:-.015em;margin-bottom:6px;}
+  .notes .pos{font-size:12.5px;line-height:1.8;color:var(--slate);margin-bottom:18px;}
+  .notes dl{display:flex;flex-direction:column;gap:12px;}
+  .notes dt{
+    font-size:9.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--faint);margin-bottom:4px;
+  }
+  .notes dd{font-size:12px;line-height:1.75;color:var(--slate);}
+  .notes dd b{color:var(--ink);font-weight:600;}
+  .pick{
+    margin-top:18px;padding:10px 12px;border-left:2px solid var(--blue);
+    background:rgba(5,56,224,.035);
+    font-size:11.5px;line-height:1.7;color:var(--slate);
+  }
+  .pick b{color:var(--blue-deep);font-weight:600;}
+
+  /* ── 对比表 ─────────────────────────── */
+  .compare{margin-top:10px;}
+  .compare h2{font-size:17px;font-weight:650;letter-spacing:-.015em;margin-bottom:6px;}
+  .compare .sub{font-size:12px;color:var(--muted);margin-bottom:20px;}
+  table{
+    width:100%;border-collapse:collapse;
+    background:#fff;border-radius:12px;overflow:hidden;
+    box-shadow:0 0 0 .5px var(--line-strong);
+  }
+  th,td{
+    text-align:left;padding:13px 16px;font-size:12px;
+    border-bottom:.5px solid var(--line);
+  }
+  th{
+    font-size:10.5px;font-weight:650;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--muted);background:#FAFBFD;
+  }
+  td:first-child{font-weight:550;color:var(--ink);width:150px;}
+  tr:last-child td{border-bottom:none;}
+  .scale{display:inline-flex;gap:3px;vertical-align:middle;}
+  .scale i{width:6px;height:6px;border-radius:50%;background:rgba(16,24,40,.10);}
+  .scale i.on{background:var(--blue);}
+
+  /* ── 推荐 ───────────────────────────── */
+  .reco{
+    margin-top:38px;border-radius:14px;background:#fff;
+    box-shadow:0 0 0 .5px var(--line-strong),0 10px 34px rgba(20,30,70,.05);
+    padding:26px 30px;
+  }
+  .reco .eyebrow{margin-bottom:10px;}
+  .reco h2{font-size:16px;font-weight:650;letter-spacing:-.015em;margin-bottom:10px;}
+  .reco p{font-size:13px;line-height:1.85;color:var(--slate);max-width:820px;}
+  .reco p + p{margin-top:8px;}
+  .reco strong{color:var(--ink);font-weight:600;}
+  .reco .ask{
+    margin-top:16px;padding-top:14px;border-top:.5px solid var(--line);
+    font-size:12px;color:var(--muted);
+  }
+  .reco .ask b{color:var(--blue);font-weight:600;}
+
+  @media (max-width:1180px){
+    .case{grid-template-columns:1fr;gap:24px;}
+    .win{width:100%;max-width:780px;}
+    .notes{max-width:780px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><i></i>LENSO / TEXT VIEWER</div>
+    <h1>文字查看页 · 四个设计方向</h1>
+    <p class="lede">
+      现在的问题不是「元素太少」，而是<b>没有层级</b>：类型、时间、工具、正文几乎平铺在同一张白纸上，所以看起来像临时拼的。
+      下面四个方向分别对应业内四类成熟做法，窗口尺寸按真实弹窗 780×560 绘制，你可直接对比手感。
+    </p>
+  </header>
+
+  <!-- 01 文档式 -->
+  <section class="case">
+    <div>
+      <div class="case-head">
+        <span class="case-no">01</span>
+        <h2>文档式</h2>
+        <span>阅读优先，界面退后</span>
+      </div>
+      <div class="win">
+        <div class="win-bar">
+          <div class="lights"><i></i><i></i><i></i></div>
+          <div class="bar-note">纯文本</div>
+          <div class="bar-spacer"></div>
+          <div class="bar-time">14:32</div>
+          <div class="close-x">✕</div>
+        </div>
+        <div class="doc-body">
+          <div class="doc-col">
+            <div class="doc-meta">2025 年 11 月 18 日 · 来自 Safari</div>
+            <div class="doc-title">把复杂留给系统，把简单留给用户</div>
+            <p class="doc-p">好的工具不应该要求用户先理解它。打开、看见、用完、离开——这四个动作之间的摩擦，决定了产品是「顺手」还是「要学」。</p>
+            <p class="doc-p">我们在做截图工具时反复问自己一个问题：用户按下快捷键的那一秒，期待的是什么？答案不是功能列表，而是一个足够快、足够安静的界面。</p>
+            <p class="doc-p">这也是为什么这一版把重心放在了响应速度、留白和信息的层级上，而不是继续堆按钮。</p>
+          </div>
+        </div>
+        <div class="dock">
+          <button class="primary">
+            <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+            复制
+          </button>
+          <div class="sep"></div>
+          <button>
+            <svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z"/></svg>
+            存为便签
+          </button>
+          <button>
+            <svg viewBox="0 0 24 24"><path d="M12 3l2.7 5.7 6.3.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.3-.9z"/></svg>
+            收藏
+          </button>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <div class="ref">参考 · Bear / Ulysses / iA Writer</div>
+      <h3>把「查看」变成「阅读」</h3>
+      <p class="pos">正文收进一条约 34 字的栏宽，界面元素全部退到边缘。用户注意力只在文字上，操作以悬浮坞的形式随时可用。</p>
+      <dl>
+        <div><dt>高级感来源</dt><dd>限宽正文栏 + 1.9 倍行高 + 小号大写的元信息，克制的对比度。</dd></div>
+        <div><dt>适合</dt><dd>长文、文章摘录、成段的灵感笔记。</dd></div>
+        <div><dt>代价</dt><dd>短文本会显得空；来源、字数等信息被弱化。</dd></div>
+      </dl>
+      <div class="pick"><b>选它如果：</b>你最在意「读起来舒服」，愿意为长文牺牲一点信息密度。</div>
+    </aside>
+  </section>
+
+  <!-- 02 检查器式 -->
+  <section class="case">
+    <div>
+      <div class="case-head">
+        <span class="case-no">02</span>
+        <h2>检查器式</h2>
+        <span>正文 + 常驻信息侧栏</span>
+      </div>
+      <div class="win">
+        <div class="win-bar">
+          <div class="lights"><i></i><i></i><i></i></div>
+          <div class="chip">
+            <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+            纯文本
+          </div>
+          <div class="pill">Safari</div>
+          <div class="bar-spacer"></div>
+          <div class="bar-time">2025-11-18 14:32:06</div>
+          <div class="close-x">✕</div>
+        </div>
+        <div class="insp-main">
+          <div class="insp-content">
+            <div class="text-card">
+              <p>好的工具不应该要求用户先理解它。打开、看见、用完、离开——这四个动作之间的摩擦，决定了产品是「顺手」还是「要学」。</p>
+              <p>我们在做截图工具时反复问自己一个问题：用户按下快捷键的那一秒，期待的是什么？答案不是功能列表，而是一个足够快、足够安静的界面。</p>
+              <p>这也是为什么这一版把重心放在了响应速度、留白和信息的层级上，而不是继续堆按钮。</p>
+            </div>
+            <div class="insp-foot">
+              <div class="stat-mono"><b>128</b> 字符 · <b>6</b> 行</div>
+              <div class="bar-spacer"></div>
+              <button class="btn-ghost">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4z"/></svg>
+                存为便签
+              </button>
+              <button class="btn-blue">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+                复制全部
+              </button>
+            </div>
+          </div>
+          <aside class="insp-side">
+            <div class="side-label">元信息</div>
+            <div class="side-rows">
+              <div class="side-row"><span>类型</span><b>纯文本</b></div>
+              <div class="side-row"><span>来源</span><b>Safari</b></div>
+              <div class="side-row"><span>时间</span><b>11-18 14:32</b></div>
+              <div class="side-row"><span>字符</span><b>128</b></div>
+              <div class="side-row"><span>行数</span><b>6</b></div>
+            </div>
+            <div class="side-actions">
+              <div class="side-action">
+                <svg viewBox="0 0 24 24"><path d="M12 3l2.7 5.7 6.3.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.3-.9z"/></svg>
+                收藏
+              </div>
+              <div class="side-action">
+                <svg viewBox="0 0 24 24"><path d="M4 20h16M6 16l9-9 3 3-9 9H6z"/></svg>
+                编辑内容
+              </div>
+              <div class="side-action danger">
+                <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13"/></svg>
+                删除
+              </div>
+            </div>
+            <div class="side-hint"><span class="kbd">Esc</span> 关闭</div>
+          </aside>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <div class="ref">参考 · Raycast / Paste / macOS 显示简介</div>
+      <h3>桌面工具的专业分工</h3>
+      <p class="pos">左边只负责阅读，右边只负责信息与操作。两栏都常驻，不需要悬停或展开，短文本也不觉得空。</p>
+      <dl>
+        <div><dt>高级感来源</dt><dd>明确的左右分工、侧栏小号字与细分割线、底部常驻主操作，像系统自带的检查器。</dd></div>
+        <div><dt>适合</dt><dd>短到中等文本、复制来的片段、需要看来源和时间的场景。</dd></div>
+        <div><dt>代价</dt><dd>侧栏占掉约 190px 横向空间；实现改动最大。</dd></div>
+      </dl>
+      <div class="pick"><b>选它如果：</b>你希望「信息 + 操作」一眼全在，且愿意给正文少一点宽度。</div>
+    </aside>
+  </section>
+
+  <!-- 03 便签式 -->
+  <section class="case">
+    <div>
+      <div class="case-head">
+        <span class="case-no">03</span>
+        <h2>便签式</h2>
+        <span>暖白纸面，轻量随手</span>
+      </div>
+      <div class="win note">
+        <div class="win-bar">
+          <div class="lights"><i></i><i></i><i></i></div>
+          <div class="bar-note" style="color:#A8A491;">文字便签</div>
+          <div class="bar-spacer"></div>
+          <div class="bar-time" style="color:#C0BBA9;">昨天 21:08</div>
+          <div class="close-x">✕</div>
+        </div>
+        <div class="note-body">
+          <div class="note-rail">
+            <span class="note-dot"></span>
+            <span class="note-dot ghost"></span>
+            <span class="note-dot ghost"></span>
+          </div>
+          <div class="note-col">
+            <div class="note-meta">来自 Safari · 昨天 21:08</div>
+            <div class="note-lead">把复杂留给系统，把简单留给用户</div>
+            <p>好的工具不应该要求用户先理解它。打开、看见、用完、离开——这四个动作之间的摩擦，决定了产品是「顺手」还是「要学」。</p>
+            <p>这也是为什么这一版把重心放在了响应速度、留白和信息的层级上，而不是继续堆按钮。</p>
+            <div class="note-foot">
+              <div class="stat-mono">86 字符 · 2 行</div>
+              <span class="note-link">复制</span>
+              <span class="note-link">存为便签</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <div class="ref">参考 · Tot / Apple Notes / Craft</div>
+      <h3>收纳感，而不是查看器</h3>
+      <p class="pos">用暖白和左侧颜色点轨把「一条记录」具象化，像从便签盒里抽出一张纸。没有工具栏，动作收在正文末尾。</p>
+      <dl>
+        <div><dt>高级感来源</dt><dd>暖白纸面、颜色点轨、小号大写元信息、无边框正文。</dd></div>
+        <div><dt>适合</dt><dd>随手记、短句、待办式文本、灵感碎片。</dd></div>
+        <div><dt>代价</dt><dd>专业工具感偏弱；长文阅读和三方操作入口都不如 01/02。</dd></div>
+      </dl>
+      <div class="pick"><b>选它如果：</b>你想让这里更像「文字收纳」，而不是「文本查看器」。</div>
+    </aside>
+  </section>
+
+  <!-- 04 工具阅读式 -->
+  <section class="case">
+    <div>
+      <div class="case-head">
+        <span class="case-no">04</span>
+        <h2>工具阅读式</h2>
+        <span>为结构化文本而生</span>
+      </div>
+      <div class="win code">
+        <div class="win-bar">
+          <div class="lights"><i></i><i></i><i></i></div>
+          <div class="chip">
+            <svg viewBox="0 0 24 24"><path d="M8 4l-4 8 4 8M16 4l4 8-4 8"/></svg>
+            JSON
+          </div>
+          <div class="bar-spacer"></div>
+          <div class="seg"><span class="on">美化</span><span>压缩</span><span>原始</span></div>
+          <div class="search">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/></svg>
+            <span>搜索</span>
+          </div>
+          <div class="close-x">✕</div>
+        </div>
+        <div class="code-body">
+          <div class="gutter">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12</div>
+          <div class="code-area"><span class="t-punc">{</span>
+  <span class="t-key">"project"</span><span class="t-punc">:</span> <span class="t-str">"lenso"</span><span class="t-punc">,</span>
+  <span class="t-key">"version"</span><span class="t-punc">:</span> <span class="t-str">"1.0.0"</span><span class="t-punc">,</span>
+  <span class="t-key">"features"</span><span class="t-punc">:</span> <span class="t-punc">[</span><span class="t-str">"capture"</span><span class="t-punc">,</span> <span class="t-str">"clipboard"</span><span class="t-punc">,</span> <span class="t-str">"text"</span><span class="t-punc">]</span><span class="t-punc">,</span>
+  <span class="t-key">"platform"</span><span class="t-punc">:</span> <span class="t-punc">{</span>
+    <span class="t-key">"os"</span><span class="t-punc">:</span> <span class="t-str">"macOS"</span><span class="t-punc">,</span>
+    <span class="t-key">"min"</span><span class="t-punc">:</span> <span class="t-str">"26.0"</span>
+  <span class="t-punc">}</span><span class="t-punc">,</span>
+  <span class="t-key">"retention"</span><span class="t-punc">:</span> <span class="t-num">30</span>
+<span class="t-punc">}</span></div>
+        </div>
+        <div class="statusbar">
+          <div class="stat-mono">JSON · UTF-8 · 128 字符 · 12 行</div>
+          <div class="right">
+            <div class="stat-mono">⌘C 复制</div>
+            <div class="stat-mono">⌘F 搜索</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <div class="ref">参考 · Linear / GitHub Gist / VS Code</div>
+      <h3>结构化内容的秩序感</h3>
+      <p class="pos">工具条、正文、状态栏三层各司其职，等宽对齐带来天然的秩序感。技术内容不需要柔软，需要的是准确。</p>
+      <dl>
+        <div><dt>高级感来源</dt><dd>同色系的工具条与状态栏、行号对齐、紧凑分段控件、等宽数字。</dd></div>
+        <div><dt>适合</dt><dd>JSON、代码、日志、URL 列表等结构化文本。</dd></div>
+        <div><dt>代价</dt><dd>纯文本会显得工程化，不够柔和；不太适合当作默认视图。</dd></div>
+      </dl>
+      <div class="pick"><b>选它如果：</b>你的文字里技术内容占比高，优先保证可读与可复制。</div>
+    </aside>
+  </section>
+
+  <!-- 对比 -->
+  <section class="compare">
+    <h2>放在一起比较</h2>
+    <p class="sub">按 LENSO 的实际使用场景打分：多数是复制来的短片段，偶尔是长文或 JSON。</p>
+    <table>
+      <thead>
+        <tr>
+          <th>维度</th>
+          <th>01 文档式</th>
+          <th>02 检查器式</th>
+          <th>03 便签式</th>
+          <th>04 工具阅读式</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>长文阅读</td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td>
+        </tr>
+        <tr>
+          <td>短文本不显空</td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></td>
+        </tr>
+        <tr>
+          <td>信息密度</td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></td>
+        </tr>
+        <tr>
+          <td>操作可达性</td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td>
+        </tr>
+        <tr>
+          <td>桌面专业感</td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td>
+        </tr>
+        <tr>
+          <td>实现改动量</td>
+          <td><span class="scale"><i class="on"></i><i></i><i></i><i></i><i></i></span></td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></td>
+          <td><span class="scale"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 推荐 -->
+  <section class="reco">
+    <div class="eyebrow"><i></i>RECOMMENDATION</div>
+    <h2>我建议以 02 为骨架，吸收 01 的排版</h2>
+    <p>
+      LENSO 是桌面工具，文字大多是复制来的片段，用户打开就想确认内容、拿走它、或者存起来。
+      <strong>02 检查器式</strong> 把来源、时间、字数、操作全部摆在明面上，短文本也不会显得空，这正好补掉现在「简陋」的根源——不是缺装饰，而是缺结构和信息。
+    </p>
+    <p>
+      具体做法：保留 02 的右侧元信息栏和底部主操作；正文改用 01 的参数（限宽约 620px、14px / 1.8 行高、首行自动提为标题）；再把 04 的底部状态信息并进 02 的底栏。JSON 和代码仍走 04 的全宽 + 行号布局，不强行套用阅读栏宽。
+    </p>
+    <div class="ask">回复 <b>01 / 02 / 03 / 04</b> 选方向，或者说「按推荐组合做」，我就直接改。</div>
+  </section>
+
+</div>
+</body>
+</html>

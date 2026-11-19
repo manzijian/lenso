@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LENSO · 截图后界面方案</title>
+<style>
+  :root{
+    --blue:#0538E0;
+    --blue-deep:#002FA7;
+    --blue-soft:rgba(5,56,224,.07);
+    --ink:#15171C;
+    --slate:#4C5261;
+    --muted:#8A90A0;
+    --line:rgba(16,24,40,.09);
+    --line-2:rgba(16,24,40,.13);
+    --page:#F1F3F8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif;
+    background:var(--page);color:var(--ink);-webkit-font-smoothing:antialiased;
+    padding:54px 40px 120px;display:flex;flex-direction:column;align-items:center;
+  }
+  .wrap{width:100%;max-width:1150px;}
+  header{margin-bottom:44px;}
+  .eyebrow{display:inline-flex;align-items:center;gap:7px;font-size:10.5px;font-weight:650;letter-spacing:.16em;color:var(--blue);text-transform:uppercase;margin-bottom:13px;}
+  .eyebrow i{width:5px;height:5px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 3px rgba(5,56,224,.10);}
+  h1{font-size:28px;font-weight:650;letter-spacing:-.025em;}
+  .lede{margin-top:12px;font-size:13px;line-height:1.85;color:var(--slate);max-width:780px;}
+  .lede b{color:var(--ink);font-weight:600;}
+
+  .case{display:grid;grid-template-columns:790px minmax(250px,1fr);gap:38px;align-items:start;margin-bottom:58px;}
+  .case-head{display:flex;align-items:baseline;gap:10px;margin-bottom:12px;}
+  .case-no{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10.5px;font-weight:600;color:var(--blue);}
+  .case-head h2{font-size:15.5px;font-weight:650;letter-spacing:-.01em;}
+  .case-head span{font-size:11px;color:var(--muted);}
+
+  .stage{
+    width:790px;height:520px;border-radius:16px;display:flex;align-items:center;justify-content:center;
+    background:
+      radial-gradient(220px 170px at 22% 18%, rgba(5,56,224,.13), transparent 70%),
+      radial-gradient(260px 190px at 82% 84%, rgba(120,150,255,.20), transparent 70%),
+      linear-gradient(145deg,#E7EBF6,#F5F7FC 55%,#E3E9F6);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.7);
+  }
+
+  .win{
+    width:748px;height:472px;background:#fff;border-radius:12px;overflow:hidden;position:relative;
+    display:flex;
+    box-shadow:0 0 0 .5px rgba(16,24,40,.14),0 18px 46px rgba(20,30,70,.16),0 3px 8px rgba(20,30,70,.06);
+  }
+
+  /* 假截图内容（统一） */
+  .shot{position:relative;background:#F7F8FB;overflow:hidden;}
+  .shot::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,#FBFCFE,#F2F4FA);}
+  .fake{position:relative;display:flex;height:100%;}
+  .fake .side{
+    width:26%;background:#FBFBFD;border-right:.5px solid var(--line);padding:12px 10px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .fake .side i{display:block;height:7px;border-radius:3px;background:#E2E6EF;}
+  .fake .side i.w1{width:64%;background:#C9D2E4;}
+  .fake .side i.w2{width:80%;}
+  .fake .side i.w3{width:52%;}
+  .fake .main{flex:1;padding:14px 16px;display:flex;flex-direction:column;gap:10px;}
+  .fake .hd{display:flex;align-items:center;gap:8px;}
+  .fake .hd b{width:20px;height:20px;border-radius:6px;background:var(--blue);display:block;opacity:.9;}
+  .fake .hd i{display:block;height:8px;border-radius:3px;background:#DDE3EE;width:34%;}
+  .fake .hero{height:112px;border-radius:9px;background:linear-gradient(135deg,#E8EDFA,#DCE4F6);box-shadow:inset 0 0 0 1px rgba(5,56,224,.06);}
+  .fake .rowline{display:flex;gap:9px;}
+  .fake .rowline i{flex:1;height:58px;border-radius:8px;background:#EEF1F8;}
+  .fake .txt i{display:block;height:6px;border-radius:3px;background:#E4E8F1;margin-bottom:7px;}
+  .fake .txt i:nth-child(1){width:86%;}
+  .fake .txt i:nth-child(2){width:94%;}
+  .fake .txt i:nth-child(3){width:58%;}
+
+  /* 01 悬浮工具条 */
+  .shot-01{flex:1;margin:9px;border-radius:10px;box-shadow:0 0 0 .5px rgba(16,24,40,.10);}
+  .chip{
+    position:absolute;display:flex;align-items:center;gap:6px;
+    padding:4px 9px;border-radius:999px;background:rgba(255,255,255,.94);
+    box-shadow:0 0 0 .5px rgba(16,24,40,.10),0 2px 6px rgba(20,30,70,.08);
+    font-size:10px;font-weight:550;color:var(--slate);backdrop-filter:blur(10px);
+  }
+  .chip .dot{width:5px;height:5px;border-radius:50%;background:var(--blue);}
+  .chip .mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:9.5px;color:var(--muted);}
+  .top-left{top:16px;left:18px;}
+  .top-right{top:16px;right:18px;width:22px;height:22px;justify-content:center;padding:0;color:var(--muted);}
+
+  .dock{
+    position:absolute;left:50%;bottom:15px;transform:translateX(-50%);
+    display:flex;align-items:center;gap:3px;padding:5px;
+    border-radius:13px;background:rgba(255,255,255,.96);
+    box-shadow:0 0 0 .5px rgba(16,24,40,.10),0 8px 22px rgba(20,30,70,.16);
+    backdrop-filter:blur(14px);
+  }
+  .dock .t{
+    width:32px;height:30px;border-radius:8px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:2px;color:var(--slate);
+  }
+  .dock .t svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+  .dock .t span{font-size:7px;font-weight:550;}
+  .dock .t.on{background:var(--blue-soft);color:var(--blue);}
+  .dock .sep{width:1px;height:20px;background:var(--line);margin:0 3px;}
+  .dock .primary{
+    display:flex;align-items:center;gap:5px;height:30px;padding:0 11px;border-radius:9px;
+    background:var(--blue);color:#fff;font-size:10.5px;font-weight:600;
+    box-shadow:0 2px 6px rgba(5,56,224,.28);
+  }
+  .dock .primary svg{width:12px;height:12px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+
+  /* 02 右侧检查器 */
+  .shot-02{flex:1;margin:9px 0 9px 9px;border-radius:9px;box-shadow:0 0 0 .5px rgba(16,24,40,.10);}
+  .inspector{
+    width:186px;flex:none;border-left:.5px solid var(--line);background:#FDFDFE;
+    display:flex;flex-direction:column;padding:12px 13px 11px;
+  }
+  .in-title{font-size:11px;font-weight:700;letter-spacing:-.01em;}
+  .in-sub{margin-top:2px;font-size:9px;color:var(--muted);font-family:ui-monospace,"SF Mono",Menlo,monospace;}
+  .in-grp{margin-top:13px;}
+  .in-label{font-size:8.5px;font-weight:650;letter-spacing:.1em;color:#B9BEC9;text-transform:uppercase;margin-bottom:5px;}
+  .in-row{display:flex;justify-content:space-between;align-items:baseline;font-size:10px;color:var(--slate);padding:2.5px 0;}
+  .in-row b{font-weight:600;color:var(--ink);font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:9.5px;}
+  .zoomgrp{margin-top:13px;padding-top:11px;border-top:.5px solid var(--line);}
+  .zoomctl{display:flex;align-items:center;gap:5px;margin-top:6px;}
+  .zoomctl .z{
+    flex:1;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+    font-size:9.5px;font-family:ui-monospace,"SF Mono",Menlo,monospace;color:var(--slate);
+    box-shadow:inset 0 0 0 .8px var(--line-2);background:#fff;
+  }
+  .zoomctl .zb{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;box-shadow:inset 0 0 0 .8px var(--line-2);background:#fff;color:var(--slate);}
+  .zoomctl .zb svg{width:10px;height:10px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;}
+  .in-bottom{margin-top:auto;display:flex;flex-direction:column;gap:6px;}
+  .btn-primary{
+    height:28px;border-radius:7px;background:var(--blue);color:#fff;font-size:11px;font-weight:600;
+    display:flex;align-items:center;justify-content:center;gap:5px;box-shadow:0 2px 6px rgba(5,56,224,.24);
+  }
+  .btn-row{display:flex;gap:6px;}
+  .btn-ghost{
+    flex:1;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;gap:4px;
+    font-size:10px;color:var(--slate);box-shadow:inset 0 0 0 .8px var(--line-2);background:#fff;
+  }
+  .btn-primary svg,.btn-ghost svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+
+  /* 03 底部操作栏 */
+  .col3{flex:1;display:flex;flex-direction:column;min-width:0;}
+  .shot-03{flex:1;margin:9px 9px 0;border-radius:9px;box-shadow:0 0 0 .5px rgba(16,24,40,.10);}
+  .bottombar{
+    height:44px;flex:none;display:flex;align-items:center;gap:12px;
+    padding:0 12px;border-top:.5px solid var(--line);background:#FCFCFE;
+  }
+  .bottombar .info{font-size:9.5px;color:var(--muted);font-family:ui-monospace,"SF Mono",Menlo,monospace;}
+  .bottombar .info b{color:var(--ink);font-weight:600;}
+  .bottombar .right{margin-left:auto;display:flex;align-items:center;gap:6px;}
+  .bb{
+    height:24px;padding:0 9px;border-radius:6px;display:flex;align-items:center;gap:4px;
+    font-size:10px;color:var(--slate);box-shadow:inset 0 0 0 .8px var(--line-2);background:#fff;
+  }
+  .bb svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+  .bb.blue{background:var(--blue);color:#fff;box-shadow:0 2px 5px rgba(5,56,224,.24);}
+  .bb.blue svg{stroke:#fff;}
+
+  /* 说明 */
+  .notes{padding-top:2px;}
+  .ref{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.05em;color:var(--blue);background:var(--blue-soft);border-radius:5px;padding:3px 7px;margin-bottom:11px;}
+  .notes h3{font-size:16px;font-weight:650;letter-spacing:-.015em;margin-bottom:6px;}
+  .notes .pos{font-size:12.5px;line-height:1.8;color:var(--slate);margin-bottom:15px;}
+  .notes dl{display:flex;flex-direction:column;gap:12px;}
+  .notes dt{font-size:9.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#B9BEC9;margin-bottom:3px;}
+  .notes dd{font-size:12px;line-height:1.75;color:var(--slate);}
+  .notes dd b{color:var(--ink);font-weight:600;}
+  .pick{margin-top:16px;padding:10px 12px;border-left:2px solid var(--blue);background:rgba(5,56,224,.035);font-size:11.5px;line-height:1.7;color:var(--slate);}
+  .pick b{color:var(--blue-deep);font-weight:600;}
+
+  /* 04 Snipaste 式：选区原地成品 */
+  .stage.desktop{
+    background:
+      radial-gradient(320px 220px at 20% 20%, #C9D6F5, transparent 70%),
+      radial-gradient(380px 260px at 82% 82%, #E4D7F2, transparent 70%),
+      linear-gradient(140deg,#B9C7E8,#DCE4F5 46%,#C6D2EC);
+  }
+  .snip{position:relative;width:560px;height:318px;}
+  .snip-shot{
+    position:absolute;inset:0;overflow:hidden;background:#F7F8FB;
+    box-shadow:0 0 0 1px rgba(5,56,224,.85),0 14px 34px rgba(20,30,70,.26);
+  }
+  .snip-dims{
+    position:absolute;right:0;top:-25px;padding:2px 7px;border-radius:4px;
+    background:rgba(9,12,20,.72);color:#fff;font-size:9.5px;
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;
+  }
+  .snip-bar{
+    position:absolute;left:0;bottom:-42px;display:flex;align-items:center;gap:2px;
+    padding:4px;border-radius:7px;background:#F6F7FA;
+    box-shadow:0 0 0 .5px rgba(16,24,40,.16),0 6px 18px rgba(20,30,70,.20);
+  }
+  .snip-bar .sb{
+    width:27px;height:25px;border-radius:5px;display:grid;place-items:center;color:#4C5261;
+  }
+  .snip-bar .sb svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
+  .snip-bar .sb.on{background:var(--blue);color:#fff;}
+  .snip-bar .sep{width:1px;height:17px;background:rgba(16,24,40,.12);margin:0 3px;}
+  .snip-bar .sb.blue{color:var(--blue);}
+
+  .compare h2{font-size:17px;font-weight:650;letter-spacing:-.015em;margin-bottom:6px;}
+  .compare .sub{font-size:12px;color:var(--muted);margin-bottom:16px;}
+  table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 0 0 .5px var(--line-2);}
+  th,td{text-align:left;padding:12px 16px;font-size:12px;border-bottom:.5px solid var(--line);}
+  th{font-size:10.5px;font-weight:650;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);background:#FAFBFD;}
+  td:first-child{font-weight:550;width:150px;}
+  tr:last-child td{border-bottom:none;}
+
+  .reco{margin-top:34px;border-radius:14px;background:#fff;padding:26px 30px;box-shadow:0 0 0 .5px var(--line-2),0 10px 34px rgba(20,30,70,.05);}
+  .reco h2{font-size:16px;font-weight:650;letter-spacing:-.015em;margin-bottom:10px;}
+  .reco p{font-size:13px;line-height:1.85;color:var(--slate);max-width:880px;}
+  .reco p + p{margin-top:8px;}
+  .reco strong{color:var(--ink);font-weight:600;}
+  .reco .ask{margin-top:16px;padding-top:14px;border-top:.5px solid var(--line);font-size:12px;color:var(--muted);}
+  .reco .ask b{color:var(--blue);font-weight:600;}
+
+  @media (max-width:1180px){
+    .case{grid-template-columns:1fr;gap:20px;}
+    .stage{width:100%;max-width:790px;}
+    .win{max-width:748px;width:94%;height:auto;aspect-ratio:748/472;}
+    .notes{max-width:790px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><i></i>LENSO / POST-CAPTURE</div>
+    <h1>截图后的界面</h1>
+    <p class="lede">
+      现在的预览窗口是「顶部文件名胶囊 + 右侧缩放/钉图/复制/导出胶囊」，两团悬浮物压在图片上，
+      和主界面的<b>分区侧栏、检查器、底栏</b>不是一套语言。下面三种改法沿用克莱因蓝 + 浅色平面，
+      最后附一个<b>Snipaste（Snapaster）式</b>的参照，方便直接对比差距。
+    </p>
+  </header>
+
+  <!-- 01 -->
+  <section class="case">
+    <div>
+      <div class="case-head"><span class="case-no">01</span><h2>沉浸预览 + 底部悬浮坞</h2><span>图片最大化，工具按需出现</span></div>
+      <div class="stage">
+        <div class="win">
+          <div class="shot shot-01">
+            <div class="fake">
+              <div class="side">
+                <i class="w1"></i><i class="w2"></i><i class="w3"></i><i class="w2"></i><i class="w1"></i><i class="w3"></i>
+              </div>
+              <div class="main">
+                <div class="hd"><b></b><i></i></div>
+                <div class="hero"></div>
+                <div class="rowline"><i></i><i></i><i></i></div>
+                <div class="txt"><i></i><i></i><i></i></div>
+              </div>
+            </div>
+            <div class="chip top-left"><span class="dot"></span>Safari<span class="mono">今日 14:32:08</span></div>
+            <div class="chip top-right">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </div>
+            <div class="dock">
+              <div class="t"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M13 8h6M16 5v6M20 20l-3.5-3.5"/></svg><span>放大</span></div>
+              <div class="t"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M20 20l-3.5-3.5"/></svg><span>缩小</span></div>
+              <div class="t"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 10-2.3 5.7M20 6v6h-6"/></svg><span>复位</span></div>
+              <div class="sep"></div>
+              <div class="t on"><svg viewBox="0 0 24 24"><path d="M9 4h6l1 4h3v11a2 2 0 01-2 2H7a2 2 0 01-2-2V8h3z"/><path d="M12 11v6"/></svg><span>钉图</span></div>
+              <div class="t"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg><span>复制</span></div>
+              <div class="sep"></div>
+              <div class="primary">
+                <svg viewBox="0 0 24 24"><path d="M12 4v11M8 11l4 4 4-4M5 19h14"/></svg>
+                导出
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <div class="ref">参考 · CleanShot X / Shottr</div>
+      <h3>图片就是主体</h3>
+      <p class="pos">只剩一条底部工具坞，左上角一个极简来源胶囊，右上角关闭。工具按使用频率排列，导出作为唯一实心主按钮。</p>
+      <dl>
+        <div><dt>与主界面关系</dt><dd>工具坞用主界面的胶囊 + 选中蓝底，来源胶囊用侧栏的弱化配色。</dd></div>
+        <div><dt>流畅感</dt><dd>不留白边、不遮挡图片；工具坞固定高度，缩放时图片区不重排。</dd></div>
+        <div><dt>代价</dt><dd>无内联标注能力（现在也没有），纯查看/导出。</dd></div>
+      </dl>
+      <div class="pick"><b>推荐：</b>截图是高频动作，预览越「干净」越像系统级工具。</div>
+    </aside>
+  </section>
+
+  <!-- 02 -->
+  <section class="case">
+    <div>
+      <div class="case-head"><span class="case-no">02</span><h2>图片 + 右侧检查器</h2><span>与文字查看器同构</span></div>
+      <div class="stage">
+        <div class="win">
+          <div class="shot shot-02">
+            <div class="fake">
+              <div class="side">
+                <i class="w1"></i><i class="w2"></i><i class="w3"></i><i class="w2"></i><i class="w1"></i><i class="w3"></i>
+              </div>
+              <div class="main">
+                <div class="hd"><b></b><i></i></div>
+                <div class="hero"></div>
+                <div class="rowline"><i></i><i></i><i></i></div>
+                <div class="txt"><i></i><i></i><i></i></div>
+              </div>
+            </div>
+          </div>
+          <div class="inspector">
+            <div class="in-title">截图详情</div>
+            <div class="in-sub">14:32:08</div>
+
+            <div class="in-grp">
+              <div class="in-label">来源</div>
+              <div class="in-row"><span>Safari</span></div>
+              <div class="in-row"><span>尺寸</span><b>1512 × 982</b></div>
+              <div class="in-row"><span>文件大小</span><b>428 KB</b></div>
+              <div class="in-row"><span>格式</span><b>PNG</b></div>
+            </div>
+
+            <div class="zoomgrp">
+              <div class="in-label">缩放</div>
+              <div class="zoomctl">
+                <div class="zb"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></div>
+                <div class="z">100%</div>
+                <div class="zb"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
+              </div>
+            </div>
+
+            <div class="in-bottom">
+              <div class="btn-primary">
+                <svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg>
+                复制图片
+              </div>
+              <div class="btn-row">
+                <div class="btn-ghost"><svg viewBox="0 0 24 24"><path d="M9 4h6l1 4h3v11a2 2 0 01-2 2H7a2 2 0 01-2-2V8h3z"/></svg>钉住</div>
+                <div class="btn-ghost"><svg viewBox="0 0 24 24"><path d="M12 4v11M8 11l4 4 4-4M5 19h14"/></svg>导出</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <div class="ref">参考 · 文字查看器 / macOS 显示简介</div>
+      <h3>和主界面完全同一套</h3>
+      <p class="pos">左侧图片、右侧 186px 检查器，来源/尺寸/大小/格式常驻，缩放在检查器里，底部固定「复制 / 钉住 / 导出」。</p>
+      <dl>
+        <div><dt>与主界面关系</dt><dd>就是文字查看器的结构，用户不需要重新学一遍。</dd></div>
+        <div><dt>流畅感</dt><dd>布局稳定，图片区尺寸固定，不会因工具出现而跳动。</dd></div>
+        <div><dt>代价</dt><dd>图片可视面积少了约 25%，小截图会显得偏小。</dd></div>
+      </dl>
+      <div class="pick"><b>选它如果：</b>一致性优先，你也常需要看尺寸和文件信息。</div>
+    </aside>
+  </section>
+
+  <!-- 03 -->
+  <section class="case">
+    <div>
+      <div class="case-head"><span class="case-no">03</span><h2>系统式底栏</h2><span>最接近 macOS 原生截图</span></div>
+      <div class="stage">
+        <div class="win">
+          <div class="col3">
+            <div class="shot shot-03">
+              <div class="fake">
+                <div class="side">
+                  <i class="w1"></i><i class="w2"></i><i class="w3"></i><i class="w2"></i><i class="w1"></i><i class="w3"></i>
+                </div>
+                <div class="main">
+                  <div class="hd"><b></b><i></i></div>
+                  <div class="hero"></div>
+                  <div class="rowline"><i></i><i></i><i></i></div>
+                  <div class="txt"><i></i><i></i><i></i></div>
+                </div>
+              </div>
+            </div>
+            <div class="bottombar">
+              <div class="info"><b>Safari</b> · 1512 × 982 · 428 KB · 14:32:08</div>
+              <div class="right">
+                <div class="bb"><svg viewBox="0 0 24 24"><path d="M9 4h6l1 4h3v11a2 2 0 01-2 2H7a2 2 0 01-2-2V8h3z"/></svg>钉住</div>
+                <div class="bb"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg>复制</div>
+                <div class="bb blue"><svg viewBox="0 0 24 24"><path d="M12 4v11M8 11l4 4 4-4M5 19h14"/></svg>保存</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <div class="ref">参考 · macOS 系统截图 / 微信截图</div>
+      <h3>一条底栏解决所有信息</h3>
+      <p class="pos">图片贴边铺满，底部 44px 固定栏：左侧来源/尺寸/大小/时间，右侧钉住、复制、保存。没有悬浮物，行为最可预期。</p>
+      <dl>
+        <div><dt>与主界面关系</dt><dd>底栏的信息排布和主界面的组头/元信息一致。</dd></div>
+        <div><dt>流畅感</dt><dd>结构最简单，窗口尺寸变化时只有图片区伸缩。</dd></div>
+        <div><dt>代价</dt><dd>观感偏「系统工具」，品牌感最弱；信息挤在一行，窗口窄了会截断。</dd></div>
+      </dl>
+      <div class="pick"><b>选它如果：</b>你更在意零学习成本和原生感。</div>
+    </aside>
+  </section>
+
+  <!-- 04 Snipaste 式 -->
+  <section class="case">
+    <div>
+      <div class="case-head"><span class="case-no">04</span><h2>Snipaste 式：选区原地成品</h2><span>不弹窗口，工具条紧贴选区</span></div>
+      <div class="stage desktop">
+        <div class="snip">
+          <div class="snip-dims">1512 × 982</div>
+          <div class="snip-shot">
+            <div class="fake">
+              <div class="side">
+                <i class="w1"></i><i class="w2"></i><i class="w3"></i><i class="w2"></i><i class="w1"></i><i class="w3"></i>
+              </div>
+              <div class="main">
+                <div class="hd"><b></b><i></i></div>
+                <div class="hero"></div>
+                <div class="rowline"><i></i><i></i><i></i></div>
+                <div class="txt"><i></i><i></i><i></i></div>
+              </div>
+            </div>
+          </div>
+          <div class="snip-bar">
+            <div class="sb"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/></svg></div>
+            <div class="sb"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8" ry="6"/></svg></div>
+            <div class="sb on"><svg viewBox="0 0 24 24"><path d="M5 19L19 5M19 5h-5M19 5v5"/></svg></div>
+            <div class="sb"><svg viewBox="0 0 24 24"><path d="M4 19l4-1 10-10-3-3L5 15z"/></svg></div>
+            <div class="sb"><svg viewBox="0 0 24 24"><path d="M5 6h14M12 6v13"/></svg></div>
+            <div class="sb"><svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg></div>
+            <div class="sep"></div>
+            <div class="sb blue"><svg viewBox="0 0 24 24"><path d="M9 4h6l1 4h3v11a2 2 0 01-2 2H7a2 2 0 01-2-2V8h3z"/></svg></div>
+            <div class="sb"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg></div>
+            <div class="sb"><svg viewBox="0 0 24 24"><path d="M12 4v11M8 11l4 4 4-4M5 19h14"/></svg></div>
+            <div class="sep"></div>
+            <div class="sb"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <div class="ref">参考 · Snipaste（Snapaster）</div>
+      <h3>零窗口，直接就能标</h3>
+      <p class="pos">选区松开就成品：选区描边细蓝线，右下角尺寸角标，工具条贴在选区下方，矩形/椭圆/箭头/画笔/文字/马赛克在前，贴图/复制/保存/关闭在后。</p>
+      <dl>
+        <div><dt>与主界面关系</dt><dd>没有窗口可谈一致性；它是一套独立的功能语言。</dd></div>
+        <div><dt>流畅感</dt><dd>最快——没有窗口创建、没有转场，松手即可标注。</dd></div>
+        <div><dt>代价</dt><dd>标注能力要整套新建（目前我们没有）；纯查看时反而少了大图的浏览体验。</dd></div>
+      </dl>
+      <div class="pick"><b>结论：</b>它的「丝滑」来自不弹窗口，代价是要做完整标注系统。</div>
+    </aside>
+  </section>
+
+  <section class="compare">
+    <h2>与 Snipaste 对比</h2>
+    <p class="sub">Snipaste 是「选区即成品」的路线，不弹窗口；这也正是我们差异最大的地方。</p>
+    <table>
+      <thead><tr><th>维度</th><th>Snipaste</th><th>01 沉浸 + 悬浮坞</th><th>02 右侧检查器</th><th>03 系统式底栏</th></tr></thead>
+      <tbody>
+        <tr><td>截完后的形态</td><td>选区原地变成可操作图像，无窗口</td><td>独立预览窗口</td><td>独立预览窗口</td><td>独立预览窗口</td></tr>
+        <tr><td>标注</td><td>强：矩形/箭头/画笔/文字/马赛克，就地编辑</td><td>无</td><td>无</td><td>无</td></tr>
+        <tr><td>贴图</td><td>一键把选区贴在屏幕上，可继续编辑</td><td>有（钉图）</td><td>有（钉住）</td><td>有（钉住）</td></tr>
+        <tr><td>信息展示</td><td>几乎没有（尺寸随选区角标）</td><td>来源 + 时间</td><td>来源/时间/尺寸/大小/格式</td><td>来源/尺寸/大小/时间</td></tr>
+        <tr><td>操作位置</td><td>工具条紧贴选区</td><td>窗口底部悬浮</td><td>右侧常驻</td><td>窗口底部固定</td></tr>
+        <tr><td>与主界面一致性</td><td>无（独立工具语言）</td><td>中高</td><td>最高</td><td>中</td></tr>
+        <tr><td>上手成本</td><td>低（但需记快捷键）</td><td>最低</td><td>低</td><td>最低</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="compare" style="margin-top:34px;">
+    <h2>三个方案之间</h2>
+    <p class="sub">三种都能和主界面统一，差别在图片占比和信息密度。</p>
+    <table>
+      <thead><tr><th>维度</th><th>01 沉浸 + 悬浮坞</th><th>02 右侧检查器</th><th>03 系统式底栏</th></tr></thead>
+      <tbody>
+        <tr><td>图片面积</td><td>最大</td><td>最小（−186px）</td><td>大</td></tr>
+        <tr><td>信息强度</td><td>低（来源 + 时间）</td><td>高（来源/尺寸/大小/缩放）</td><td>中（一行全带）</td></tr>
+        <tr><td>与主界面一致性</td><td>中（胶囊语言）</td><td>最高（同检查器）</td><td>中（同信息排布）</td></tr>
+        <tr><td>操作可见性</td><td>低（工具需注意）</td><td>高（按钮常驻）</td><td>最高（底栏常驻）</td></tr>
+        <tr><td>观感</td><td>最精致</td><td>最专业</td><td>最原生</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="reco">
+    <div class="eyebrow"><i></i>RECOMMENDATION</div>
+    <h2>我建议 01，但把工具坞做成「主界面语言」</h2>
+    <p>
+      截图后的第一件事几乎总是<b>看内容</b>，不是看工具。01 把图片放到最大，用一条和主界面同材质的悬浮坞承载操作，
+      既比现在两团胶囊干净，也不会像 02 那样吃掉四分之一宽度。
+    </p>
+    <p>
+      和 Snipaste 的差距在<b>标注</b>，不在预览：它不弹窗口、松手就能画。这部分如果要补，是独立的一期工作；
+      但只是「截完看一眼、复制或导出」的话，01 的体验已经对齐，甚至因为有大图预览而更好。
+    </p>
+    <p>
+      配套的流畅度我一起处理：复用预览窗口而不是每次新建、图片解码后首帧直接上屏（避免白闪）、
+      工具坞固定高度不触发重排、缩放只改图层变换。
+    </p>
+    <div class="ask">回复 <b>01 / 02 / 03</b>，或说「按 01 做」，我就改预览界面。</div>
+  </section>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LENSO 状态栏面板 · 热门应用风格方案</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue: #2b5cff;
+    --purple: #8b5cf6;
+    --ink: #1d1d1f;
+    --ink2: #48484a;
+    --gray: #8e8e93;
+    --line: rgba(0,0,0,.08);
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    min-height: 100vh;
+    padding: 44px 24px 64px;
+    color: var(--ink);
+    background:
+      radial-gradient(1000px 560px at 12% -5%, #52618c 0%, transparent 55%),
+      radial-gradient(900px 640px at 88% 105%, #7b5b8c 0%, transparent 62%),
+      linear-gradient(160deg, #242b3e 0%, #171c29 100%);
+  }
+
+  .page-title {
+    text-align: center; color: rgba(255,255,255,.94);
+    font-size: 15px; font-weight: 600; letter-spacing: .3px; margin-bottom: 5px;
+  }
+  .page-sub {
+    text-align: center; color: rgba(255,255,255,.42);
+    font-size: 11.5px; margin-bottom: 32px;
+  }
+
+  .stage {
+    display: grid;
+    grid-template-columns: repeat(2, 360px);
+    gap: 34px 44px;
+    justify-content: center;
+  }
+
+  .demo-label {
+    color: rgba(255,255,255,.8); font-size: 12px; font-weight: 600;
+    margin-bottom: 10px; padding-left: 2px;
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  .demo-label .ref { font-weight: 400; font-size: 11px; color: rgba(255,255,255,.4); }
+
+  .panel {
+    width: 360px;
+    border-radius: 15px;
+    overflow: hidden;
+    border: 0.5px solid rgba(0,0,0,.14);
+    box-shadow: 0 20px 52px rgba(0,0,0,.38);
+  }
+
+  /* ================= D1 · Raycast 风 ================= */
+  .raycast {
+    background: rgba(30, 30, 34, .82);
+    backdrop-filter: blur(30px) saturate(180%);
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
+    border-color: rgba(255,255,255,.12);
+    color: #f2f2f7;
+  }
+  .rc-search {
+    display: flex; align-items: center; gap: 9px;
+    padding: 12px 14px;
+    border-bottom: 0.5px solid rgba(255,255,255,.09);
+  }
+  .rc-search .ico { color: rgba(255,255,255,.5); font-size: 13px; }
+  .rc-search input {
+    flex: 1; background: transparent; border: none; outline: none;
+    color: #f2f2f7; font-size: 13.5px; font-family: inherit;
+  }
+  .rc-search input::placeholder { color: rgba(255,255,255,.35); }
+  .rc-search .kbd {
+    font-size: 9.5px; color: rgba(255,255,255,.45);
+    border: 0.5px solid rgba(255,255,255,.18);
+    padding: 1px 5px; border-radius: 4px; font-family: "SF Mono", Menlo, monospace;
+  }
+
+  .rc-group-label {
+    font-size: 10px; font-weight: 600; letter-spacing: .6px;
+    color: rgba(255,255,255,.35); text-transform: uppercase;
+    padding: 9px 16px 4px;
+  }
+  .rc-row {
+    display: flex; align-items: center; gap: 10px;
+    margin: 0 8px 2px; padding: 7px 8px;
+    border-radius: 8px; cursor: pointer;
+  }
+  .rc-row.sel {
+    background: linear-gradient(90deg, rgba(43,92,255,.85), rgba(139,92,246,.75));
+  }
+  .rc-row .ri {
+    width: 26px; height: 26px; border-radius: 7px;
+    background: rgba(255,255,255,.1);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12.5px; flex: none;
+  }
+  .rc-row.sel .ri { background: rgba(255,255,255,.22); }
+  .rc-row .rt { font-size: 12.5px; font-weight: 500; }
+  .rc-row .rs { font-size: 10px; color: rgba(255,255,255,.45); margin-top: 1px; }
+  .rc-row.sel .rs { color: rgba(255,255,255,.72); }
+  .rc-row .rk {
+    margin-left: auto; font-size: 9.5px; font-family: "SF Mono", Menlo, monospace;
+    color: rgba(255,255,255,.4);
+  }
+  .rc-row.sel .rk { color: rgba(255,255,255,.8); }
+
+  .rc-json { padding: 10px 12px 12px; border-top: 0.5px solid rgba(255,255,255,.09); margin-top: 6px; }
+  .rc-input {
+    width: 100%; height: 62px; resize: none;
+    background: rgba(255,255,255,.06);
+    border: 0.5px solid rgba(255,255,255,.14);
+    border-radius: 8px; padding: 8px 10px;
+    color: #f2f2f7; font-family: "SF Mono", Menlo, monospace;
+    font-size: 10.5px; line-height: 1.6; outline: none;
+  }
+  .rc-input:focus { border-color: rgba(120,150,255,.8); background: rgba(255,255,255,.09); }
+  .rc-input::placeholder { color: rgba(255,255,255,.3); }
+  .rc-actions { display: flex; gap: 6px; margin-top: 7px; align-items: center; }
+  .rc-btn {
+    border: none; cursor: pointer; font-family: inherit;
+    font-size: 11px; font-weight: 500; padding: 5px 11px; border-radius: 6px;
+  }
+  .rc-btn.p { background: linear-gradient(135deg, #2b5cff, #8b5cf6); color: #fff; }
+  .rc-btn.g { background: rgba(255,255,255,.1); color: rgba(255,255,255,.8); }
+  .rc-btn.g:hover { background: rgba(255,255,255,.16); }
+  .rc-actions .sp { flex: 1; }
+  .rc-out {
+    margin-top: 7px; background: rgba(0,0,0,.35); border-radius: 8px;
+    padding: 8px 10px; max-height: 96px; overflow: auto;
+    font-family: "SF Mono", Menlo, monospace; font-size: 10px;
+    line-height: 1.6; color: #cdd6f4; white-space: pre;
+  }
+  .rc-out:empty { display: none; }
+  .rc-status { font-size: 9.5px; color: rgba(255,255,255,.42); margin-top: 6px; display: flex; align-items: center; gap: 5px; }
+  .d { width: 5px; height: 5px; border-radius: 50%; background: #30d158; }
+  .d.bad { background: #ff453a; }
+
+  .rc-footer {
+    display: flex; gap: 14px; padding: 7px 14px;
+    border-top: 0.5px solid rgba(255,255,255,.09);
+    font-size: 9.5px; color: rgba(255,255,255,.4);
+    background: rgba(0,0,0,.18);
+  }
+
+  /* ================= D2 · CleanShot 风 ================= */
+  .cleanshot {
+    background: rgba(250, 250, 252, .95);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+  }
+  .cs-capture { padding: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .cs-big {
+    grid-column: span 2;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 14px; border-radius: 11px; border: none; cursor: pointer;
+    background: linear-gradient(135deg, #2b5cff, #4c7dff);
+    color: #fff; font-family: inherit; font-size: 13px; font-weight: 600;
+    box-shadow: 0 6px 16px rgba(43,92,255,.3);
+  }
+  .cs-big:hover { filter: brightness(1.07); }
+  .cs-mini {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 11px 6px; border-radius: 10px; border: 1px solid var(--line);
+    background: #fff; cursor: pointer; font-family: inherit;
+    font-size: 11px; font-weight: 500; color: var(--ink2);
+  }
+  .cs-mini:hover { border-color: rgba(43,92,255,.4); color: var(--blue); }
+  .cs-mini .mi { font-size: 15px; color: var(--blue); }
+
+  .cs-section {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 2px 14px 7px; font-size: 10.5px; font-weight: 600; color: var(--gray);
+  }
+  .cs-recent { display: flex; gap: 7px; padding: 0 12px 12px; }
+  .cs-thumb {
+    flex: 1; height: 52px; border-radius: 7px; border: 1px solid var(--line);
+    background: linear-gradient(135deg, #dfe6f8, #c9d6f0);
+    position: relative; overflow: hidden;
+  }
+  .cs-thumb:nth-child(2) { background: linear-gradient(135deg, #e6e0f5, #d3c9ee); }
+  .cs-thumb:nth-child(3) { background: linear-gradient(135deg, #dff0e8, #c8e5d5); }
+  .cs-thumb span {
+    position: absolute; bottom: 3px; left: 4px;
+    font-size: 8px; color: #fff; background: rgba(0,0,0,.45);
+    padding: 1px 4px; border-radius: 3px; font-family: "SF Mono", Menlo, monospace;
+  }
+  .cs-div { height: .5px; background: var(--line); margin: 0 12px; }
+  .cs-tool-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; cursor: pointer;
+  }
+  .cs-tool-row:hover { background: rgba(0,0,0,.03); }
+  .cs-tool-row .ti {
+    width: 26px; height: 26px; border-radius: 7px;
+    background: rgba(43,92,255,.1); color: var(--blue);
+    display: flex; align-items: center; justify-content: center; font-size: 12px;
+  }
+  .cs-tool-row .tt { font-size: 12px; font-weight: 500; }
+  .cs-tool-row .ts { font-size: 10px; color: var(--gray); }
+  .cs-tool-row .chev { margin-left: auto; color: var(--gray); font-size: 11px; }
+  .cs-json { padding: 10px 12px 12px; background: rgba(0,0,0,.02); }
+  .cs-json-input {
+    width: 100%; height: 62px; resize: none; border-radius: 8px;
+    border: 1px solid var(--line); background: #fff;
+    padding: 8px 9px; font-family: "SF Mono", Menlo, monospace;
+    font-size: 10.5px; line-height: 1.6; outline: none; color: var(--ink);
+  }
+  .cs-json-input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(43,92,255,.12); }
+  .cs-row2 { display: flex; gap: 6px; margin-top: 7px; align-items: center; }
+  .cs-b {
+    border: none; cursor: pointer; font-family: inherit;
+    font-size: 11px; font-weight: 500; padding: 5px 11px; border-radius: 6px;
+  }
+  .cs-b.p { background: var(--blue); color: #fff; }
+  .cs-b.g { background: rgba(0,0,0,.055); color: var(--ink2); }
+  .cs-row2 .sp { flex: 1; }
+  .cs-out {
+    margin-top: 7px; background: #fff; border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; max-height: 90px; overflow: auto;
+    font-family: "SF Mono", Menlo, monospace; font-size: 10px;
+    line-height: 1.6; color: #2d2d33; white-space: pre;
+  }
+  .cs-out:empty { display: none; }
+  .cs-foot { display: flex; gap: 14px; padding: 8px 14px; border-top: .5px solid var(--line); font-size: 9.5px; color: var(--gray); }
+
+  /* ================= D3 · FavTray 风 ================= */
+  .favtray {
+    background: rgba(252, 252, 254, .96);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+  }
+  .ft-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px 9px;
+  }
+  .ft-logo {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: linear-gradient(135deg, #2b5cff, #8b5cf6);
+    color: #fff; font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ft-title { font-size: 12.5px; font-weight: 600; }
+  .ft-count {
+    margin-left: auto; font-size: 9.5px; color: var(--gray);
+    background: rgba(0,0,0,.05); padding: 2px 7px; border-radius: 20px;
+  }
+  .ft-tabs { display: flex; gap: 4px; padding: 0 12px 10px; }
+  .ft-tab {
+    border: none; cursor: pointer; font-family: inherit;
+    font-size: 10.5px; font-weight: 500; padding: 4px 10px;
+    border-radius: 20px; background: rgba(0,0,0,.045); color: var(--gray);
+  }
+  .ft-tab.on { background: var(--ink); color: #fff; }
+
+  .ft-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 6px; padding: 0 12px 10px;
+  }
+  .ft-tool {
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    padding: 10px 3px 8px; border-radius: 10px; cursor: pointer;
+    border: 1px solid transparent; background: rgba(0,0,0,.028);
+  }
+  .ft-tool:hover { background: rgba(43,92,255,.07); }
+  .ft-tool.on {
+    background: #fff; border-color: rgba(43,92,255,.45);
+    box-shadow: 0 3px 10px rgba(43,92,255,.16);
+  }
+  .ft-tool .fi { font-size: 15px; color: var(--ink2); }
+  .ft-tool.on .fi { color: var(--blue); }
+  .ft-tool .fl { font-size: 9.5px; color: var(--ink2); font-weight: 500; text-align: center; line-height: 1.2; }
+  .ft-tool.on .fl { color: var(--blue); }
+
+  .ft-detail { padding: 0 12px 12px; }
+  .ft-detail-card {
+    background: #fff; border-radius: 11px;
+    border: 1px solid var(--line); padding: 11px;
+  }
+  .ft-detail-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .ft-detail-head .dt { font-size: 11.5px; font-weight: 600; }
+  .ft-detail-head .db {
+    font-size: 8.5px; font-weight: 700; padding: 1px 5px; border-radius: 4px;
+    background: rgba(43,92,255,.1); color: var(--blue);
+  }
+  .ft-detail-head .dr { margin-left: auto; display: flex; gap: 4px; }
+  .ft-in {
+    width: 100%; height: 58px; resize: none; border-radius: 7px;
+    border: 1px solid var(--line); background: #fbfbfd;
+    padding: 7px 8px; font-family: "SF Mono", Menlo, monospace;
+    font-size: 10px; line-height: 1.6; outline: none; color: var(--ink);
+  }
+  .ft-in:focus { border-color: var(--blue); background: #fff; }
+  .ft-actions { display: flex; gap: 5px; margin-top: 6px; align-items: center; }
+  .ft-b { border: none; cursor: pointer; font-family: inherit; font-size: 10.5px; font-weight: 500; padding: 4px 10px; border-radius: 6px; }
+  .ft-b.p { background: var(--blue); color: #fff; }
+  .ft-b.g { background: rgba(0,0,0,.05); color: var(--ink2); }
+  .ft-actions .sp { flex: 1; }
+  .ft-out {
+    margin-top: 6px; background: #1b1c26; border-radius: 7px;
+    padding: 8px 9px; max-height: 86px; overflow: auto;
+    font-family: "SF Mono", Menlo, monospace; font-size: 9.5px;
+    line-height: 1.6; color: #cdd6f4; white-space: pre;
+  }
+  .ft-out:empty { display: none; }
+  .ft-status { font-size: 9px; color: var(--gray); margin-top: 5px; display: flex; gap: 5px; align-items: center; }
+
+  /* ================= D4 · 控制中心风 ================= */
+  .control {
+    background: rgba(240, 242, 248, .78);
+    backdrop-filter: blur(26px) saturate(180%);
+    -webkit-backdrop-filter: blur(26px) saturate(180%);
+    padding: 11px;
+  }
+  .cc-card {
+    background: rgba(255,255,255,.72);
+    border-radius: 13px; padding: 9px;
+    border: 0.5px solid rgba(255,255,255,.8);
+    box-shadow: 0 2px 10px rgba(0,0,0,.05);
+    margin-bottom: 8px;
+  }
+  .cc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+  .cc-tile {
+    aspect-ratio: 1 / 1; border-radius: 11px; border: none; cursor: pointer;
+    background: rgba(255,255,255,.9);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px; font-family: inherit;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    transition: transform .12s, background .12s;
+  }
+  .cc-tile:hover { transform: translateY(-1px); }
+  .cc-tile.on { background: var(--blue); color: #fff; box-shadow: 0 4px 12px rgba(43,92,255,.35); }
+  .cc-tile.on .ci { color: #fff; }
+  .cc-tile .ci { font-size: 17px; color: var(--ink2); }
+  .cc-tile .cl { font-size: 9px; color: var(--ink2); font-weight: 500; }
+  .cc-tile.on .cl { color: rgba(255,255,255,.95); }
+
+  .cc-json-card { background: rgba(255,255,255,.82); border-radius: 13px; padding: 10px; border: 0.5px solid rgba(255,255,255,.85); box-shadow: 0 2px 10px rgba(0,0,0,.05); }
+  .cc-json-head { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; }
+  .cc-json-head .t { font-size: 11px; font-weight: 600; }
+  .cc-json-head .b { font-size: 8.5px; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: rgba(43,92,255,.1); color: var(--blue); }
+  .cc-json-head .r { margin-left: auto; font-size: 9px; color: var(--gray); }
+  .cc-in {
+    width: 100%; height: 54px; resize: none; border-radius: 8px;
+    border: 1px solid rgba(0,0,0,.08); background: rgba(255,255,255,.9);
+    padding: 7px 8px; font-family: "SF Mono", Menlo, monospace;
+    font-size: 9.5px; line-height: 1.55; outline: none; color: var(--ink);
+  }
+  .cc-in:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(43,92,255,.1); }
+  .cc-row { display: flex; gap: 5px; margin-top: 6px; align-items: center; }
+  .cc-b { border: none; cursor: pointer; font-family: inherit; font-size: 10px; font-weight: 500; padding: 4px 9px; border-radius: 6px; }
+  .cc-b.p { background: var(--blue); color: #fff; }
+  .cc-b.g { background: rgba(0,0,0,.05); color: var(--ink2); }
+  .cc-row .sp { flex: 1; }
+  .cc-out {
+    margin-top: 6px; background: #1b1c26; border-radius: 7px; padding: 7px 9px;
+    max-height: 78px; overflow: auto; font-family: "SF Mono", Menlo, monospace;
+    font-size: 9.5px; line-height: 1.55; color: #cdd6f4; white-space: pre;
+  }
+  .cc-out:empty { display: none; }
+  .cc-status { font-size: 9px; color: var(--gray); margin-top: 5px; display: flex; gap: 5px; align-items: center; }
+</style>
+</head>
+<body>
+
+<div class="page-title">LENSO 状态栏面板 · 热门应用风格方案</div>
+<div class="page-sub">四个方案的 JSON 格式化都能直接试用</div>
+
+<div class="stage">
+
+  <!-- ============ D1 Raycast 风 ============ -->
+  <div class="demo">
+    <div class="demo-label">D1 · Raycast 风 <span class="ref">暗色命令面板 / 键盘优先</span></div>
+    <div class="panel raycast">
+      <div class="rc-search">
+        <span class="ico">⌕</span>
+        <input id="rcSearch" placeholder="搜索或输入命令…">
+        <span class="kbd">⌘ K</span>
+      </div>
+
+      <div class="rc-group-label">快捷操作</div>
+      <div class="rc-row"><div class="ri">⛶</div><div><div class="rt">区域截图</div><div class="rs">框选屏幕任意区域</div></div><span class="rk">⇧⌘1</span></div>
+      <div class="rc-row"><div class="ri">⌕</div><div><div class="rt">全局搜索</div><div class="rs">截图 · 文字 · 剪贴板</div></div><span class="rk">⇧⌘F</span></div>
+      <div class="rc-row"><div class="ri">▥</div><div><div class="rt">打开图库</div><div class="rs">全部截图与文字收纳</div></div><span class="rk">⌘L</span></div>
+      <div class="rc-row sel"><div class="ri">{ }</div><div><div class="rt">JSON 格式化</div><div class="rs">美化 · 压缩 · 校验</div></div><span class="rk">⌘J</span></div>
+
+      <div class="rc-json">
+        <textarea class="rc-input" id="rcIn" spellcheck="false" placeholder='粘贴 JSON…'></textarea>
+        <div class="rc-actions">
+          <button class="rc-btn p" id="rcFmt">✨ 格式化</button>
+          <button class="rc-btn g" id="rcMin">压缩</button>
+          <div class="sp"></div>
+          <button class="rc-btn g" id="rcCopy">复制</button>
+        </div>
+        <div class="rc-out" id="rcOut"></div>
+        <div class="rc-status"><span class="d" id="rcDot"></span><span id="rcMsg">等待输入</span></div>
+      </div>
+
+      <div class="rc-footer"><span>↩ 执行</span><span>⌘K 命令</span><span>esc 关闭</span></div>
+    </div>
+  </div>
+
+  <!-- ============ D2 CleanShot 风 ============ -->
+  <div class="demo">
+    <div class="demo-label">D2 · CleanShot X 风 <span class="ref">截图优先 / 最近缩略图</span></div>
+    <div class="panel cleanshot">
+      <div class="cs-capture">
+        <button class="cs-big">⛶ 区域截图 <span style="font-size:10px;opacity:.75;">⇧⌘1</span></button>
+        <button class="cs-mini"><span class="mi">▣</span>窗口</button>
+        <button class="cs-mini"><span class="mi">▤</span>全屏</button>
+      </div>
+
+      <div class="cs-section"><span>最近截图</span><span style="font-weight:400;">查看全部 ›</span></div>
+      <div class="cs-recent">
+        <div class="cs-thumb"><span>1440×900</span></div>
+        <div class="cs-thumb"><span>820×560</span></div>
+        <div class="cs-thumb"><span>1920×1080</span></div>
+      </div>
+
+      <div class="cs-div"></div>
+
+      <div class="cs-tool-row">
+        <div class="ti">{ }</div>
+        <div><div class="tt">JSON 格式化</div><div class="ts">美化 · 压缩 · 校验</div></div>
+        <span class="chev">›</span>
+      </div>
+
+      <div class="cs-json">
+        <textarea class="cs-json-input" id="csIn" spellcheck="false" placeholder='粘贴 JSON…'></textarea>
+        <div class="cs-row2">
+          <button class="cs-b p" id="csFmt">✨ 格式化</button>
+          <button class="cs-b g" id="csMin">压缩</button>
+          <div class="sp"></div>
+          <button class="cs-b g" id="csCopy">复制</button>
+        </div>
+        <div class="cs-out" id="csOut"></div>
+      </div>
+
+      <div class="cs-foot"><span>🖼 图库</span><span>⚙ 设置</span><span style="margin-left:auto;">LENSO v2.0</span></div>
+    </div>
+  </div>
+
+  <!-- ============ D3 FavTray 风 ============ -->
+  <div class="demo">
+    <div class="demo-label">D3 · FavTray 风 <span class="ref">一个图标装整套工具</span></div>
+    <div class="panel favtray">
+      <div class="ft-head">
+        <div class="ft-logo">L</div>
+        <div class="ft-title">LENSO 工具箱</div>
+        <div class="ft-count">6 个工具</div>
+      </div>
+
+      <div class="ft-tabs">
+        <button class="ft-tab on">全部</button>
+        <button class="ft-tab">开发</button>
+        <button class="ft-tab">系统</button>
+      </div>
+
+      <div class="ft-grid">
+        <div class="ft-tool on"><div class="fi">{ }</div><div class="fl">JSON</div></div>
+        <div class="ft-tool"><div class="fi">.*</div><div class="fl">正则</div></div>
+        <div class="ft-tool"><div class="fi">🔗</div><div class="fl">URL</div></div>
+        <div class="ft-tool"><div class="fi">#</div><div class="fl">Base64</div></div>
+        <div class="ft-tool"><div class="fi">⛶</div><div class="fl">截图</div></div>
+        <div class="ft-tool"><div class="fi">⌕</div><div class="fl">搜索</div></div>
+        <div class="ft-tool"><div class="fi">▥</div><div class="fl">图库</div></div>
+        <div class="ft-tool"><div class="fi">⚙</div><div class="fl">设置</div></div>
+      </div>
+
+      <div class="ft-detail">
+        <div class="ft-detail-card">
+          <div class="ft-detail-head">
+            <span class="dt">{ } JSON 格式化</span>
+            <span class="db">常用</span>
+            <div class="dr">
+              <button class="ft-b g" id="ftCopy" style="font-size:9.5px;">复制</button>
+            </div>
+          </div>
+          <textarea class="ft-in" id="ftIn" spellcheck="false" placeholder='粘贴 JSON…'></textarea>
+          <div class="ft-actions">
+            <button class="ft-b p" id="ftFmt">✨ 格式化</button>
+            <button class="ft-b g" id="ftMin">压缩</button>
+            <div class="sp"></div>
+            <button class="ft-b g" id="ftClear">清空</button>
+          </div>
+          <div class="ft-out" id="ftOut"></div>
+          <div class="ft-status"><span class="d" id="ftDot"></span><span id="ftMsg">等待输入</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ D4 控制中心风 ============ -->
+  <div class="demo">
+    <div class="demo-label">D4 · 控制中心风 <span class="ref">Apple 原生磁贴 / 分组卡片</span></div>
+    <div class="panel control">
+      <div class="cc-card">
+        <div class="cc-grid">
+          <button class="cc-tile on"><span class="ci">⛶</span><span class="cl">截图</span></button>
+          <button class="cc-tile"><span class="ci">⌕</span><span class="cl">搜索</span></button>
+          <button class="cc-tile"><span class="ci">▥</span><span class="cl">图库</span></button>
+          <button class="cc-tile"><span class="ci">⚙</span><span class="cl">设置</span></button>
+        </div>
+      </div>
+
+      <div class="cc-json-card">
+        <div class="cc-json-head">
+          <span class="t">{ } JSON 格式化</span>
+          <span class="b">快捷</span>
+          <span class="r">⌘J</span>
+        </div>
+        <textarea class="cc-in" id="ccIn" spellcheck="false" placeholder='粘贴 JSON…'></textarea>
+        <div class="cc-row">
+          <button class="cc-b p" id="ccFmt">格式化</button>
+          <button class="cc-b g" id="ccMin">压缩</button>
+          <div class="sp"></div>
+          <button class="cc-b g" id="ccCopy">复制</button>
+        </div>
+        <div class="cc-out" id="ccOut"></div>
+        <div class="cc-status"><span class="d" id="ccDot"></span><span id="ccMsg">等待输入</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  /* ---------- 公共工具 ---------- */
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  function hl(json) {
+    return esc(json).replace(
+      /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g,
+      m => {
+        let c = 'n';
+        if (/^"/.test(m)) c = /:$/.test(m.trim()) ? 'k' : 's';
+        else if (/true|false|null/.test(m)) c = 'b';
+        return `<span style="color:${c==='k'?'#89b4fa':c==='s'?'#a6e3a1':c==='b'?'#cba6f7':'#fab387'}">${m}</span>`;
+      }
+    );
+  }
+
+  function run(inputEl, outEl, dotEl, msgEl, mode) {
+    const raw = inputEl.value.trim();
+    if (!raw) { outEl.innerHTML=''; dotEl.classList.remove('bad'); msgEl.textContent='等待输入'; return; }
+    try {
+      const o = JSON.parse(raw);
+      const text = mode === 'min' ? JSON.stringify(o) : JSON.stringify(o, null, 2);
+      outEl.innerHTML = hl(text);
+      outEl.dataset.plain = text;
+      dotEl.classList.remove('bad');
+      const keys = (text.match(/":/g) || []).length;
+      msgEl.textContent = mode === 'min'
+        ? `✓ 有效 · ${text.length} 字符`
+        : `✓ 有效 JSON · ${keys} 字段 · ${text.split('\n').length} 行`;
+    } catch (e) {
+      outEl.innerHTML = `<span style="color:#f38ba8">✗ ${esc(e.message)}</span>`;
+      outEl.dataset.plain = '';
+      dotEl.classList.add('bad');
+      msgEl.textContent = '解析失败';
+    }
+  }
+
+  async function copy(el, btn) {
+    const t = el.dataset.plain || '';
+    if (!t) return;
+    try { await navigator.clipboard.writeText(t); }
+    catch { const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+    const old = btn.textContent; btn.textContent = '✓';
+    setTimeout(()=>btn.textContent=old, 1100);
+  }
+
+  function wire(prefix, modeKinds) {
+    const $ = s => document.getElementById(prefix + s);
+    const input = $('In'), out = $('Out'), dot = $('Dot'), msg = $('Msg');
+    if (!input) return;
+    $('Fmt').onclick = () => run(input, out, dot, msg, 'pretty');
+    const minBtn = $('Min'); if (minBtn) minBtn.onclick = () => run(input, out, dot, msg, 'min');
+    const copyBtn = $('Copy'); if (copyBtn) copyBtn.onclick = () => copy(out, copyBtn);
+    const clearBtn = $('Clear'); if (clearBtn) clearBtn.onclick = () => { input.value=''; run(input,out,dot,msg,'pretty'); };
+    input.addEventListener('input', () => run(input, out, dot, msg, 'pretty'));
+    input.value = '{"name":"LENSO","version":2.0,"tools":["json","ocr"],"active":true}';
+    run(input, out, dot, msg, 'pretty');
+  }
+
+  wire('rc'); wire('cs'); wire('ft'); wire('cc');
+
+  /* 交互：磁贴 / 工具切换 */
+  document.querySelectorAll('.cc-tile').forEach(t => {
+    t.onclick = () => {
+      document.querySelectorAll('.cc-tile').forEach(x => x.classList.remove('on'));
+      t.classList.add('on');
+    };
+  });
+  document.querySelectorAll('.ft-tool').forEach(t => {
+    t.onclick = () => {
+      document.querySelectorAll('.ft-tool').forEach(x => x.classList.remove('on'));
+      t.classList.add('on');
+    };
+  });
+  document.querySelectorAll('.ft-tab').forEach(t => {
+    t.onclick = () => {
+      document.querySelectorAll('.ft-tab').forEach(x => x.classList.remove('on'));
+      t.classList.add('on');
+    };
+  });
+</script>
+</body>
+</html>

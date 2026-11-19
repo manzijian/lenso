@@ -7,6 +7,8 @@ struct SearchPanelInspectionOverlay: View {
     let onCopyItem: (SearchPanelView.FeedItem) -> Void
     let onPinImage: (CGImage) -> Void
 
+    @State private var fullImage: CGImage?
+
     var body: some View {
         if let currentItem = item {
             ZStack {
@@ -39,7 +41,13 @@ struct SearchPanelInspectionOverlay: View {
                         .shadow(color: Color.black.opacity(0.35), radius: 24, y: 10)
 
                     case .image(let cgImage, _):
-                        imageLightboxView(item: currentItem, cgImage: cgImage)
+                        imageLightboxView(item: currentItem, cgImage: fullImage ?? cgImage)
+                            .task(id: currentItem.id) {
+                                fullImage = nil
+                                guard let record = currentItem.record else { return }
+                                let image = await ScreenshotStore.loadImageAsync(record)
+                                if !Task.isCancelled { fullImage = image }
+                            }
                     }
                 }
                 .transition(.asymmetric(
@@ -73,7 +81,7 @@ struct SearchPanelInspectionOverlay: View {
 
                 Spacer()
 
-                Text(DateFormatter.lensoFullDateTime.string(from: item.createdAt))
+                Text(item.createdAt.lensoRelativeDayTime)
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(.secondary)
 

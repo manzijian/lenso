@@ -12,6 +12,7 @@ struct ClipboardPanelView: View {
         let text: String?
         let sourceApp: String?
         let createdAt: Date
+        let isJSON: Bool
     }
 
     @State private var items: [Item] = []
@@ -111,6 +112,14 @@ struct ClipboardPanelView: View {
                 }
                 HStack(spacing: 4) {
                     Image(systemName: item.kind == .image ? "photo" : "text.alignleft")
+                    if item.isJSON {
+                        Text("JSON")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(LensoColors.kleinBlueBright)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(LensoColors.kleinBlueSoft))
+                    }
                     Text(item.sourceApp ?? "LENSO")
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -119,6 +128,16 @@ struct ClipboardPanelView: View {
                         Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                     } else {
                         Text(DateFormatter.lensoFullDateTime.string(from: item.createdAt))
+                    }
+                    if item.isJSON {
+                        Button {
+                            formatJSON(item)
+                        } label: {
+                            Image(systemName: "curlybraces")
+                                .foregroundStyle(LensoColors.kleinBlueBright)
+                        }
+                        .buttonStyle(.plain)
+                        .help("在 JSON 工作台中格式化")
                     }
                     if item.kind == .text {
                         Button {
@@ -150,18 +169,33 @@ struct ClipboardPanelView: View {
     }
 
     private func reload() {
+        Task {
+            let result = await Self.loadItems()
+            items = result.items
+        }
+    }
+
+    private struct ClipboardLoadResult: @unchecked Sendable {
+        let items: [Item]
+    }
+
+    /// 历史记录与图片解码放到主线程之外，面板可以先即时弹出。
+    nonisolated private static func loadItems() async -> ClipboardLoadResult {
         let store = ScreenshotStore.shared
         let records = (try? store.listClipboard()) ?? []
-        items = records.map { record in
-            Item(
+        let items = records.map { record -> Item in
+            let text = record.text
+            return Item(
                 id: record.id,
                 kind: record.kind,
                 image: record.kind == .image ? store.loadClipboardImage(record) : nil,
-                text: record.text,
+                text: text,
                 sourceApp: record.sourceApp,
-                createdAt: record.createdAt
+                createdAt: record.createdAt,
+                isJSON: text.map(JSONClipboard.looksLikeJSON) ?? false
             )
         }
+        return ClipboardLoadResult(items: items)
     }
 
     /// 把文字条目收藏到「文字收纳」
@@ -170,6 +204,13 @@ struct ClipboardPanelView: View {
         _ = try? ScreenshotStore.shared.createTextNote(content: text, sourceApp: item.sourceApp)
         NotificationCenter.default.post(name: .textNotesChanged, object: nil)
         SaveToastController.shared.show(title: "已收藏", subtitle: "到文字收纳", thumbnail: nil)
+    }
+
+    /// 在 JSON 工作台里打开这条内容（自动格式化）
+    private func formatJSON(_ item: Item) {
+        guard let text = item.text else { return }
+        onDismiss()
+        ToolHostWindowController.shared.show(toolID: "json", initialText: text)
     }
 
     private func copyBack(_ item: Item) {

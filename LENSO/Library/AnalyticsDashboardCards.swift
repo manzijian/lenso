@@ -258,7 +258,11 @@ extension AnalyticsDashboardView {
     // MARK: - 模块 3：来源应用排行榜
 
     func topAppsCard(_ data: ScreenshotStore.AnalyticsData) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        // 只展示前 5 个，和副标题一致；条形长度按第一名归一化，避免溢出卡片
+        let apps = Array(data.topApps.prefix(5))
+        let maxCount = max(1, apps.map(\.count).max() ?? 1)
+
+        return VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("高频来源应用排行")
                     .font(.system(size: 14, weight: .bold))
@@ -271,13 +275,13 @@ extension AnalyticsDashboardView {
             Divider().opacity(0.5)
 
             VStack(spacing: 10) {
-                if data.topApps.isEmpty {
+                if apps.isEmpty {
                     Text("暂无应用数据")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 20)
                 } else {
-                    ForEach(data.topApps) { app in
+                    ForEach(apps) { app in
                         VStack(spacing: 4) {
                             HStack {
                                 Text(app.appName)
@@ -287,13 +291,13 @@ extension AnalyticsDashboardView {
                                 Text("\(app.count) 次")
                                     .font(.system(size: 11, design: .monospaced))
                                     .foregroundStyle(.secondary)
-                                Text(String(format: "%.1f%%", app.percentage * 100))
+                                Text(String(format: "%.1f%%", app.percentage))
                                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
                                     .foregroundStyle(LensoColors.kleinBlueBright)
                                     .frame(width: 48, alignment: .trailing)
                             }
 
-                            // 进度条
+                            // 进度条：按第一名归一化，最大 100%，不会超出卡片
                             GeometryReader { geo in
                                 ZStack(alignment: .leading) {
                                     Capsule()
@@ -301,7 +305,10 @@ extension AnalyticsDashboardView {
                                         .frame(height: 6)
                                     Capsule()
                                         .fill(LensoColors.kleinBlueBright)
-                                        .frame(width: max(6, geo.size.width * CGFloat(app.percentage)), height: 6)
+                                        .frame(
+                                            width: max(6, geo.size.width * CGFloat(app.count) / CGFloat(maxCount)),
+                                            height: 6
+                                        )
                                 }
                             }
                             .frame(height: 6)

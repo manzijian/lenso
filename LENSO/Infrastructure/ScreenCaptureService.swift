@@ -50,6 +50,11 @@ final class ScreenCaptureService: ScreenCapturing, Sendable {
 }
 
 extension ScreenCaptureService {
+    /// 预热 ScreenCaptureKit：首次截图时冻结画面不再等框架初始化。
+    static func prewarm() async {
+        _ = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+    }
+
     /// 显示器的物理像素宽度（HiDPI 下是逻辑宽度的 2 倍）。
     static func physicalPixelWidth(_ displayID: CGDirectDisplayID) -> CGFloat {
         guard let mode = CGDisplayCopyDisplayMode(displayID) else {

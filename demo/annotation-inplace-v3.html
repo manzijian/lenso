@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LENSO · 标注工具条 v3</title>
+<style>
+  :root{
+    --blue:#0538E0;
+    --ink:#2D3138;
+    --line:rgba(16,24,40,.12);
+    --page:#E9EDF5;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif;
+    background:var(--page);color:var(--ink);-webkit-font-smoothing:antialiased;
+    padding:48px 40px 90px;display:flex;flex-direction:column;align-items:center;
+  }
+  .wrap{width:100%;max-width:960px;}
+  header{margin-bottom:34px;}
+  .eyebrow{display:inline-flex;align-items:center;gap:7px;font-size:10px;font-weight:650;letter-spacing:.16em;color:var(--blue);text-transform:uppercase;margin-bottom:12px;}
+  .eyebrow i{width:4.5px;height:4.5px;border-radius:50%;background:var(--blue);}
+  h1{font-size:25px;font-weight:650;letter-spacing:-.024em;}
+  .lede{margin-top:10px;font-size:12.5px;line-height:1.8;color:#4A5060;max-width:780px;}
+  .lede b{color:#14161B;font-weight:600;}
+
+  .board{
+    position:relative;border-radius:14px;overflow:hidden;margin-bottom:14px;
+    background:linear-gradient(150deg,#9FB0D6,#C9D4EC 60%,#AAB9D8);
+    height:420px;display:flex;align-items:center;justify-content:center;
+  }
+  .shotwrap{position:relative;width:620px;height:320px;}
+  .shot{
+    position:absolute;inset:0;overflow:hidden;background:#F7F8FB;
+    box-shadow:0 0 0 1px rgba(5,56,224,.9),0 16px 40px rgba(10,16,40,.26);
+  }
+  .fake{display:flex;height:100%;}
+  .fake .side{width:25%;background:#FBFBFD;border-right:.5px solid rgba(16,24,40,.09);padding:11px 9px;display:flex;flex-direction:column;gap:6px;}
+  .fake .side i{display:block;height:7px;border-radius:3px;background:#E2E6EF;}
+  .fake .side i.w1{width:62%;background:#C7D0E3;}
+  .fake .side i.w2{width:82%;}
+  .fake .side i.w3{width:50%;}
+  .fake .main{flex:1;padding:13px 15px;display:flex;flex-direction:column;gap:9px;}
+  .fake .hd{display:flex;align-items:center;gap:8px;}
+  .fake .hd b{width:18px;height:18px;border-radius:5px;background:var(--blue);opacity:.9;display:block;}
+  .fake .hd i{height:7px;border-radius:3px;background:#DCE2EE;width:30%;display:block;}
+  .fake .hero{height:96px;border-radius:8px;background:linear-gradient(135deg,#E9EEFB,#DCE4F6);}
+  .fake .rowline{display:flex;gap:8px;}
+  .fake .rowline i{flex:1;height:50px;border-radius:7px;background:#EEF1F8;}
+  .fake .txt i{display:block;height:5px;border-radius:3px;background:#E4E8F1;margin-bottom:6px;}
+  .fake .txt i:nth-child(1){width:84%;}
+  .fake .txt i:nth-child(2){width:92%;}
+
+  .mark{position:absolute;pointer-events:none;}
+  .mark.rect{left:44%;top:32%;width:22%;height:24%;border:1.8px solid #E5484D;border-radius:2px;}
+  .mark.arrow{left:28%;top:66%;width:84px;height:2px;background:var(--blue);transform:rotate(-13deg);}
+  .mark.arrow::after{content:"";position:absolute;right:-1px;top:-4px;width:8px;height:8px;border-top:2px solid var(--blue);border-right:2px solid var(--blue);transform:rotate(45deg);}
+
+  .dims{
+    position:absolute;right:0;top:-23px;padding:2px 7px;border-radius:4px;
+    background:rgba(10,14,24,.76);color:#fff;font-size:9.5px;
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;
+  }
+
+  /* 单行工具条 */
+  .bar{
+    position:absolute;left:0;bottom:-40px;
+    display:flex;align-items:center;gap:0;
+    height:32px;padding:0 3px;border-radius:8px;
+    background:rgba(252,252,254,.98);
+    box-shadow:0 0 0 .5px rgba(16,24,40,.13),0 5px 16px rgba(10,16,40,.14);
+    backdrop-filter:blur(14px);
+  }
+  .t{
+    position:relative;width:26px;height:26px;border-radius:5px;
+    display:flex;align-items:center;justify-content:center;color:#4A5060;
+  }
+  .t svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round;}
+  .t:hover{background:rgba(16,24,40,.055);}
+  .t.on{background:rgba(5,56,224,.10);color:var(--blue);}
+  .t .tip{
+    position:absolute;left:50%;bottom:calc(100% + 6px);transform:translateX(-50%);
+    padding:2px 5px;border-radius:3px;background:rgba(10,14,24,.85);color:#fff;
+    font-size:8.5px;white-space:nowrap;opacity:0;pointer-events:none;
+  }
+  .t:hover .tip{opacity:1;}
+  .vs{width:1px;height:15px;background:rgba(16,24,40,.10);margin:0 4px;}
+
+  .color{
+    width:26px;height:26px;border-radius:5px;display:flex;align-items:center;justify-content:center;
+  }
+  .color:hover{background:rgba(16,24,40,.055);}
+  .color i{width:13px;height:13px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 1px rgba(255,255,255,.9),0 0 0 2px rgba(16,24,40,.18);}
+
+  .done{
+    height:24px;padding:0 9px;margin-left:3px;border-radius:5px;
+    display:flex;align-items:center;gap:4px;
+    background:var(--blue);color:#fff;font-size:10px;font-weight:600;
+    box-shadow:0 1px 4px rgba(5,56,224,.30);
+  }
+  .done svg{width:9px;height:9px;stroke:#fff;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
+
+  /* 属性弹层 */
+  .pop{
+    position:absolute;left:150px;bottom:-118px;
+    width:186px;padding:10px;border-radius:9px;background:rgba(252,252,254,.99);
+    box-shadow:0 0 0 .5px rgba(16,24,40,.12),0 10px 26px rgba(10,16,40,.18);
+  }
+  .pop .pl{font-size:8px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#B6BCC9;margin-bottom:6px;}
+  .sws{display:flex;gap:8px;margin-bottom:10px;}
+  .sw{width:16px;height:16px;border-radius:50%;}
+  .sw.on{box-shadow:0 0 0 2px #fff,0 0 0 3.2px var(--blue);}
+  .wrow{display:flex;align-items:center;gap:5px;}
+  .wd{flex:1;height:18px;border-radius:4px;display:flex;align-items:center;justify-content:center;background:rgba(16,24,40,.045);}
+  .wd.on{background:rgba(5,56,224,.10);}
+  .wd i{display:block;border-radius:50%;background:#7E8494;}
+  .wd.on i{background:var(--blue);}
+  .wd:nth-child(1) i{width:3px;height:3px;}
+  .wd:nth-child(2) i{width:5px;height:5px;}
+  .wd:nth-child(3) i{width:7px;height:7px;}
+
+  .notes{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-top:34px;}
+  .note{background:#fff;border-radius:11px;padding:15px 16px;box-shadow:0 0 0 .5px var(--line);}
+  .note h3{font-size:10.5px;font-weight:650;margin-bottom:5px;}
+  .note p{font-size:11px;line-height:1.7;color:#4A5060;}
+  .note p b{color:#14161B;font-weight:600;}
+
+  .ask{margin-top:26px;font-size:12px;color:#4A5060;line-height:1.8;}
+  .ask b{color:var(--blue);font-weight:600;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><i></i>LENSO / TOOLBAR v3</div>
+    <h1>单行工具条</h1>
+    <p class="lede">
+      上一版的问题是<b>两行、太厚、实心蓝块太重</b>。这版压成一行 32px：选中态改成浅蓝底 + 蓝图标，
+      颜色和粗细收进点按弹层，完成按钮缩到 24px 高。
+    </p>
+  </header>
+
+  <div class="board">
+    <div class="shotwrap">
+      <div class="shot">
+        <div class="fake">
+          <div class="side"><i class="w1"></i><i class="w2"></i><i class="w3"></i><i class="w2"></i><i class="w1"></i></div>
+          <div class="main">
+            <div class="hd"><b></b><i></i></div>
+            <div class="hero"></div>
+            <div class="rowline"><i></i><i></i><i></i></div>
+            <div class="txt"><i></i><i></i></div>
+          </div>
+        </div>
+        <div class="mark rect"></div>
+        <div class="mark arrow"></div>
+      </div>
+      <div class="dims">1512 × 982</div>
+
+      <div class="bar">
+        <div class="t"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.6L10.4 19z"/></svg><span class="tip">选择</span></div>
+        <div class="t"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/></svg><span class="tip">矩形</span></div>
+        <div class="t"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8" ry="6"/></svg><span class="tip">椭圆</span></div>
+        <div class="t on"><svg viewBox="0 0 24 24"><path d="M5 19L19 5M19 5h-5M19 5v5"/></svg><span class="tip">箭头</span></div>
+        <div class="t"><svg viewBox="0 0 24 24"><path d="M4 19l4-1 10-10-3-3L5 15z"/></svg><span class="tip">画笔</span></div>
+        <div class="t"><svg viewBox="0 0 24 24"><path d="M5 6h14M12 6v13"/></svg><span class="tip">文字</span></div>
+        <div class="t"><svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span class="tip">马赛克</span></div>
+        <div class="vs"></div>
+        <div class="color"><i></i></div>
+        <div class="t"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 10-2.3 5.7M20 6v6h-6"/></svg><span class="tip">撤销</span></div>
+        <div class="vs"></div>
+        <div class="t"><svg viewBox="0 0 24 24"><path d="M9 4h6l1 4h3v11a2 2 0 01-2 2H7a2 2 0 01-2-2V8h3z"/><path d="M12 12v5M9.5 14.5h5"/></svg><span class="tip">贴图</span></div>
+        <div class="t"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg><span class="tip">复制</span></div>
+        <div class="done"><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>完成</div>
+      </div>
+
+      <div class="pop">
+        <div class="pl">颜色</div>
+        <div class="sws">
+          <span class="sw on" style="background:#0538E0"></span>
+          <span class="sw" style="background:#E5484D"></span>
+          <span class="sw" style="background:#111318"></span>
+          <span class="sw" style="background:#F5C518"></span>
+          <span class="sw" style="background:#FFFFFF;box-shadow:0 0 0 1px rgba(16,24,40,.18)"></span>
+        </div>
+        <div class="pl">粗细</div>
+        <div class="wrow">
+          <div class="wd"><i></i></div>
+          <div class="wd on"><i></i></div>
+          <div class="wd"><i></i></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note">
+      <h3>高度与密度</h3>
+      <p>工具条 <b>32px</b>，图标 26px，间距 0；工具之间不用分隔线，只在功能组之间留 1px。</p>
+    </div>
+    <div class="note">
+      <h3>选中态</h3>
+      <p>只换<b>浅蓝底 + 蓝图标</b>，不用实心色块；同一时刻只有一个工具高亮，视觉不抢图。</p>
+    </div>
+    <div class="note">
+      <h3>属性</h3>
+      <p>颜色圆点即入口，点开<b>向上弹层</b>选颜色与粗细；不选绘图工具时整层不存在。</p>
+    </div>
+  </div>
+
+  <p class="ask">
+    如果这版的密度和克制感是对的，我按这个规格实现；如果问题是<b>工具条不该出现在选区下方</b>或图标风格不对，指一下具体那块。
+  </p>
+
+</div>
+</body>
+</html>

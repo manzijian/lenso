@@ -16,6 +16,8 @@ struct ScreenshotRecord: Identifiable, Hashable, Sendable {
     let capturedAt: Date
     let isFavorite: Bool
     let favoritedAt: Date?
+    /// 截图时最前端应用的名称（用于在图库中辨识来源）
+    var sourceApp: String? = nil
 }
 
 /// 文字收纳条目
@@ -159,7 +161,8 @@ final class ScreenshotStore: @unchecked Sendable {
             file_size INTEGER NOT NULL,
             captured_at REAL NOT NULL,
             is_favorite INTEGER NOT NULL DEFAULT 0,
-            favorited_at REAL
+            favorited_at REAL,
+            source_app TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_captured_at ON screenshots(captured_at DESC);
         CREATE TABLE IF NOT EXISTS clipboard_items (
@@ -190,6 +193,7 @@ final class ScreenshotStore: @unchecked Sendable {
         sqlite3_exec(db, "CREATE INDEX IF NOT EXISTS idx_clip_hash ON clipboard_items(content_hash);", nil, nil, nil)
         sqlite3_exec(db, "ALTER TABLE screenshots ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0;", nil, nil, nil)
         sqlite3_exec(db, "ALTER TABLE screenshots ADD COLUMN favorited_at REAL;", nil, nil, nil)
+        sqlite3_exec(db, "ALTER TABLE screenshots ADD COLUMN source_app TEXT;", nil, nil, nil)
         sqlite3_exec(db, "ALTER TABLE text_notes ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0;", nil, nil, nil)
         sqlite3_exec(db, "ALTER TABLE text_notes ADD COLUMN favorited_at REAL;", nil, nil, nil)
 
@@ -216,7 +220,7 @@ final class ScreenshotStore: @unchecked Sendable {
     // MARK: - Save
 
     @discardableResult
-    func save(image: CGImage, capturedAt: Date = Date()) throws -> ScreenshotRecord {
+    func save(image: CGImage, capturedAt: Date = Date(), sourceApp: String? = nil) throws -> ScreenshotRecord {
         let id = UUID()
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMddHHmmss"
@@ -275,7 +279,7 @@ final class ScreenshotStore: @unchecked Sendable {
         }
 
         try queue.sync {
-            let sql = "INSERT INTO screenshots (id, filename, width, height, file_size, captured_at) VALUES (?,?,?,?,?,?);"
+            let sql = "INSERT INTO screenshots (id, filename, width, height, file_size, captured_at, source_app) VALUES (?,?,?,?,?,?,?);"
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
             defer { sqlite3_finalize(stmt) }
@@ -285,6 +289,11 @@ final class ScreenshotStore: @unchecked Sendable {
             sqlite3_bind_int(stmt, 4, Int32(image.height))
             sqlite3_bind_int(stmt, 5, Int32(fileSize))
             sqlite3_bind_double(stmt, 6, capturedAt.timeIntervalSince1970)
+            if let sourceApp {
+                Self.bind(stmt, 7, sourceApp)
+            } else {
+                sqlite3_bind_null(stmt, 7)
+            }
             guard sqlite3_step(stmt) == SQLITE_DONE else { throw StoreError.dbFailed }
         }
 
@@ -296,7 +305,8 @@ final class ScreenshotStore: @unchecked Sendable {
             fileSize: fileSize,
             capturedAt: capturedAt,
             isFavorite: false,
-            favoritedAt: nil
+            favoritedAt: nil,
+            sourceApp: sourceApp
         )
     }
 
@@ -304,7 +314,7 @@ final class ScreenshotStore: @unchecked Sendable {
 
     func list(limit: Int = 100) throws -> [ScreenshotRecord] {
         try queue.sync {
-            let sql = "SELECT id, filename, width, height, file_size, captured_at, is_favorite, favorited_at FROM screenshots ORDER BY captured_at DESC LIMIT ?;"
+            let sql = "SELECT id, filename, width, height, file_size, captured_at, is_favorite, favorited_at, source_app FROM screenshots ORDER BY captured_at DESC LIMIT ?;"
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { throw StoreError.dbFailed }
             defer { sqlite3_finalize(stmt) }
@@ -325,6 +335,9 @@ final class ScreenshotStore: @unchecked Sendable {
                 let favoritedAt: Date? = sqlite3_column_type(stmt, 7) == SQLITE_NULL
                     ? nil
                     : Date(timeIntervalSince1970: sqlite3_column_double(stmt, 7))
+                let sourceApp: String? = sqlite3_column_type(stmt, 8) == SQLITE_NULL
+                    ? nil
+                    : sqlite3_column_text(stmt, 8).map { String(cString: $0) }
                 records.append(ScreenshotRecord(
                     id: id,
                     filename: filename,
@@ -333,7 +346,8 @@ final class ScreenshotStore: @unchecked Sendable {
                     fileSize: size,
                     capturedAt: capturedAt,
                     isFavorite: isFavorite,
-                    favoritedAt: favoritedAt
+                    favoritedAt: favoritedAt,
+                    sourceApp: sourceApp
                 ))
             }
             return records
@@ -405,13 +419,25 @@ final class ScreenshotStore: @unchecked Sendable {
         return Self.loadImage(at: url)
     }
 
+    private final class ImageBox: @unchecked Sendable {
+        let image: CGImage?
+        init(_ image: CGImage?) { self.image = image }
+    }
+
+    /// 供 UI 在后台读取全尺寸图，避免主线程解码。
+    static func loadImageAsync(_ record: ScreenshotRecord) async -> CGImage? {
+        await Task.detached(priority: .userInitiated) {
+            ImageBox(ScreenshotStore.shared.loadImage(record))
+        }.value.image
+    }
+
     func screenshotOriginalURL(_ record: ScreenshotRecord) -> URL? {
         return baseDir.appendingPathComponent("Original").appendingPathComponent(record.filename)
     }
 
-    func loadThumbnail(_ record: ScreenshotRecord) -> CGImage? {
+    func loadThumbnail(_ record: ScreenshotRecord, maxPixelSize: Int = 480) -> CGImage? {
         let url = baseDir.appendingPathComponent("Thumbnails").appendingPathComponent(record.filename)
-        return Self.loadThumbnail(at: url, maxPixelSize: 480)
+        return Self.loadThumbnail(at: url, maxPixelSize: maxPixelSize)
     }
 
     func thumbnailURL(_ record: ScreenshotRecord) -> URL? {
@@ -423,7 +449,23 @@ final class ScreenshotStore: @unchecked Sendable {
         return CGImageSourceCreateImageAtIndex(source, 0, nil)
     }
 
+    private final class ThumbnailBox {
+        let image: CGImage
+        init(_ image: CGImage) { self.image = image }
+    }
+
+    /// 缩略图内存缓存：图库/搜索反复刷新时不再重复读盘解码。
+    nonisolated(unsafe) private static let thumbnailCache: NSCache<NSString, ThumbnailBox> = {
+        let cache = NSCache<NSString, ThumbnailBox>()
+        cache.countLimit = 240
+        cache.totalCostLimit = 48 * 1024 * 1024
+        return cache
+    }()
+
     static func loadThumbnail(at url: URL, maxPixelSize: Int = 480) -> CGImage? {
+        let key = "\(url.path)#\(maxPixelSize)" as NSString
+        if let cached = thumbnailCache.object(forKey: key) { return cached.image }
+
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -431,7 +473,15 @@ final class ScreenshotStore: @unchecked Sendable {
             kCGImageSourceShouldCacheImmediately: true,
             kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
         ]
-        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+        guard let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+        thumbnailCache.setObject(
+            ThumbnailBox(thumb),
+            forKey: key,
+            cost: thumb.bytesPerRow * thumb.height
+        )
+        return thumb
     }
 
     private func thumbnailSize(for image: CGImage) -> CGSize {

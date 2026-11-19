@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LENSO · 状态栏面板配置</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue: #2b5cff;
+    --purple: #8b5cf6;
+    --ink: #1d1d1f;
+    --ink2: #48484a;
+    --gray: #8e8e93;
+    --line: rgba(0,0,0,.08);
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    min-height: 100vh; padding: 40px 24px 64px; color: var(--ink);
+    background:
+      radial-gradient(1000px 560px at 12% -5%, #52618c 0%, transparent 55%),
+      radial-gradient(900px 640px at 88% 105%, #7b5b8c 0%, transparent 62%),
+      linear-gradient(160deg, #242b3e 0%, #171c29 100%);
+  }
+
+  .page-title { text-align: center; color: rgba(255,255,255,.92); font-size: 14px; font-weight: 600; margin-bottom: 5px; }
+  .page-sub { text-align: center; color: rgba(255,255,255,.4); font-size: 11px; margin-bottom: 26px; }
+
+  /* ============ 设置窗口 ============ */
+  .window {
+    width: 1060px; margin: 0 auto; height: 700px;
+    background: #fff; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 28px 70px rgba(0,0,0,.45), 0 0 0 .5px rgba(255,255,255,.12);
+    display: flex; flex-direction: column;
+  }
+  .traffic { padding: 12px 14px; background: #f6f6f8; border-bottom: .5px solid var(--line); display: flex; gap: 8px; align-items: center; }
+  .traffic span { width: 12px; height: 12px; border-radius: 50%; }
+  .traffic .r { background: #ff5f57; } .traffic .y { background: #febc2e; } .traffic .g { background: #28c840; }
+  .traffic .wtitle { margin-left: 12px; font-size: 12px; color: #6e6e73; font-weight: 500; }
+
+  .wbody { flex: 1; display: flex; overflow: hidden; }
+
+  /* 左导航 */
+  .rail { width: 186px; background: #fafbfc; border-right: .5px solid var(--line); padding: 14px 9px; }
+  .rail .g { font-size: 9.5px; font-weight: 600; color: #a1a1a6; letter-spacing: .5px; padding: 10px 10px 5px; text-transform: uppercase; }
+  .rail .item { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 8px; cursor: pointer; font-size: 12.5px; color: var(--ink2); margin-bottom: 2px; }
+  .rail .item:hover { background: rgba(0,0,0,.045); }
+  .rail .item.on { background: rgba(43,92,255,.1); color: #2249d6; font-weight: 500; }
+  .rail .item .ii { width: 17px; text-align: center; font-size: 12px; }
+
+  /* 中间配置区 */
+  .config { flex: 1; overflow-y: auto; padding: 22px 26px; border-right: .5px solid var(--line); }
+  .config h1 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .config .desc { font-size: 11.5px; color: var(--gray); margin-bottom: 18px; }
+
+  .group-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; font-weight: 600; color: var(--gray);
+    text-transform: uppercase; letter-spacing: .5px;
+    margin: 18px 0 8px;
+  }
+  .group-title:first-of-type { margin-top: 0; }
+  .group-title .count { font-weight: 400; text-transform: none; letter-spacing: 0; color: #b0b0b6; }
+
+  .list { border: .5px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
+  .row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; border-bottom: .5px solid rgba(0,0,0,.05);
+    background: #fff; cursor: grab;
+  }
+  .row:last-child { border-bottom: none; }
+  .row.off { background: #fbfbfd; }
+  .row.off .r-icon, .row.off .r-title, .row.off .r-sub { opacity: .4; }
+  .row.drag-over { box-shadow: inset 0 2px 0 var(--blue); }
+  .row.dragging { opacity: .35; }
+
+  .handle { color: #c7c7cc; font-size: 12px; letter-spacing: -1px; width: 12px; flex: none; }
+  .r-icon { width: 24px; height: 24px; border-radius: 6px; background: rgba(0,0,0,.055); display: flex; align-items: center; justify-content: center; font-size: 11.5px; color: var(--ink2); flex: none; }
+  .r-main { flex: 1; min-width: 0; }
+  .r-title { font-size: 12.5px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+  .r-sub { font-size: 10px; color: var(--gray); margin-top: 1px; }
+  .r-key { font-size: 9.5px; font-family: "SF Mono", Menlo, monospace; color: var(--gray); }
+  .open-tag { font-size: 8px; font-weight: 700; padding: 1px 4px; border-radius: 3px; background: rgba(43,92,255,.1); color: var(--blue); }
+
+  /* 开关 */
+  .sw { width: 34px; height: 20px; border-radius: 10px; background: #e9e9ec; position: relative; cursor: pointer; flex: none; transition: background .18s; }
+  .sw.on { background: #34c759; }
+  .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: #fff; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .18s; }
+  .sw.on::after { transform: translateX(14px); }
+
+  /* 其他选项 */
+  .opt-card { border: .5px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
+  .opt-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: .5px solid rgba(0,0,0,.05); }
+  .opt-row:last-child { border-bottom: none; }
+  .opt-row .o-main { flex: 1; }
+  .opt-row .o-title { font-size: 12.5px; font-weight: 500; }
+  .opt-row .o-sub { font-size: 10px; color: var(--gray); margin-top: 1px; }
+  .seg { display: flex; background: rgba(0,0,0,.05); border-radius: 6px; padding: 2px; }
+  .seg button { border: none; background: transparent; cursor: pointer; font-family: inherit; font-size: 10.5px; padding: 3px 10px; border-radius: 4px; color: var(--gray); font-weight: 500; }
+  .seg button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+
+  .reset-btn {
+    margin-top: 16px; border: .5px solid var(--line); background: #fff; cursor: pointer;
+    font-family: inherit; font-size: 11.5px; color: var(--ink2);
+    padding: 6px 14px; border-radius: 7px;
+  }
+  .reset-btn:hover { background: #f5f5f7; }
+
+  /* ============ 右侧预览 ============ */
+  .preview {
+    width: 392px; padding: 22px 20px;
+    background:
+      radial-gradient(300px 200px at 30% 10%, #4a5f8a55 0%, transparent 70%),
+      linear-gradient(160deg, #2a3247 0%, #1c2231 100%);
+    display: flex; flex-direction: column;
+  }
+  .preview-label { font-size: 10.5px; font-weight: 600; color: rgba(255,255,255,.55); letter-spacing: .5px; text-transform: uppercase; margin-bottom: 10px; }
+
+  .panel {
+    width: 348px; border-radius: 15px; overflow: hidden;
+    background: rgba(30,30,34,.86);
+    backdrop-filter: blur(30px) saturate(180%);
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
+    border: .5px solid rgba(255,255,255,.12);
+    box-shadow: 0 20px 46px rgba(0,0,0,.45);
+    color: #f2f2f7;
+  }
+  .rc-search { display: flex; align-items: center; gap: 9px; padding: 11px 13px; border-bottom: .5px solid rgba(255,255,255,.09); }
+  .rc-search .ico { color: rgba(255,255,255,.5); font-size: 12.5px; }
+  .rc-search input { flex: 1; background: transparent; border: none; outline: none; color: #f2f2f7; font-size: 12.5px; font-family: inherit; }
+  .rc-search input::placeholder { color: rgba(255,255,255,.35); }
+  .rc-search .kbd { font-size: 9px; color: rgba(255,255,255,.45); border: .5px solid rgba(255,255,255,.18); padding: 1px 5px; border-radius: 4px; font-family: "SF Mono", Menlo, monospace; }
+  .rc-group-label { font-size: 9.5px; font-weight: 600; letter-spacing: .6px; color: rgba(255,255,255,.33); text-transform: uppercase; padding: 8px 15px 4px; }
+  .rc-row { display: flex; align-items: center; gap: 9px; margin: 0 8px 2px; padding: 6.5px 8px; border-radius: 8px; }
+  .rc-row:first-of-type { background: linear-gradient(90deg, rgba(43,92,255,.85), rgba(139,92,246,.72)); }
+  .rc-row .ri { width: 25px; height: 25px; border-radius: 7px; background: rgba(255,255,255,.1); display: flex; align-items: center; justify-content: center; font-size: 12px; flex: none; }
+  .rc-row:first-of-type .ri { background: rgba(255,255,255,.22); }
+  .rc-row .rt { font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 5px; }
+  .rc-row .rs { font-size: 9.5px; color: rgba(255,255,255,.43); margin-top: 1px; }
+  .rc-row:first-of-type .rs { color: rgba(255,255,255,.72); }
+  .rc-row .rk { margin-left: auto; font-size: 9px; font-family: "SF Mono", Menlo, monospace; color: rgba(255,255,255,.38); }
+  .rc-row:first-of-type .rk { color: rgba(255,255,255,.8); }
+  .rc-tag { font-size: 8px; padding: 1px 4px; border-radius: 3px; background: rgba(255,255,255,.16); color: rgba(255,255,255,.85); font-weight: 600; }
+  .rc-footer { display: flex; gap: 12px; padding: 7px 13px; border-top: .5px solid rgba(255,255,255,.09); font-size: 9px; color: rgba(255,255,255,.4); background: rgba(0,0,0,.18); }
+  .rc-empty { padding: 24px 16px; text-align: center; font-size: 11px; color: rgba(255,255,255,.35); }
+  .preview-hint { margin-top: 12px; font-size: 10px; color: rgba(255,255,255,.35); line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<div class="page-title">LENSO · 状态栏面板可配置</div>
+<div class="page-sub">勾选要显示的入口 · 拖拽调整顺序 · 右侧实时预览</div>
+
+<div class="window">
+  <div class="traffic">
+    <span class="r"></span><span class="y"></span><span class="g"></span>
+    <span class="wtitle">设置</span>
+  </div>
+
+  <div class="wbody">
+    <!-- 左导航 -->
+    <aside class="rail">
+      <div class="g">偏好设置</div>
+      <div class="item"><span class="ii">⚙</span> 通用</div>
+      <div class="item"><span class="ii">◎</span> 截图</div>
+      <div class="item on"><span class="ii">▤</span> 状态栏面板</div>
+      <div class="item"><span class="ii">⌨</span> 快捷键</div>
+      <div class="item"><span class="ii">🎨</span> 外观</div>
+      <div class="g">工具</div>
+      <div class="item"><span class="ii">{ }</span> JSON 工作台</div>
+      <div class="g">其他</div>
+      <div class="item"><span class="ii">ⓘ</span> 关于</div>
+    </aside>
+
+    <!-- 配置区 -->
+    <main class="config">
+      <h1>状态栏面板</h1>
+      <div class="desc">选择点击菜单栏图标后显示的功能，顶部项优先展示</div>
+
+      <div class="group-title">快捷操作 <span class="count" id="cntQuick"></span></div>
+      <div class="list" id="listQuick"></div>
+
+      <div class="group-title">工具 <span class="count" id="cntTool"></span></div>
+      <div class="list" id="listTool"></div>
+
+      <div class="group-title">面板外观</div>
+      <div class="opt-card">
+        <div class="opt-row">
+          <div class="o-main">
+            <div class="o-title">显示搜索框</div>
+            <div class="o-sub">面板顶部提供命令搜索</div>
+          </div>
+          <div class="sw on" id="swSearch"></div>
+        </div>
+        <div class="opt-row">
+          <div class="o-main">
+            <div class="o-title">显示快捷键提示</div>
+            <div class="o-sub">在每项右侧显示对应快捷键</div>
+          </div>
+          <div class="sw on" id="swKeys"></div>
+        </div>
+        <div class="opt-row">
+          <div class="o-main">
+            <div class="o-title">面板尺寸</div>
+            <div class="o-sub">影响整体宽度与行间距</div>
+          </div>
+          <div class="seg" id="segSize">
+            <button class="on" data-size="standard">标准</button>
+            <button data-size="compact">紧凑</button>
+          </div>
+        </div>
+      </div>
+
+      <button class="reset-btn" id="resetBtn">恢复默认</button>
+    </main>
+
+    <!-- 预览 -->
+    <aside class="preview">
+      <div class="preview-label">实时预览</div>
+      <div class="panel" id="panel">
+        <div class="rc-search" id="pvSearch">
+          <span class="ico">⌕</span>
+          <input id="pvInput" placeholder="搜索或输入命令…" readonly>
+          <span class="kbd">⌘ K</span>
+        </div>
+        <div id="pvBody"></div>
+        <div class="rc-footer"><span>↩ 执行</span><span>⌘K 命令</span><span>esc 关闭</span></div>
+      </div>
+      <div class="preview-hint">拖拽左侧列表排序，面板顺序会同步变化。<br>带「打开」标记的工具会跳转到工作台窗口。</div>
+    </aside>
+  </div>
+</div>
+
+<script>
+  /* ---------- 数据 ---------- */
+  const GROUPS = {
+    quick: '快捷操作',
+    tool: '工具'
+  };
+
+  const DEFAULT_ITEMS = [
+    { id: 'capture',  group: 'quick', icon: '⛶', title: '区域截图', sub: '框选屏幕任意区域', key: '⇧⌘1', on: true,  opens: false },
+    { id: 'search',   group: 'quick', icon: '⌕', title: '全局搜索', sub: '截图 · 文字 · 剪贴板', key: '⇧⌘F', on: true,  opens: false },
+    { id: 'library',  group: 'quick', icon: '▥', title: '打开图库', sub: '全部截图与文字收纳', key: '⌘L',  on: true,  opens: false },
+    { id: 'clipboard',group: 'quick', icon: '📋', title: '剪贴板历史', sub: '最近复制的图片与文字', key: '⇧⌘B', on: false, opens: false },
+    { id: 'preview',  group: 'quick', icon: '👁', title: '预览最新截图', sub: '悬浮贴图查看', key: '⇧⌘P', on: false, opens: false },
+    { id: 'analytics',group: 'quick', icon: '▦', title: '数据看板', sub: '使用统计与趋势', key: '⇧⌘D', on: false, opens: false },
+    { id: 'settings', group: 'quick', icon: '⚙', title: '打开设置', sub: '在主窗口中打开', key: '⌘,',  on: false, opens: false },
+
+    { id: 'json',     group: 'tool', icon: '{ }', title: 'JSON 格式化', sub: '在独立工作台中编辑', key: '⌘J',  on: true,  opens: true },
+    { id: 'regex',    group: 'tool', icon: '.*', title: '正则测试', sub: '实时匹配与替换', key: '⌘R',  on: true,  opens: true },
+    { id: 'url',      group: 'tool', icon: '🔗', title: 'URL 解析', sub: 'query 参数拆解', key: '⌘U',  on: false, opens: true },
+    { id: 'base64',   group: 'tool', icon: '#',  title: 'Base64 编解码', sub: '文本与图片互转', key: '⌘B',  on: false, opens: true },
+    { id: 'ocr',      group: 'tool', icon: '文', title: 'OCR 文字识别', sub: '从截图中提取文字', key: '⌘O',  on: false, opens: true }
+  ];
+
+  let items = DEFAULT_ITEMS.map(x => ({ ...x }));
+  let showSearch = true;
+  let showKeys = true;
+  let panelSize = 'standard';
+
+  /* ---------- 渲染左侧列表 ---------- */
+  function renderList(group, listEl, countEl) {
+    const groupItems = items.filter(i => i.group === group);
+    const onCount = groupItems.filter(i => i.on).length;
+    countEl.textContent = `${onCount} / ${groupItems.length} 已启用`;
+    listEl.innerHTML = '';
+
+    groupItems.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'row' + (item.on ? '' : ' off');
+      row.draggable = true;
+      row.dataset.id = item.id;
+      row.innerHTML = `
+        <span class="handle">⠿</span>
+        <span class="r-icon">${item.icon}</span>
+        <span class="r-main">
+          <span class="r-title">${item.title}${item.opens ? '<span class="open-tag">打开</span>' : ''}</span>
+          <span class="r-sub">${item.sub}</span>
+        </span>
+        <span class="r-key">${item.key}</span>
+        <span class="sw ${item.on ? 'on' : ''}"></span>
+      `;
+      row.querySelector('.sw').onclick = (e) => {
+        e.stopPropagation();
+        item.on = !item.on;
+        renderAll();
+      };
+      listEl.appendChild(row);
+    });
+  }
+
+  /* ---------- 拖拽排序 ---------- */
+  let dragId = null;
+
+  function bindDrag(listEl, group) {
+    listEl.querySelectorAll('.row').forEach(row => {
+      row.addEventListener('dragstart', e => {
+        dragId = row.dataset.id;
+        row.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      row.addEventListener('dragend', () => {
+        row.classList.remove('dragging');
+        listEl.querySelectorAll('.row').forEach(r => r.classList.remove('drag-over'));
+        dragId = null;
+      });
+      row.addEventListener('dragover', e => {
+        e.preventDefault();
+        row.classList.add('drag-over');
+      });
+      row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
+      row.addEventListener('drop', e => {
+        e.preventDefault();
+        row.classList.remove('drag-over');
+        const targetId = row.dataset.id;
+        if (!dragId || dragId === targetId) return;
+
+        const fromIdx = items.findIndex(i => i.id === dragId);
+        const toIdx = items.findIndex(i => i.id === targetId);
+        if (fromIdx < 0 || toIdx < 0) return;
+
+        const [moved] = items.splice(fromIdx, 1);
+        items.splice(toIdx, 0, moved);
+        renderAll();
+      });
+    });
+  }
+
+  /* ---------- 右侧预览 ---------- */
+  function renderPreview() {
+    document.getElementById('pvSearch').style.display = showSearch ? '' : 'none';
+
+    const enabled = items.filter(i => i.on);
+    const body = document.getElementById('pvBody');
+    body.innerHTML = '';
+
+    if (enabled.length === 0) {
+      body.innerHTML = '<div class="rc-empty">未启用任何功能</div>';
+      return;
+    }
+
+    // 按分组输出（保持全局顺序，组标题只出现一次）
+    let lastGroup = null;
+    enabled.forEach(item => {
+      if (item.group !== lastGroup) {
+        const label = document.createElement('div');
+        label.className = 'rc-group-label';
+        label.textContent = GROUPS[item.group];
+        body.appendChild(label);
+        lastGroup = item.group;
+      }
+      const row = document.createElement('div');
+      row.className = 'rc-row';
+      row.innerHTML = `
+        <div class="ri">${item.icon}</div>
+        <div>
+          <div class="rt">${item.title}${item.opens ? '<span class="rc-tag">↗ 打开</span>' : ''}</div>
+          <div class="rs">${item.sub}</div>
+        </div>
+        <span class="rk" style="${showKeys ? '' : 'display:none'}">${item.key}</span>
+      `;
+      body.appendChild(row);
+    });
+
+    // 面板尺寸
+    const panel = document.getElementById('panel');
+    if (panelSize === 'compact') {
+      panel.style.width = '316px';
+      panel.querySelectorAll('.rc-row').forEach(r => r.style.padding = '5px 8px');
+      body.querySelectorAll('.rc-row').forEach(r => { r.style.padding = '5px 8px'; r.style.marginBottom = '1px'; });
+      body.querySelectorAll('.rc-row .rt').forEach(t => t.style.fontSize = '11.5px');
+    } else {
+      panel.style.width = '348px';
+      body.querySelectorAll('.rc-row').forEach(r => { r.style.padding = '6.5px 8px'; r.style.marginBottom = '2px'; });
+      body.querySelectorAll('.rc-row .rt').forEach(t => t.style.fontSize = '12px');
+    }
+  }
+
+  function renderAll() {
+    renderList('quick', document.getElementById('listQuick'), document.getElementById('cntQuick'));
+    renderList('tool', document.getElementById('listTool'), document.getElementById('cntTool'));
+    bindDrag(document.getElementById('listQuick'), 'quick');
+    bindDrag(document.getElementById('listTool'), 'tool');
+    renderPreview();
+  }
+
+  /* ---------- 外观选项 ---------- */
+  document.getElementById('swSearch').onclick = function () {
+    showSearch = !showSearch;
+    this.classList.toggle('on', showSearch);
+    renderPreview();
+  };
+  document.getElementById('swKeys').onclick = function () {
+    showKeys = !showKeys;
+    this.classList.toggle('on', showKeys);
+    renderPreview();
+  };
+  document.getElementById('segSize').onclick = (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    document.querySelectorAll('#segSize button').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    panelSize = b.dataset.size;
+    renderPreview();
+  };
+
+  document.getElementById('resetBtn').onclick = () => {
+    items = DEFAULT_ITEMS.map(x => ({ ...x }));
+    showSearch = true; showKeys = true; panelSize = 'standard';
+    document.getElementById('swSearch').classList.add('on');
+    document.getElementById('swKeys').classList.add('on');
+    document.querySelectorAll('#segSize button').forEach((x, i) => x.classList.toggle('on', i === 0));
+    renderAll();
+  };
+
+  renderAll();
+</script>
+</body>
+</html>

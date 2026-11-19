@@ -17,6 +17,10 @@ struct LensoLibraryView: View {
     @State private var recordToDelete: ScreenshotRecord? = nil
     @State private var showDeleteConfirm: Bool = false
     @State private var showBatchDeleteConfirm: Bool = false
+    // 触控板双指缩放：按比例调整卡片大小与列数
+    @State private var cardScale: CGFloat = 1.0
+    @State private var gestureStartScale: CGFloat = 1.0
+    @FocusState private var gridFocused: Bool
 
     @Environment(\.openWindow) private var openWindow
 
@@ -29,9 +33,11 @@ struct LensoLibraryView: View {
         case pastMonth = "近 30 天"
     }
 
-    private let gridColumns = [
-        GridItem(.adaptive(minimum: 185, maximum: 265), spacing: 14)
-    ]
+    private var cardWidth: CGFloat { 200 * cardScale }
+
+    private var gridColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: cardWidth, maximum: cardWidth + 2), spacing: 14)]
+    }
 
     private var recordsByID: [UUID: ScreenshotRecord] {
         Dictionary(uniqueKeysWithValues: records.map { ($0.id, $0) })
@@ -69,7 +75,7 @@ struct LensoLibraryView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 case .recent:
-                    feedHeader(title: "最近", subtitle: "过去 7 天的内容")
+                    feedHeader(title: "最近 7 天", subtitle: "过去 7 天新增的内容")
                     LibraryFeedView(
                         entries: recentEntries,
                         emptyTitle: "最近 7 天还没有内容",
@@ -85,7 +91,8 @@ struct LensoLibraryView: View {
                         entries: favoriteEntries,
                         emptyTitle: "还没有收藏",
                         emptyMessage: "点卡片上的星标即可收藏截图或文字",
-                        emptyIcon: "star"
+                        emptyIcon: "star",
+                        groupsByFavoriteDate: true
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     feedFooter(summary: favoriteSummary)
@@ -123,6 +130,9 @@ struct LensoLibraryView: View {
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .onReceive(NotificationCenter.default.publisher(for: .openAnalyticsSection)) { _ in
             section = .analytics
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openSettingsFromMenu)) { _ in
+            section = .settings(.general)
         }
         .alert(
             "确定直接删除？",
@@ -182,7 +192,8 @@ struct LensoLibraryView: View {
             screenshotsCount: images.count,
             textCount: notes.count,
             recentCount: recentEntries.count,
-            favoritesCount: favoriteEntries.count
+            favoritesCount: favoriteEntries.count,
+            storageBytes: records.reduce(Int64(0)) { $0 + Int64($1.fileSize) }
         )
     }
 
@@ -223,32 +234,122 @@ struct LensoLibraryView: View {
         }
     }
 
-    // MARK: - 截图网格视图（纯白 Apple 卡片 + 克莱因蓝选中）
+    // MARK: - 截图网格视图（按日期分组的白底卡片 + 克莱因蓝选中）
 
     private var screenshotGrid: some View {
         ScrollView {
-            LazyVGrid(columns: gridColumns, spacing: 14) {
-                ForEach(filteredImages) { item in
-                    let record = recordsByID[item.id]
-                    LibraryImageCell(
-                        item: item,
-                        record: record,
-                        isSelected: selectedIDs.contains(item.id),
-                        onOpen: { onOpenPreview?(item.id) },
-                        onToggleSelection: { toggleSelection(item.id) },
-                        onToggleFavorite: { toggleFavorite(item) },
-                        onCopy: { copyImage(item) },
-                        onDelete: {
-                            if let record {
-                                recordToDelete = record
-                                showDeleteConfirm = true
+            LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
+                ForEach(groupedImages) { group in
+                    SwiftUI.Section {
+                        LazyVGrid(columns: gridColumns, spacing: 14) {
+                            ForEach(group.items) { item in
+                                let record = recordsByID[item.id]
+                                LibraryImageCell(
+                                    item: item,
+                                    record: record,
+                                    isSelected: selectedIDs.contains(item.id),
+                                    onOpen: { onOpenPreview?(item.id) },
+                                    onToggleSelection: { toggleSelection(item.id) },
+                                    onToggleFavorite: { toggleFavorite(item) },
+                                    onCopy: { copyImage(item) },
+                                    onDelete: {
+                                        if let record {
+                                            recordToDelete = record
+                                            showDeleteConfirm = true
+                                        }
+                                    }
+                                )
                             }
                         }
-                    )
+                        .padding(.horizontal, 16)
+                    } header: {
+                        LibraryDayHeader(title: group.title, count: group.items.count)
+                    }
                 }
             }
-            .padding(.horizontal, 16)
             .padding(.bottom, 20)
+        }
+        .simultaneousGesture(magnifyGesture)
+        .focusable()
+        .focused($gridFocused)
+        .focusEffectDisabled()
+        .onAppear { gridFocused = true }
+        .onKeyPress(.leftArrow) { moveSelection(by: -1); return .handled }
+        .onKeyPress(.rightArrow) { moveSelection(by: 1); return .handled }
+        .onKeyPress(.upArrow) { moveSelection(by: -3); return .handled }
+        .onKeyPress(.downArrow) { moveSelection(by: 3); return .handled }
+        .onKeyPress(.space) { openSelection(); return .handled }
+        .onKeyPress(.delete) { requestDeleteSelection(); return .handled }
+        .onKeyPress(phases: .down) { press in
+            if press.modifiers.contains(.command), press.characters.lowercased() == "a" {
+                selectedIDs = Set(filteredImages.map(\.id))
+                return .handled
+            }
+            return .ignored
+        }
+    }
+
+    // MARK: - 键盘操作
+
+    private func moveSelection(by offset: Int) {
+        let items = filteredImages
+        guard !items.isEmpty else { return }
+        gridFocused = true
+
+        let current = items.firstIndex { selectedIDs.contains($0.id) }
+        let base = current ?? (offset > 0 ? -1 : 0)
+        let next = min(max(base + offset, 0), items.count - 1)
+        selectedIDs = [items[next].id]
+    }
+
+    private func openSelection() {
+        guard let id = selectedIDs.first else { return }
+        onOpenPreview?(id)
+    }
+
+    private func requestDeleteSelection() {
+        if selectedIDs.count > 1 {
+            showBatchDeleteConfirm = true
+        } else if let id = selectedIDs.first, let record = recordsByID[id] {
+            recordToDelete = record
+            showDeleteConfirm = true
+        }
+    }
+
+    /// 双指捏合：0.75× ~ 1.6×，按 0.04 档位吸附
+    private var magnifyGesture: some Gesture {
+        MagnifyGesture(minimumScaleDelta: 0.01)
+            .onChanged { value in
+                let target = gestureStartScale * value.magnification
+                let clamped = min(max(target, 0.75), 1.6)
+                let snapped = (clamped / 0.04).rounded() * 0.04
+                if abs(snapped - cardScale) > 0.001 {
+                    cardScale = snapped
+                }
+            }
+            .onEnded { _ in
+                gestureStartScale = cardScale
+            }
+    }
+
+    // MARK: - 日期分组
+
+    private struct DayGroup: Identifiable {
+        let id: Date
+        let title: String
+        let items: [LibraryImage]
+    }
+
+    private var groupedImages: [DayGroup] {
+        let calendar = Calendar.current
+        var buckets: [Date: [LibraryImage]] = [:]
+        for item in filteredImages {
+            let date = recordsByID[item.id]?.capturedAt ?? Date()
+            let day = calendar.startOfDay(for: date)
+            buckets[day, default: []].append(item)
+        }
+        return buckets.keys.sorted(by: >).map { day in
+            DayGroup(id: day, title: LibraryDayLabel.title(for: day), items: buckets[day] ?? [])
         }
     }
 
@@ -279,6 +380,23 @@ struct LensoLibraryView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 20)
         }
+        .focusable()
+        .focused($gridFocused)
+        .focusEffectDisabled()
+        .onAppear { gridFocused = true }
+        .onKeyPress(.leftArrow) { moveSelection(by: -1); return .handled }
+        .onKeyPress(.rightArrow) { moveSelection(by: 1); return .handled }
+        .onKeyPress(.upArrow) { moveSelection(by: -3); return .handled }
+        .onKeyPress(.downArrow) { moveSelection(by: 3); return .handled }
+        .onKeyPress(.space) { openSelection(); return .handled }
+        .onKeyPress(.delete) { requestDeleteSelection(); return .handled }
+        .onKeyPress(phases: .down) { press in
+            if press.modifiers.contains(.command), press.characters.lowercased() == "a" {
+                selectedIDs = Set(filteredImages.map(\.id))
+                return .handled
+            }
+            return .ignored
+        }
     }
 
     // MARK: - 空状态
@@ -301,6 +419,7 @@ struct LensoLibraryView: View {
     // MARK: - 数据操作（直接彻底删除）
 
     private func toggleSelection(_ id: UUID) {
+        gridFocused = true
         if selectedIDs.contains(id) {
             selectedIDs.remove(id)
         } else {

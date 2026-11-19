@@ -17,340 +17,434 @@ struct WindowDragHandleView: NSViewRepresentable {
     }
 }
 
-/// 截图方块卡片（类似相册照片，满铺 + 年月日时分秒）
+extension DateFormatter {
+    /// 卡片上的紧凑时间：月日 + 时分，避免年月日时分秒把卡片撑乱
+    static let lensoCardTime: DateFormatter = {
+        let df = DateFormatter()
+        df.dateFormat = "MM月dd日 HH:mm"
+        df.locale = Locale(identifier: "zh_CN")
+        return df
+    }()
+}
+
+/// 统一卡片样式：统一圆角，高度由双指缩放的档位传入
+private enum CardStyle {
+    static let radius: CGFloat = 13
+}
+
+// MARK: - 来源应用图标
+
+/// 按应用名解析图标：优先运行中的 App，其次常见应用目录，结果缓存
+@MainActor
+enum AppIconProvider {
+    private static var cache: [String: NSImage?] = [:]
+
+    static func icon(for name: String?) -> NSImage? {
+        guard let name, !name.isEmpty else { return nil }
+        if let cached = cache[name] { return cached }
+
+        var result: NSImage?
+        if name == "截图" {
+            result = NSApp.applicationIconImage
+        } else if let running = NSWorkspace.shared.runningApplications.first(where: { $0.localizedName == name }) {
+            result = running.icon
+        } else if let url = applicationURL(named: name) {
+            result = NSWorkspace.shared.icon(forFile: url.path)
+        }
+        cache[name] = result
+        return result
+    }
+
+    private static func applicationURL(named name: String) -> URL? {
+        let fm = FileManager.default
+        let roots = ["/Applications", "/System/Applications", NSHomeDirectory() + "/Applications"]
+        for root in roots {
+            guard let entries = try? fm.contentsOfDirectory(atPath: root) else { continue }
+            if let hit = entries.first(where: {
+                $0.lowercased() == "\(name.lowercased()).app"
+            }) {
+                return URL(fileURLWithPath: root).appendingPathComponent(hit)
+            }
+        }
+        return nil
+    }
+}
+
+/// 来源应用图标：解析不到时退化为类型图标
+struct SourceAppIcon: View {
+    let name: String?
+    var size: CGFloat = 16
+
+    private var fallbackSymbol: String {
+        switch name {
+        case "截图": return "camera.viewfinder"
+        case "收纳": return "tray.full"
+        default: return "doc.on.clipboard"
+        }
+    }
+
+    var body: some View {
+        Group {
+            if let icon = AppIconProvider.icon(for: name) {
+                Image(nsImage: icon)
+                    .resizable()
+                    .interpolation(.high)
+            } else {
+                Image(systemName: fallbackSymbol)
+                    .font(.system(size: size * 0.6, weight: .semibold))
+                    .foregroundStyle(Color.secondary)
+                    .frame(width: size, height: size)
+                    .background(Color.black.opacity(0.05))
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: size * 0.24, style: .continuous))
+    }
+}
+
+// MARK: - 截图卡片
+
 struct SearchPanelScreenshotTile: View {
     let item: SearchPanelView.FeedItem
     let cgImage: CGImage?
+    let height: CGFloat
     let isCopied: Bool
     let onCopy: () -> Void
     let onInspect: () -> Void
 
+    @State private var hovering = false
+
     var body: some View {
-        ZStack(alignment: .bottom) {
-            // 背景与图片主体
+        VStack(spacing: 0) {
             ZStack {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color(red: 0.93, green: 0.94, blue: 0.96))
+                Color(red: 0.94, green: 0.95, blue: 0.965)
 
                 if let cgImage {
                     Image(decorative: cgImage, scale: 2)
                         .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(height: 185)
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .clipped()
                 } else {
                     VStack(spacing: 6) {
                         Image(systemName: "photo")
-                            .font(.system(size: 24))
+                            .font(.system(size: 22))
                             .foregroundStyle(.secondary)
-                        Text("图片记录")
+                        Text("截图")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
                 }
-            }
-            .frame(height: 185)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-            // 顶部浮动栏：来源应用胶囊 + 快速动作（预览/复制）
-            VStack {
-                HStack(spacing: 6) {
-                    if let app = item.sourceApp, !app.isEmpty {
-                        Text(app)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(Capsule().fill(Color.black.opacity(0.6)))
-                    }
-                    Spacer()
-                    if cgImage != nil {
-                        Button {
-                            onInspect()
-                        } label: {
-                            Image(systemName: "eye.fill")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.white)
-                                .frame(width: 24, height: 24)
-                                .background(Circle().fill(Color.black.opacity(0.6)))
-                        }
-                        .buttonStyle(.plain)
-                        .help("查看图片详情")
-                    }
-                    Button {
-                        onCopy()
-                    } label: {
-                        Image(systemName: "doc.on.doc.fill")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.white)
-                            .frame(width: 24, height: 24)
-                            .background(Circle().fill(Color.black.opacity(0.6)))
-                    }
-                    .buttonStyle(.plain)
-                    .help("复制图片到剪贴板")
+                if isCopied {
+                    copiedOverlay
                 }
-                .padding(8)
-                Spacer()
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
 
-            // 底部暗色渐变层 + 年月日时分秒时间
-            VStack(alignment: .leading, spacing: 2) {
-                Spacer()
-                HStack {
-                    Text(DateFormatter.lensoFullDateTime.string(from: item.createdAt))
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.9), radius: 3, y: 1)
-                    Spacer()
-                }
-                .padding(.horizontal, 10)
-                .padding(.bottom, 8)
-                .padding(.top, 28)
-                .background(
-                    LinearGradient(
-                        colors: [.clear, Color.black.opacity(0.78)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-            }
+            // 信息行放在图片下方，不遮挡画面
+            HStack(spacing: 5) {
+                SourceAppIcon(name: item.sourceApp, size: 12)
+                Text(item.sourceApp?.isEmpty == false ? item.sourceApp! : "剪贴板")
+                    .font(.system(size: 9.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
 
-            // 复制成功的覆盖反馈
-            if isCopied {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.black.opacity(0.5))
-                    HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color.green)
-                        Text("已复制")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.white)
+                Spacer(minLength: 4)
+
+                if hovering {
+                    HStack(spacing: 0) {
+                        footerButton("doc.on.doc", help: "复制", action: onCopy)
+                        footerButton("eye", help: "查看", action: onInspect)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(Color.black.opacity(0.85)))
+                } else {
+                    Text(DateFormatter.lensoCardTime.string(from: item.createdAt))
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary)
                 }
-                .transition(.opacity)
             }
+            .padding(.horizontal, 8)
+            .frame(height: 24)
+            .background(Color.white)
         }
-        .frame(height: 185)
+        .frame(height: height)
+        .contentShape(RoundedRectangle(cornerRadius: CardStyle.radius, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: CardStyle.radius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: CardStyle.radius, style: .continuous)
+                .strokeBorder(Color.black.opacity(hovering ? 0.16 : 0.07), lineWidth: 1)
         )
-        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .onTapGesture { onCopy() }
+        .shadow(color: .black.opacity(hovering ? 0.16 : 0.05), radius: hovering ? 10 : 4, y: hovering ? 4 : 2)
+        .onHover { hovering = $0 }
+        .onTapGesture { onInspect() }
+        .animation(.easeOut(duration: 0.12), value: hovering)
+    }
+
+    private func footerButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: 10.5, weight: .semibold))
+            .foregroundStyle(Color.black.opacity(0.68))
+            .frame(width: 22, height: 20)
+            .contentShape(Rectangle())
+            .onTapGesture { action() }
+            .help(help)
+    }
+
+    private var copiedOverlay: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: CardStyle.radius, style: .continuous)
+                .fill(Color.black.opacity(0.42))
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.green)
+                Text("已复制")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(Color.black.opacity(0.82)))
+        }
+        .transition(.opacity)
     }
 }
 
-/// 智能文字方块卡片（支持网址识别富卡片、代码/JSON美化、长文本查看与年月日时分秒）
+// MARK: - 文字 / 代码 / 链接卡片
+
 struct SearchPanelTextTile: View {
     let item: SearchPanelView.FeedItem
     let content: String
+    let height: CGFloat
     let isCopied: Bool
     let onCopy: () -> Void
     let onInspect: () -> Void
     @ObservedObject var webStore: WebMetadataStore
 
+    @State private var hovering = false
+
+    /// 卡片被双指缩小后自动减少正文行数，避免内容溢出
+    private var textLineLimit: Int { height < 160 ? 3 : 4 }
+    private var titleLineLimit: Int { height < 160 ? 1 : 2 }
+
     var body: some View {
         let smartType = TextIntelligence.detect(content)
 
-        ZStack(alignment: .topLeading) {
-            // 便签卡片底板
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.04), radius: 6, y: 2)
+        VStack(alignment: .leading, spacing: 0) {
+            header(for: smartType)
+                .padding(.horizontal, 12)
+                .padding(.top, 10)
 
-            VStack(alignment: .leading, spacing: 8) {
-                // 顶部：类型标签 + 来源应用 + 查看/格式化 + 复制
-                HStack(spacing: 5) {
-                    switch smartType {
-                    case .url:
-                        HStack(spacing: 3) {
-                            Image(systemName: "globe")
-                            Text("网址")
-                        }
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(LensoColors.kleinBlueBright)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(LensoColors.kleinBlueSoft))
+            body(for: smartType)
+                .padding(.horizontal, 12)
+                .padding(.top, 7)
 
-                    case .json:
-                        HStack(spacing: 3) {
-                            Image(systemName: "curlybraces")
-                            Text("JSON")
-                        }
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(LensoColors.kleinBlueBright)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(LensoColors.kleinBlueSoft))
+            Spacer(minLength: 4)
 
-                    case .code(let lang, _):
-                        HStack(spacing: 3) {
-                            Image(systemName: "chevron.left.forwardslash.chevron.right")
-                            Text(lang)
-                        }
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(LensoColors.kleinBlueBright)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(LensoColors.kleinBlueSoft))
+            Rectangle()
+                .fill(Color.black.opacity(0.055))
+                .frame(height: 1)
 
-                    case .plainText:
-                        Image(systemName: "text.quote")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(LensoColors.kleinBlueBright)
-                    }
-
-                    if let app = item.sourceApp, !app.isEmpty {
-                        Text(app)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(Color.primary.opacity(0.75))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.black.opacity(0.04)))
-                            .lineLimit(1)
-                    }
-
-                    Spacer()
-
-                    // 查看全文 / 格式化按钮
-                    Button {
-                        onInspect()
-                    } label: {
-                        Image(systemName: "eye.fill")
-                            .font(.system(size: 10))
-                            .foregroundStyle(LensoColors.kleinBlueBright)
-                            .frame(width: 22, height: 22)
-                            .background(Circle().fill(LensoColors.kleinBlueSoft))
-                    }
-                    .buttonStyle(.plain)
-                    .help(smartType != .plainText ? "查看详情与代码美化格式化" : "查看全文并排版")
-
-                    // 复制按钮
-                    Button {
-                        onCopy()
-                    } label: {
-                        Image(systemName: "doc.on.doc")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 20, height: 20)
-                    }
-                    .buttonStyle(.plain)
-                    .help("复制文本")
-                }
-
-                // 核心卡片正文区域
-                switch smartType {
-                case .url(let url, let origStr):
-                    let title = webStore.title(for: origStr) ?? url.host ?? origStr
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(title)
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(Color.primary.opacity(0.92))
-                            .lineLimit(2)
-
-                        if let host = url.host {
-                            Text(host)
-                                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                                .foregroundStyle(LensoColors.kleinBlueBright)
-                                .lineLimit(1)
-                        }
-
-                        Spacer()
-
-                        Button {
-                            NSWorkspace.shared.open(url)
-                        } label: {
-                            HStack(spacing: 4) {
-                                Text("打开网页")
-                                Image(systemName: "arrow.up.right")
-                            }
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(Capsule().fill(LensoColors.kleinBlueBright))
-                        }
-                        .buttonStyle(.plain)
-                        .help("在默认浏览器中打开此网页")
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .onAppear {
-                        webStore.fetchTitleIfNeeded(for: origStr)
-                    }
-
-                case .json(let pretty, _):
-                    Text(pretty)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(Color(red: 0.15, green: 0.2, blue: 0.3))
-                        .lineSpacing(2)
-                        .lineLimit(5)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-
-                case .code(_, let formatted):
-                    Text(formatted)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(Color(red: 0.15, green: 0.2, blue: 0.3))
-                        .lineSpacing(2)
-                        .lineLimit(5)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-
-                case .plainText:
-                    Text(content)
-                        .font(.system(size: 12.5, weight: .regular))
-                        .foregroundStyle(Color.primary.opacity(0.88))
-                        .lineSpacing(3)
-                        .lineLimit(5)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                }
-
-                Divider().opacity(0.5)
-
-                // 底部精准时间：年月日时分秒
-                HStack {
-                    Text(DateFormatter.lensoFullDateTime.string(from: item.createdAt))
-                        .font(.system(size: 10, weight: .regular, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text("\(content.count) 字")
-                        .font(.system(size: 9.5, design: .monospaced))
-                        .foregroundStyle(.secondary.opacity(0.7))
-                }
+            HStack(spacing: 6) {
+                Text(DateFormatter.lensoCardTime.string(from: item.createdAt))
+                    .font(.system(size: 9.5, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(content.count) 字")
+                    .font(.system(size: 9.5, design: .monospaced))
+                    .foregroundStyle(Color.secondary.opacity(0.7))
             }
-            .padding(12)
-
-            // 复制成功的覆盖反馈
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+        }
+        .frame(height: height)
+        .background(
+            RoundedRectangle(cornerRadius: CardStyle.radius, style: .continuous)
+                .fill(Color.white)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: CardStyle.radius, style: .continuous))
+        .overlay(alignment: .topTrailing) {
+            if hovering {
+                HoverActionButtons(onCopy: onCopy, onInspect: onInspect)
+                    .padding(8)
+                    .transition(.opacity)
+            }
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: CardStyle.radius, style: .continuous)
+                .strokeBorder(hovering ? LensoColors.kleinBlueBright.opacity(0.22) : Color.black.opacity(0.07), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: CardStyle.radius, style: .continuous))
+        .onHover { hovering = $0 }
+        .onTapGesture { onInspect() }
+        .animation(.easeOut(duration: 0.15), value: hovering)
+        .overlay {
             if isCopied {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.black.opacity(0.5))
+                    RoundedRectangle(cornerRadius: CardStyle.radius, style: .continuous)
+                        .fill(Color.black.opacity(0.42))
                     HStack(spacing: 6) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 14))
-                            .foregroundStyle(Color.green)
+                            .foregroundStyle(.green)
                         Text("已复制")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.white)
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(Capsule().fill(Color.black.opacity(0.85)))
+                    .background(Capsule().fill(Color.black.opacity(0.82)))
                 }
                 .transition(.opacity)
             }
         }
-        .frame(height: 185)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
+    }
+
+    // MARK: 顶部：类型 + 来源 + 操作
+
+    private func header(for smartType: TextIntelligence.ContentType) -> some View {
+        let badge: (label: String, symbol: String) = {
+            switch smartType {
+            case .url: return ("网址", "globe")
+            case .json: return ("JSON", "curlybraces")
+            case .code(let lang, _): return (lang, "chevron.left.forwardslash.chevron.right")
+            case .plainText: return ("文字", "text.quote")
+            }
+        }()
+
+        return HStack(spacing: 6) {
+            HStack(spacing: 3) {
+                Image(systemName: badge.symbol)
+                    .font(.system(size: 8.5, weight: .semibold))
+                Text(badge.label)
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .foregroundStyle(LensoColors.kleinBlueBright)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2.5)
+            .background(Capsule().fill(LensoColors.kleinBlueSoft))
+
+            if let app = item.sourceApp, !app.isEmpty {
+                HStack(spacing: 4) {
+                    SourceAppIcon(name: app, size: 13)
+                    Text(app)
+                        .font(.system(size: 9.5, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 4)
+        }
+        .frame(height: 22)
+    }
+
+    // MARK: 正文
+
+    @ViewBuilder
+    private func body(for smartType: TextIntelligence.ContentType) -> some View {
+        switch smartType {
+        case .url(let url, let original):
+            let title = webStore.title(for: original) ?? url.host ?? original
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(Color.primary.opacity(0.9))
+                    .lineLimit(titleLineLimit)
+                Text(url.host ?? original)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(LensoColors.kleinBlueBright)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Button {
+                    NSWorkspace.shared.open(url)
+                } label: {
+                    HStack(spacing: 3) {
+                        Text("打开网页")
+                        Image(systemName: "arrow.up.right")
+                    }
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 3.5)
+                    .background(Capsule().fill(LensoColors.kleinBlueBright))
+                }
+                .buttonStyle(.plain)
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .onAppear { webStore.fetchTitleIfNeeded(for: original) }
+
+        case .json(let pretty, _):
+            Text(pretty)
+                .font(.system(size: 10.5, design: .monospaced))
+                .foregroundStyle(Color(red: 0.16, green: 0.2, blue: 0.3))
+                .lineSpacing(2)
+                .lineLimit(textLineLimit)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+
+        case .code(_, let formatted):
+            Text(formatted)
+                .font(.system(size: 10.5, design: .monospaced))
+                .foregroundStyle(Color(red: 0.16, green: 0.2, blue: 0.3))
+                .lineSpacing(2)
+                .lineLimit(textLineLimit)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+
+        case .plainText:
+            Text(content)
+                .font(.system(size: 12))
+                .foregroundStyle(Color.primary.opacity(0.84))
+                .lineSpacing(2.5)
+                .lineLimit(textLineLimit)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+    }
+}
+
+// MARK: - 悬停操作按钮（白底实心小胶囊，保证在任何画面上都看得清）
+
+private struct HoverActionButtons: View {
+    let onCopy: () -> Void
+    let onInspect: () -> Void
+
+    var body: some View {
+        HStack(spacing: 1) {
+            HoverIconButton(symbol: "doc.on.doc", help: "复制", action: onCopy)
+            Rectangle()
+                .fill(Color.black.opacity(0.08))
+                .frame(width: 1, height: 14)
+            HoverIconButton(symbol: "eye", help: "查看", action: onInspect)
+        }
+        .padding(3)
+        .background(
+            Capsule().fill(Color.white)
         )
-        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .onTapGesture { onCopy() }
+        .overlay(
+            Capsule().strokeBorder(Color.black.opacity(0.08), lineWidth: 0.5)
+        )
+        .shadow(color: .black.opacity(0.18), radius: 6, y: 2)
+    }
+}
+
+private struct HoverIconButton: View {
+    let symbol: String
+    let help: String
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(hovering ? LensoColors.kleinBlueBright : Color.black.opacity(0.72))
+            .frame(width: 24, height: 24)
+            .background(
+                Circle().fill(hovering ? LensoColors.kleinBlueSoft : Color.clear)
+            )
+            .contentShape(Circle())
+            .onHover { hovering = $0 }
+            .onTapGesture { action() }
+            .help(help)
     }
 }

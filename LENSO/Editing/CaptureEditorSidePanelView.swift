@@ -4,7 +4,6 @@ import SwiftUI
 // MARK: - 截图编辑器右侧属性面板
 
 struct CaptureEditorSidePanelView: View {
-    @Bindable var state: AnnotationState
     @Binding var isSidePanelVisible: Bool
     @Binding var panelTab: PanelTab
 
@@ -22,19 +21,27 @@ struct CaptureEditorSidePanelView: View {
     let onRunTranslation: () -> Void
     let onCopyText: (String) -> Void
     let onSaveOCRToNotes: () -> Void
-    let onQuickCopy: () -> Void
 
     @State private var ocrDisplayMode = 0
     @State private var translationDisplayMode = 0
+    /// 结果字号，可手动放大查看
+    @State private var textSize: CGFloat = 13
 
     var body: some View {
-        VStack(spacing: 14) {
-            // 顶部工具行：标注 / 翻译 / OCR / 关闭
-            HStack(spacing: 16) {
-                SideTool(icon: "highlighter", label: "标注", active: panelTab == .annotation) {
-                    panelTab = .annotation
-                    state.activeKind = .brush
-                }
+        VStack(spacing: 12) {
+            // 拖动条：实际上由外层 AppKit 的透明拖动带接管，这里只画抓手
+            HStack {
+                Spacer()
+                Capsule()
+                    .fill(Color.black.opacity(0.12))
+                    .frame(width: 34, height: 4)
+                Spacer()
+            }
+            .frame(height: 14)
+            .help("按住拖动面板")
+
+            // 工具行：翻译 / OCR / 字号 / 关闭
+            HStack(spacing: 12) {
                 SideTool(icon: "character.bubble", label: "翻译", active: panelTab == .translate) {
                     onRunTranslation()
                 }
@@ -42,6 +49,7 @@ struct CaptureEditorSidePanelView: View {
                     if ocrPhase == .idle { onRunOCR() } else { panelTab = .ocr }
                 }
                 Spacer()
+                fontSizeControls
                 Button {
                     isSidePanelVisible = false
                 } label: {
@@ -56,12 +64,13 @@ struct CaptureEditorSidePanelView: View {
             }
 
             switch panelTab {
-            case .annotation: annotationControls
-            case .ocr: ocrResultsView
+            case .annotation, .ocr: ocrResultsView
             case .translate: translationResultsView
             }
         }
         .padding(16)
+        // 面板尺寸固定，内容撑满整张卡片，拖动带才会落在卡片顶部
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(Color(red: 0.985, green: 0.988, blue: 1.0))
@@ -75,71 +84,39 @@ struct CaptureEditorSidePanelView: View {
 
     // MARK: - 面板页签内容
 
-    /// 标注页：颜色盘 + 粗细 + 形状快捷 + 开关 + 复制（原面板内容，原样搬过来）
-    private var annotationControls: some View {
-        Group {
-            // 颜色盘（7 色，选中蓝圈）
-            HStack(spacing: 12) {
-                ForEach(0..<AnnotationPalette.count, id: \.self) { i in
-                    Circle()
-                        .fill(AnnotationPalette[i])
-                        .frame(width: 22, height: 22)
-                        .overlay {
-                            if state.colorIndex == i {
-                                Circle().strokeBorder(Color(nsColor: .controlAccentColor), lineWidth: 2.5)
-                                    .frame(width: 30, height: 30)
-                            }
-                        }
-                        .onTapGesture { state.colorIndex = i }
-                }
-            }
+    /// 结果区最大高度：字号放大时同步变高，方便看长文
+    private var resultMaxHeight: CGFloat {
+        min(420, max(240, textSize * 18))
+    }
 
-            // 粗细滑杆 + Npx
-            HStack(spacing: 10) {
-                Slider(value: $state.strokeWidth, in: 1...10, step: 1)
-                    .tint(Color(nsColor: .controlAccentColor))
-                Text("\(Int(state.strokeWidth))px")
-                    .font(.system(size: 13))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    .frame(width: 36)
-            }
-
-            // 形状快捷行：直线/箭头/矩形/椭圆/上箭头
-            HStack(spacing: 22) {
-                ShapeQuick(icon: "line.diagonal", kind: .brush, state: state) { state.activeKind = .brush }
-                ShapeQuick(icon: "arrow.right", kind: .arrow, state: state) { state.activeKind = .arrow }
-                ShapeQuick(icon: "rectangle", kind: .rect, state: state) { state.activeKind = .rect }
-                ShapeQuick(icon: "circle", kind: .ellipse, state: state) { state.activeKind = .ellipse }
-                ShapeQuick(icon: "arrow.up.right", kind: .arrow, state: state) { state.activeKind = .arrow }
-            }
-            .padding(.vertical, 10)
-            .background(RoundedRectangle(cornerRadius: 12).fill(.primary.opacity(0.04)))
-
-            // 马赛克 / 高亮 开关行
-            ToggleRow(icon: "square.grid.3x3.square", label: "马赛克", isOn: $state.mosaicEnabled) {
-                if state.mosaicEnabled { state.activeKind = .mosaic }
-            }
-            ToggleRow(icon: "drop", label: "高亮", isOn: $state.highlightEnabled) {
-                if state.highlightEnabled { state.activeKind = .highlight }
-            }
-
-            // 复制到剪贴板（整宽按钮）
+    /// 字号放大 / 缩小
+    private var fontSizeControls: some View {
+        HStack(spacing: 2) {
             Button {
-                onQuickCopy()
+                textSize = max(11, textSize - 1)
             } label: {
-                HStack {
-                    Image(systemName: "doc.on.doc")
-                    Text("复制到剪贴板").font(.system(size: 13, weight: .medium))
-                    Spacer()
-                    Text("⌘C").font(.system(size: 11)).foregroundStyle(.tertiary)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 12).fill(.primary.opacity(0.05)))
-                .contentShape(Rectangle())
+                Image(systemName: "textformat.size.smaller")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(textSize <= 11 ? .tertiary : .secondary)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .disabled(textSize <= 11)
+            .help("缩小字号")
+
+            Button {
+                textSize = min(22, textSize + 1)
+            } label: {
+                Image(systemName: "textformat.size.larger")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(textSize >= 22 ? .tertiary : .secondary)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(textSize >= 22)
+            .help("放大字号")
         }
     }
 
@@ -179,7 +156,7 @@ struct CaptureEditorSidePanelView: View {
                 if ocrDisplayMode == 0 {
                     ScrollView {
                         Text(ocrLines.map(\.text).joined(separator: "\n"))
-                            .font(.system(size: 13, weight: .regular))
+                            .font(.system(size: textSize, weight: .regular))
                             .lineSpacing(4)
                             .lineLimit(nil)
                             .textSelection(.enabled)
@@ -187,7 +164,7 @@ struct CaptureEditorSidePanelView: View {
                             .padding(10)
                     }
                     .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.03)))
-                    .frame(maxHeight: 280)
+                    .frame(maxHeight: resultMaxHeight)
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 8) {
@@ -196,7 +173,7 @@ struct CaptureEditorSidePanelView: View {
                             }
                         }
                     }
-                    .frame(maxHeight: 280)
+                    .frame(maxHeight: resultMaxHeight)
                 }
             }
             HStack(spacing: 8) {
@@ -246,7 +223,7 @@ struct CaptureEditorSidePanelView: View {
                     ScrollView {
                         let text = ocrLines.map { translations[$0.id] ?? "" }.filter { !$0.isEmpty }.joined(separator: "\n")
                         Text(text)
-                            .font(.system(size: 13, weight: .regular))
+                            .font(.system(size: textSize, weight: .regular))
                             .lineSpacing(4)
                             .lineLimit(nil)
                             .textSelection(.enabled)
@@ -254,7 +231,7 @@ struct CaptureEditorSidePanelView: View {
                             .padding(10)
                     }
                     .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.03)))
-                    .frame(maxHeight: 280)
+                    .frame(maxHeight: resultMaxHeight)
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 10) {
@@ -269,7 +246,7 @@ struct CaptureEditorSidePanelView: View {
                             }
                         }
                     }
-                    .frame(maxHeight: 280)
+                    .frame(maxHeight: resultMaxHeight)
                 }
             }
             HStack(spacing: 8) {

@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>同类产品是怎么做搜索 / 历史的</title>
+<style>
+  :root{
+    --ink:#0B0D18; --ink2:#5A6076; --ink3:#8E93A8;
+    --line:rgba(11,13,24,.08);
+    --blue:#0538E0;
+    --surface:#fff;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  body{
+    margin:0;padding:46px 40px 90px;
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif;
+    background:#EDEFF5;color:var(--ink);
+  }
+  .wrap{max-width:1360px;margin:0 auto}
+  .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--blue);font-weight:700}
+  h1{margin:10px 0 8px;font-size:30px;letter-spacing:-.02em}
+  .sub{color:var(--ink2);font-size:13.5px;line-height:1.75;max-width:820px;margin:0}
+
+  .case{margin-top:46px}
+  .case-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+  .brand{
+    height:24px;padding:0 10px;border-radius:7px;display:inline-flex;align-items:center;
+    font-size:11.5px;font-weight:800;letter-spacing:.02em;color:#fff;background:var(--ink);
+  }
+  .brand.paste{background:linear-gradient(135deg,#FF5C7A,#B33CFF)}
+  .brand.ray{background:linear-gradient(135deg,#FF6363,#FF2D55)}
+  .brand.spot{background:linear-gradient(135deg,#1D1D1F,#4A4A52)}
+  .brand.eagle{background:linear-gradient(135deg,#2F8BFF,#0057D9)}
+  .brand.cs{background:linear-gradient(135deg,#25C55B,#0E8F3E)}
+  .case-head h2{margin:0;font-size:15.5px;letter-spacing:-.01em}
+  .case-head .note{font-size:11.5px;color:var(--ink3)}
+  .pair{display:grid;grid-template-columns:1.15fr .85fr;gap:26px;align-items:start}
+  .takeaways{background:#fff;border-radius:14px;padding:18px 18px 16px;box-shadow:0 0 0 1px var(--line)}
+  .takeaways h3{margin:0 0 10px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)}
+  .takeaways ul{margin:0;padding-left:16px}
+  .takeaways li{font-size:12.5px;line-height:1.85;color:var(--ink2)}
+  .takeaways li b{color:var(--ink)}
+
+  /* 通用：应用图标 */
+  .ic{width:16px;height:16px;border-radius:4.5px;display:grid;place-items:center;font-size:9px;font-weight:800;color:#fff;flex:none}
+  .ic.safari{background:linear-gradient(160deg,#3BC7FB,#0A6BE0)}
+  .ic.chrome{background:linear-gradient(160deg,#F7C34D,#E05C43 55%,#3FA36B)}
+  .ic.idea{background:linear-gradient(160deg,#F97B5C,#C7392B)}
+  .ic.lenso{background:linear-gradient(160deg,#2E6BFF,#0538E0)}
+  .ic.notes{background:linear-gradient(160deg,#FFD25C,#F2A03D);color:#7A4A00}
+  .ic.term{background:linear-gradient(160deg,#4A4F60,#1E2130)}
+  .ic.finder{background:linear-gradient(160deg,#5AC8FA,#0A84FF)}
+
+  /* 缩略图 */
+  .th{position:relative;overflow:hidden;background:#DDE2EE;border-radius:6px}
+  .th:after{
+    content:"";position:absolute;inset:0;opacity:.45;
+    background:
+      linear-gradient(180deg,rgba(255,255,255,.6),rgba(255,255,255,0) 45%),
+      repeating-linear-gradient(90deg,rgba(255,255,255,.55) 0 5px,rgba(255,255,255,0) 5px 12px);
+  }
+  .t1{background:linear-gradient(135deg,#C9D6FF,#8FA7F8 55%,#5C7BE8)}
+  .t2{background:linear-gradient(135deg,#FFD9C2,#F2A97E 60%,#C97A4E)}
+  .t3{background:linear-gradient(135deg,#D3F1E4,#93D3BB 60%,#4F9E80)}
+  .t4{background:linear-gradient(135deg,#E7DDFB,#B79CEB 60%,#7A5AC4)}
+  .t5{background:linear-gradient(135deg,#DCE6F2,#9FB2CB 60%,#6B7F99)}
+  .t6{background:linear-gradient(135deg,#FBE3EA,#EDA0B4 60%,#B85B74)}
+
+  /* ================= 1. Raycast ================= */
+  .ray{
+    width:100%;border-radius:14px;overflow:hidden;
+    background:rgba(248,248,250,.94);
+    box-shadow:0 0 0 1px rgba(11,13,24,.09), 0 26px 60px -24px rgba(11,13,24,.5);
+    backdrop-filter:blur(20px);
+  }
+  .ray .bar{display:flex;align-items:center;gap:10px;padding:13px 15px;border-bottom:1px solid rgba(11,13,24,.06)}
+  .ray .bar .app{width:22px;height:22px;border-radius:6px;background:linear-gradient(160deg,#FF6363,#FF2D55)}
+  .ray .bar input,.ray .bar .q{flex:1;font-size:14px;color:var(--ink)}
+  .ray .bar .q span{color:#B6BAC8}
+  .ray .bar .kbd{font-size:10px;color:var(--ink3);border:1px solid rgba(11,13,24,.1);border-radius:5px;padding:2px 5px;background:#fff}
+  .ray .sec{padding:8px 8px 4px}
+  .ray .sec-h{font-size:9.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#9AA0B2;padding:6px 8px 5px;display:flex;justify-content:space-between}
+  .ray .item{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:7px;height:32px}
+  .ray .item.on{background:#0B0D18;color:#fff}
+  .ray .item.on .sub,.ray .item.on .meta{color:rgba(255,255,255,.55)}
+  .ray .th{width:22px;height:22px;border-radius:5px;flex:none}
+  .ray .txt{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px}
+  .ray .ttl{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ray .sub{font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ray .meta{font-size:10.5px;color:var(--ink3);flex:none}
+  .ray .foot{display:flex;gap:14px;align-items:center;padding:9px 14px;border-top:1px solid rgba(11,13,24,.06);font-size:10.5px;color:var(--ink3);background:rgba(255,255,255,.6)}
+  .ray .foot .g{margin-left:auto;display:flex;gap:12px}
+  .ray kbd{font-family:inherit;font-size:9.5px;border:1px solid rgba(11,13,24,.12);border-bottom-width:2px;border-radius:4px;padding:1px 4px;background:#fff;color:#5A6076}
+
+  /* ================= 2. Paste ================= */
+  .paste-stage{
+    border-radius:14px;padding:22px 18px 16px;
+    background:linear-gradient(180deg,#2A2C3A,#15161F);
+    box-shadow:0 0 0 1px rgba(255,255,255,.06),0 26px 60px -26px rgba(11,13,24,.65);
+  }
+  .paste-stage .hint{font-size:10.5px;color:rgba(255,255,255,.55);display:flex;justify-content:space-between;margin-bottom:12px;padding:0 2px}
+  .paste-row{display:flex;gap:10px}
+  .p-card{flex:1;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 10px 24px -14px rgba(0,0,0,.7)}
+  .p-card .th{height:104px;border-radius:0}
+  .p-card .cap{padding:7px 8px 8px;display:flex;align-items:center;gap:5px;font-size:9.5px;color:var(--ink3)}
+  .p-card .cap .time{margin-left:auto;font-family:ui-monospace,monospace;font-size:9px}
+  .p-card.act{outline:2px solid #FF5C7A;outline-offset:2px}
+  .p-card.tx .body{padding:10px 10px 11px;font-size:11px;line-height:1.55;color:#2A2D3F;height:104px;overflow:hidden}
+  .p-card.tx .body.mono{font-family:ui-monospace,"SF Mono",monospace;font-size:10px;color:#3B3F55}
+
+  /* ================= 3. Spotlight ================= */
+  .spot{
+    border-radius:12px;overflow:hidden;background:rgba(250,250,252,.96);
+    box-shadow:0 0 0 1px rgba(11,13,24,.1),0 30px 70px -30px rgba(11,13,24,.55);
+    backdrop-filter:blur(24px);
+  }
+  .spot .bar{display:flex;align-items:center;gap:10px;padding:12px 14px}
+  .spot .bar .mag{color:#A0A5B6;font-size:16px}
+  .spot .bar .q{flex:1;font-size:17px;color:var(--ink);letter-spacing:-.01em}
+  .spot .line{height:1px;background:rgba(11,13,24,.07);margin:0 12px}
+  .spot .sec-h{font-size:10px;font-weight:600;color:#9AA0B2;padding:9px 16px 4px}
+  .spot .row{display:flex;align-items:center;gap:11px;padding:7px 16px;height:42px}
+  .spot .row.on{background:rgba(10,132,255,.12)}
+  .spot .row .ic{width:25px;height:25px;border-radius:6px;font-size:11px}
+  .spot .row .th{width:34px;height:25px}
+  .spot .row .ttl{font-size:13.5px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .spot .row .ttl b{background:rgba(255,214,10,.5);font-weight:500}
+  .spot .row .sub{font-size:10.5px;color:var(--ink3);flex:none}
+
+  /* ================= 4. Eagle ================= */
+  .eagle{
+    display:grid;grid-template-columns:104px 1fr 168px;min-height:330px;
+    border-radius:14px;overflow:hidden;background:#FAFAFC;
+    box-shadow:0 0 0 1px var(--line),0 24px 56px -28px rgba(11,13,24,.5);
+  }
+  .eagle .side{padding:10px 8px;border-right:1px solid var(--line);background:#F4F5F9}
+  .eagle .side .grp{font-size:9px;font-weight:700;letter-spacing:.08em;color:#A0A5B6;padding:8px 6px 4px}
+  .eagle .side .it{display:flex;align-items:center;gap:6px;font-size:11px;color:#4B5063;padding:5px 7px;border-radius:6px}
+  .eagle .side .it.on{background:#fff;box-shadow:0 0 0 1px var(--line);color:var(--ink);font-weight:600}
+  .eagle .mid{padding:12px 10px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;align-content:start}
+  .eagle .mid .th{height:64px;border-radius:6px}
+  .eagle .mid .cell.sel .th{outline:2px solid var(--blue);outline-offset:2px}
+  .eagle .mid .cap{font-size:9px;color:var(--ink3);margin-top:4px;display:flex;gap:3px;align-items:center}
+  .eagle .prev{border-left:1px solid var(--line);padding:10px;background:#fff;display:flex;flex-direction:column;gap:8px}
+  .eagle .prev .th{height:118px;border-radius:8px}
+  .eagle .prev .ttl{font-size:11px;font-weight:600;line-height:1.4}
+  .eagle .prev .kv{font-size:9.5px;color:var(--ink3);line-height:1.6}
+
+  /* ================= 5. CleanShot 快捷访问 ================= */
+  .cs-stage{
+    border-radius:14px;padding:26px 18px;background:linear-gradient(180deg,#38415B,#1B2030);
+    position:relative;min-height:190px;
+    box-shadow:0 0 0 1px rgba(255,255,255,.06),0 26px 60px -26px rgba(11,13,24,.65);
+  }
+  .cs-stage:before{content:"";position:absolute;inset:0;background:radial-gradient(400px 160px at 80% 10%,rgba(255,255,255,.12),transparent 70%)}
+  .cs-strip{
+    position:relative;display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:12px;
+    background:rgba(255,255,255,.14);backdrop-filter:blur(18px);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.22),0 12px 26px -14px rgba(0,0,0,.6);
+    color:#fff;
+  }
+  .cs-strip .th{width:74px;height:46px;border-radius:7px;flex:none}
+  .cs-strip .txt{font-size:10.5px;color:rgba(255,255,255,.78);line-height:1.5}
+  .cs-strip .txt b{display:block;color:#fff;font-size:11.5px;margin-bottom:2px}
+  .cs-acts{margin-left:auto;display:flex;gap:6px}
+  .cs-acts .a{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;font-size:11px;background:rgba(255,255,255,.16);box-shadow:inset 0 0 0 1px rgba(255,255,255,.2)}
+  .cs-acts .a.pri{background:#25C55B;box-shadow:0 6px 14px -4px rgba(37,197,91,.6)}
+  .cs-more{display:flex;gap:6px;margin-top:10px;position:relative}
+  .cs-more .th{width:56px;height:36px;border-radius:6px;opacity:.55}
+
+  /* ================= 结论 ================= */
+  .rule-table{width:100%;border-collapse:collapse;font-size:12px;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 0 0 1px var(--line);margin-top:16px}
+  .rule-table th,.rule-table td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line)}
+  .rule-table th{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink3)}
+  .rule-table tr:last-child td{border-bottom:none}
+  .rule-table td:first-child{font-weight:600}
+
+  .final{margin-top:34px;background:#fff;border-radius:16px;padding:24px 26px;box-shadow:0 0 0 1px var(--line)}
+  .final h2{margin:0 0 6px;font-size:16px}
+  .final p{margin:0 0 12px;font-size:12.5px;color:var(--ink2);line-height:1.85}
+  .final b{color:var(--ink)}
+  .swatches{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .sw{font-size:11px;color:var(--ink2);background:#F3F4F8;border-radius:999px;padding:5px 10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">LENSO · Reference Study</div>
+  <h1>同类产品的搜索 / 历史界面是怎么做的</h1>
+  <p class="sub">下面是按真实产品布局重建的五个案例（不是我的改编），可以看到它们的密度、层级和“图片怎么放”。后面给出可以直接落到 LENSO 上的结论。案例顺序：命令面板类 → 卡片货架类 → 系统搜索 → 素材管理 → 截图工具快捷条。</p>
+
+  <!-- ========== 1  Raycast ========== -->
+  <section class="case">
+    <div class="case-head">
+      <span class="brand ray">RAYCAST</span>
+      <h2>命令面板：一行一条，键盘优先</h2>
+      <span class="note">剪贴板历史 / 文件搜索 / 扩展</span>
+    </div>
+    <div class="pair">
+      <div class="ray">
+        <div class="bar">
+          <div class="app"></div>
+          <div class="q">搜索剪贴板历史…</div>
+          <div class="kbd">⌘K</div>
+        </div>
+        <div class="sec">
+          <div class="sec-h"><span>CLIPBOARD HISTORY</span><span>14 ITEMS</span></div>
+          <div class="item on"><div class="th t1"></div><div class="txt"><span class="ttl">全局搜索的页面需要优化下</span><span class="sub">LENSO</span></div><span class="meta">18:18</span></div>
+          <div class="item"><div class="ic notes">N</div><div class="txt"><span class="ttl">全局搜索的页面需要优化下，目前这个是我用的最多的功能</span><span class="sub">备忘录</span></div><span class="meta">09:48</span></div>
+          <div class="item"><div class="ic idea">I</div><div class="txt"><span class="ttl">WITH win AS ( SELECT user_id, package_id …</span><span class="sub">IntelliJ IDEA</span></div><span class="meta">09:33</span></div>
+          <div class="item"><div class="th t2"></div><div class="txt"><span class="ttl">数据看板 · 最近 7 天趋势</span><span class="sub">Safari</span></div><span class="meta">17:42</span></div>
+          <div class="item"><div class="ic term">T</div><div class="txt"><span class="ttl">dryRun</span><span class="sub">iTerm</span></div><span class="meta">09:32</span></div>
+          <div class="item"><div class="th t3"></div><div class="txt"><span class="ttl">设置 · 截图快捷键与保存路径</span><span class="sub">LENSO</span></div><span class="meta">16:08</span></div>
+        </div>
+        <div class="foot">
+          <span><kbd>↵</kbd> 粘贴</span><span><kbd>⌘↵</kbd> 复制</span><span><kbd>⌘Y</kbd> 预览</span>
+          <span class="g"><span><kbd>⌘K</kbd> 操作</span><span><kbd>esc</kbd></span></span>
+        </div>
+      </div>
+      <div class="takeaways">
+        <h3>为什么好用</h3>
+        <ul>
+          <li><b>行高只有 32px</b>，一屏 15+ 条，靠滚动和键盘比靠眼睛快。</li>
+          <li><b>图片只用 22px 缩略图</b>，不承担“看清内容”的职责，看清楚靠按 ⌘Y 唤出预览窗。</li>
+          <li><b>主标题 + 灰色副标题</b>（来源应用）两段式，时间只占最右一小格。</li>
+          <li><b>选中行反色</b>（黑底白字），焦点非常明确；底部常驻快捷键提示。</li>
+          <li>分类靠<b>分组标题</b>而不是上面的筛选胶囊，节省一行。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 2  Paste ========== -->
+  <section class="case">
+    <div class="case-head">
+      <span class="brand paste">PASTE</span>
+      <h2>卡片货架：图片当主角，横向浏览</h2>
+      <span class="note">macOS 剪贴板管理器</span>
+    </div>
+    <div class="pair">
+      <div class="paste-stage">
+        <div class="hint"><span>最近复制</span><span>← → 切换 · ⏎ 粘贴</span></div>
+        <div class="paste-row">
+          <div class="p-card act">
+            <div class="th t1"></div>
+            <div class="cap"><span class="ic lenso">L</span><span class="time">18:18</span></div>
+          </div>
+          <div class="p-card tx">
+            <div class="body">全局搜索的页面需要优化下，目前这个是我用的最多的功能，一定要把这个功能做好。</div>
+            <div class="cap"><span class="ic notes">N</span><span class="time">09:48</span></div>
+          </div>
+          <div class="p-card">
+            <div class="th t2"></div>
+            <div class="cap"><span class="ic safari">S</span><span class="time">17:42</span></div>
+          </div>
+          <div class="p-card tx">
+            <div class="body mono">WITH win AS (<br/>SELECT user_id, package_id<br/>FROM g.pkg_end</div>
+            <div class="cap"><span class="ic idea">I</span><span class="time">09:33</span></div>
+          </div>
+        </div>
+        <div class="cs-more" style="margin-top:12px"><div class="th t3"></div><div class="th t5"></div><div class="th t6"></div></div>
+      </div>
+      <div class="takeaways">
+        <h3>为什么好用</h3>
+        <ul>
+          <li><b>横向卡片流</b>，每张卡 200px 左右，图片直接铺满上半部分，缩略图足够辨认。</li>
+          <li>文字与图片<b>混排在同一序列</b>，不做两套布局，视觉统一。</li>
+          <li>当前选中卡用<b>彩色描边</b>，而不是背景色变化，图片本身不被遮挡。</li>
+          <li>卡片里只有<b>一个小应用图标 + 时间</b>，没有标题、没有字数、没有路径。</li>
+          <li>适合“最近几条”的短时记忆检索，不适合精确搜索。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 3  Spotlight ========== -->
+  <section class="case">
+    <div class="case-head">
+      <span class="brand spot">SPOTLIGHT</span>
+      <h2>系统搜索：大图标 + 极简行</h2>
+      <span class="note">macOS 全局搜索</span>
+    </div>
+    <div class="pair">
+      <div class="spot">
+        <div class="bar"><span class="mag">⌕</span><span class="q">搜索</span></div>
+        <div class="line"></div>
+        <div class="sec-h">最佳结果</div>
+        <div class="row on"><div class="ic finder">F</div><div class="ttl">全局搜索 <b>面板</b>设计稿</div><div class="sub">文件夹</div></div>
+        <div class="row"><div class="th t1"></div><div class="ttl">全局搜索 <b>面板</b> · 截图 18:18</div><div class="sub">截图</div></div>
+        <div class="sec-h">备忘录</div>
+        <div class="row"><div class="ic notes">N</div><div class="ttl"><b>全局搜索</b>的页面需要优化下</div><div class="sub">今天 09:48</div></div>
+        <div class="row"><div class="ic notes">N</div><div class="ttl"><b>全局搜索</b>相关的交互整理</div><div class="sub">昨天</div></div>
+      </div>
+      <div class="takeaways">
+        <h3>为什么好用</h3>
+        <ul>
+          <li><b>匹配关键词高亮</b>（黄色底），一眼知道为什么命中。</li>
+          <li>行高 <b>42px</b>，图标 25px，比 Raycast 更“可视化”，但仍是一行一条。</li>
+          <li>结果<b>按类型分组</b>（最佳结果 / 备忘录 / 截图），组内不再重复类型标签。</li>
+          <li>右侧只放一个极短的元信息（文件夹 / 时间），不堆字段。</li>
+          <li>无筛选胶囊、无排序、无批量操作，<b>只做一件事</b>。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 4  Eagle ========== -->
+  <section class="case">
+    <div class="case-head">
+      <span class="brand eagle">EAGLE</span>
+      <h2>素材管理：左筛选 + 中网格 + 右预览</h2>
+      <span class="note">设计素材库</span>
+    </div>
+    <div class="pair">
+      <div class="eagle">
+        <div class="side">
+          <div class="grp">资料库</div>
+          <div class="it on">全部素材</div>
+          <div class="it">截图</div>
+          <div class="it">灵感</div>
+          <div class="grp">应用</div>
+          <div class="it"><span class="ic lenso">L</span>LENSO</div>
+          <div class="it"><span class="ic safari">S</span>Safari</div>
+          <div class="it"><span class="ic idea">I</span>IDEA</div>
+        </div>
+        <div class="mid">
+          <div class="cell sel"><div class="th t1"></div><div class="cap">18:18</div></div>
+          <div class="cell"><div class="th t2"></div><div class="cap">17:42</div></div>
+          <div class="cell"><div class="th t3"></div><div class="cap">16:08</div></div>
+          <div class="cell"><div class="th t4"></div><div class="cap">11:20</div></div>
+          <div class="cell"><div class="th t5"></div><div class="cap">10:55</div></div>
+          <div class="cell"><div class="th t6"></div><div class="cap">09:30</div></div>
+        </div>
+        <div class="prev">
+          <div class="th t1"></div>
+          <div class="ttl">全局搜索的页面需要优化下</div>
+          <div class="kv">1512 × 982 · 386 KB<br/>LENSO · 今天 18:18:42</div>
+        </div>
+      </div>
+      <div class="takeaways">
+        <h3>为什么好用</h3>
+        <ul>
+          <li>筛选<b>放在左侧竖栏</b>（按类型 / 按应用），不占顶部空间，还能显示数量与层级。</li>
+          <li>中间网格密度高（64px 高、三列），<b>只给时间</b>，不给标题——素材靠图认。</li>
+          <li>右侧固定预览栏，<b>选中即看大图</b>，不用双击、不弹窗。</li>
+          <li>预览旁只放<b>尺寸 / 大小 / 来源 / 时间</b>四行，够用不啰嗦。</li>
+          <li>适合“我知道它长什么样”的场景。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 5  CleanShot ========== -->
+  <section class="case">
+    <div class="case-head">
+      <span class="brand cs">CLEANSHOT X</span>
+      <h2>截图后的快捷条：任务导向的一行</h2>
+      <span class="note">截图工具浮动历史</span>
+    </div>
+    <div class="pair">
+      <div class="cs-stage">
+        <div class="cs-strip">
+          <div class="th t1"></div>
+          <div class="txt"><b>刚刚截图 · 1512 × 982</b>已复制到剪贴板</div>
+          <div class="cs-acts">
+            <div class="a">⧉</div><div class="a">✎</div><div class="a">⤓</div><div class="a pri">✓</div>
+          </div>
+        </div>
+        <div class="cs-more"><div class="th t2"></div><div class="th t3"></div><div class="th t5"></div><div class="th t6"></div></div>
+      </div>
+      <div class="takeaways">
+        <h3>为什么好用</h3>
+        <ul>
+          <li>不追求“管理”，只服务<b>刚刚那一次截图</b>：缩略图 + 一句话状态 + 4 个动作。</li>
+          <li>动作按钮<b>等宽、带图标、无文字</b>，主操作（完成/确认）用绿色实心区分。</li>
+          <li>历史缩略图<b>降透明度</b>排在下面，弱化但可点。</li>
+          <li>整体是<b>悬浮的一条</b>，不打断当前工作。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 汇总 ========== -->
+  <section class="case">
+    <div class="case-head"><span class="brand">对比</span><h2>这五类界面的共同规律</h2></div>
+    <table class="rule-table">
+      <tr><th>维度</th><th>他们怎么做</th><th>含义</th></tr>
+      <tr><td>图片尺寸</td><td>列表里都是 20–40px 的小缩略图；要看清就切换成预览</td><td>不要把“大图卡片”塞进搜索列表</td></tr>
+      <tr><td>每条的信息</td><td>标题（或文字片段）+ 一个来源 + 一个时间</td><td>不超过三段，绝不出现字数、路径、类型标签三件套</td></tr>
+      <tr><td>筛选</td><td>要么竖向侧栏，要么干脆没有（分组标题代替）</td><td>顶部一排胶囊是最占地方、收益最低的做法</td></tr>
+      <tr><td>预览</td><td>Raycast 按需唤出；Eagle 固定右栏</td><td>搜索场景更适合“固定右栏/按需”，不适合双击弹窗</td></tr>
+      <tr><td>焦点</td><td>选中行整行变色或加描边</td><td>键盘上下移动必须始终有一条高亮</td></tr>
+      <tr><td>元信息</td><td>弱化到 9–10.5px、灰阶</td><td>时间/来源是辅助，不该和标题抢注意力</td></tr>
+    </table>
+  </section>
+
+  <div class="final">
+    <h2>落到 LENSO 的建议</h2>
+    <p><b>骨架用 Raycast，图片交互借 Eagle，状态条借 CleanShot。</b>具体是：顶部保留一条大搜索框（像现在这样，这个是优点）；下面不再用筛选胶囊，改成 <b>左侧 120px 竖栏</b>（全部 / 截图 / 文字 / 收藏，带数量）；中间是 <b>32px 行高的紧凑列表</b>，每行 = 24px 缩略图或类型图标 + 标题一行 + 来源应用图标 + 时间；<b>右侧 260px 固定预览栏</b>，选中即显示大图 / 全文和「复制 / 打开 / 删除」。</p>
+    <p>这样一屏能看到 12–15 条，图片在右边永远完整清晰，键盘 ↑↓ 直接切换预览，回车复制——和纯看图库的体验区分开。如果你更想要“最近几条、滑动挑选”的轻量感，那就走 Paste 的横向货架，但那会牺牲搜索密度。</p>
+    <div class="swatches">
+      <span class="sw">行高 32</span><span class="sw">缩略图 24–28</span><span class="sw">左栏 120 + 列表 + 预览 260</span>
+      <span class="sw">选中整行高亮</span><span class="sw">元信息 10.5px 灰</span><span class="sw">回车复制 / ⌘↵ 打开</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

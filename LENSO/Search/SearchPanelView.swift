@@ -11,9 +11,43 @@ extension DateFormatter {
     }()
 }
 
-/// Spotlight 风格全局搜索与最近剪贴板聚合画廊
-/// 采用方块形照片网格铺满排版（LazyVGrid），支持窗口自由拖拽移动，
-/// 整合展示截图与复制文字，并以「年月日时分秒」精准呈现时间。
+extension Date {
+    /// 与截图一致的相对日期时间：今日 / 昨日 / M月d日 / yyyy年M月d日，均带时分秒
+    var lensoRelativeDayTime: String {
+        let calendar = Calendar.current
+        let time = formatted(date: .omitted, time: .standard)
+        if calendar.isDateInToday(self) { return "今日 \(time)" }
+        if calendar.isDateInYesterday(self) { return "昨日 \(time)" }
+        if calendar.component(.year, from: self) == calendar.component(.year, from: .now) {
+            return "\(formatted(.dateTime.month(.defaultDigits).day())) \(time)"
+        }
+        return "\(formatted(.dateTime.year().month(.defaultDigits).day())) \(time)"
+    }
+}
+
+// MARK: - 桌面毛玻璃背景
+
+/// 跨窗口毛玻璃：模糊面板背后的真实桌面（而不是面板内部内容）
+struct BehindWindowBlur: NSViewRepresentable {
+    var material: NSVisualEffectView.Material = .fullScreenUI
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = material
+        view.blendingMode = .behindWindow
+        view.state = .active
+        view.appearance = NSAppearance(named: .vibrantDark)
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = material
+    }
+}
+
+// MARK: - 沉浸式搜索面板
+
+/// 全屏沉浸式搜索：模糊桌面 + 瀑布流画廊（参考 Apple 照片搜索）
 struct SearchPanelView: View {
     var onDismiss: () -> Void = {}
 
@@ -39,6 +73,8 @@ struct SearchPanelView: View {
         let rawText: String?
         let thumbnail: CGImage?
         let clipboardID: UUID?
+        /// 截图条目保留记录，全尺寸图在预览/复制时按需加载
+        let record: ScreenshotRecord?
     }
 
     @State private var searchText = ""
@@ -46,65 +82,75 @@ struct SearchPanelView: View {
     @State private var items: [FeedItem] = []
     @State private var copiedID: UUID?
     @State private var inspectingItem: FeedItem?
+    @State private var selection: UUID?
+    @State private var currentColumnCount = 6
+    @State private var keyMonitor: Any?
     @ObservedObject private var webStore = WebMetadataStore.shared
     @FocusState private var focused: Bool
 
-    // 方块形网格布局：自适应列宽（185~230pt），如同相册照片墙铺满整个界面
-    private let gridColumns = [
-        GridItem(.adaptive(minimum: 185, maximum: 230), spacing: 14)
-    ]
+    private let gap: CGFloat = 11
+    private let sidePadding: CGFloat = 22
+    /// 所有卡片统一高度，不随截图比例变化
+    private static let tileHeight: CGFloat = 148
 
     var body: some View {
-        VStack(spacing: 10) {
-            // 顶部拖拽手柄指示条（按住可拖动窗口）
-            topDragBar
-
-            // 顶部搜索胶囊栏
-            searchHeader
-
-            // 分类筛选与数量统计栏
-            filterBar
-
-            // 照片级方块铺满网格流（图文聚合，时间倒序）
-            scrollContent
+        VStack(spacing: 0) {
+            header
+            content
+            footer
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 6)
-        .padding(.bottom, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
+            // 与主界面同一套浅色底：磨砂桌面 + 极浅冷色渐变
             ZStack {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(Color(red: 0.985, green: 0.988, blue: 0.995))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
-                    )
-                // 背景区域可全局直接拖拽窗口
-                WindowDragHandleView()
+                BehindWindowBlur()
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.94),
+                        Color(red: 0.973, green: 0.976, blue: 0.986).opacity(0.96),
+                        Color(red: 0.958, green: 0.966, blue: 0.984).opacity(0.97)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
             }
         }
-        .shadow(color: Color.black.opacity(0.22), radius: 32, y: 14)
+        .overlay(alignment: .top) {
+            // 顶部留白区域作为拖动带：按住可移动整个搜索窗口
+            SearchPanelDragStrip()
+                .frame(height: 18)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.22), radius: 30, y: 14)
         .onAppear {
             focused = true
             reloadFeed()
+            installKeyMonitor()
         }
-        .onChange(of: searchText) { _ in reloadFeed() }
-        .onChange(of: selectedCategory) { _ in reloadFeed() }
+        .onDisappear { removeKeyMonitor() }
         .onReceive(NotificationCenter.default.publisher(for: .searchPanelShouldReload)) { _ in reloadFeed() }
         .onReceive(NotificationCenter.default.publisher(for: .textNotesChanged)) { _ in reloadFeed() }
         .onReceive(NotificationCenter.default.publisher(for: .libraryChanged)) { _ in reloadFeed() }
         .onReceive(NotificationCenter.default.publisher(for: .screenshotSaved)) { _ in reloadFeed() }
+        .onReceive(NotificationCenter.default.publisher(for: .libraryChanged)) { _ in reloadFeed() }
+        .onReceive(NotificationCenter.default.publisher(for: .textNotesChanged)) { _ in reloadFeed() }
+        .onChange(of: items.map(\.id)) { _, _ in
+            if selection == nil { selection = filteredItems.first?.id }
+        }
         .onExitCommand {
             if inspectingItem != nil {
-                withAnimation(.easeInOut(duration: 0.2)) { inspectingItem = nil }
+                withAnimation(.easeInOut(duration: 0.18)) { inspectingItem = nil }
             } else {
                 onDismiss()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .searchPanelEscapePressed)) { _ in
             if inspectingItem != nil {
-                withAnimation(.easeInOut(duration: 0.2)) { inspectingItem = nil }
+                withAnimation(.easeInOut(duration: 0.18)) { inspectingItem = nil }
             } else {
                 onDismiss()
             }
@@ -116,213 +162,438 @@ struct SearchPanelView: View {
                 onPinImage: { openFloatingPreview($0) }
             )
         }
-        .lensoColorScheme()
     }
 
-    // MARK: - 顶部拖拽把手
+    // MARK: - 顶部搜索与筛选
 
-    private var topDragBar: some View {
-        HStack {
-            Spacer()
-            Capsule()
-                .fill(Color.black.opacity(0.18))
-                .frame(width: 44, height: 4.5)
-            Spacer()
-        }
-        .padding(.top, 2)
-        .padding(.bottom, 2)
-        .background(WindowDragHandleView())
-        .help("按住可拖拽移动此窗口")
+    private func openJSONTool() {
+        let clip = NSPasteboard.general.string(forType: .string) ?? ""
+        ToolHostWindowController.shared.show(toolID: "json", initialText: clip)
     }
 
-    // MARK: - 顶部搜索胶囊
+    private var header: some View {
+        HStack(spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(LensoColors.kleinBlue.opacity(0.8))
 
-    private var searchHeader: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(LensoColors.kleinBlueBright)
-
-            TextField("搜索最近复制的文字、截图或关键词…", text: $searchText)
-                .textFieldStyle(.plain)
-                .font(.system(size: 15))
-                .focused($focused)
-                .onSubmit {
-                    if let first = filteredItems.first {
-                        copyItem(first)
+                ZStack(alignment: .leading) {
+                    if searchText.isEmpty {
+                        Text("搜索截图、复制文字、来源应用…")
+                            .font(.system(size: 16.5))
+                            .foregroundStyle(Color.black.opacity(0.3))
+                            .allowsHitTesting(false)
                     }
+                    TextField("", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 16.5))
+                        .foregroundStyle(Color.primary)
+                        .focused($focused)
+                        .onSubmit { copySelectedOrFirst() }
                 }
 
-            if !searchText.isEmpty {
+                // JSON 工具快捷入口：取当前剪贴板文本作为初始内容
                 Button {
-                    searchText = ""
+                    openJSONTool()
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
+                    Image(systemName: "curlybraces")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.black.opacity(0.45))
+                        .frame(width: 24, height: 20)
+                        .background(
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .fill(Color.black.opacity(0.05))
+                        )
                 }
                 .buttonStyle(.plain)
+                .help("JSON 格式化工具")
+
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.black.opacity(0.28))
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Text("esc")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Color.black.opacity(0.42))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .strokeBorder(Color.black.opacity(0.12), lineWidth: 1)
+                        )
+                }
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 46)
+            .frame(maxWidth: 620)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(
+                        focused ? LensoColors.kleinBlueBright.opacity(0.55) : Color.black.opacity(0.08),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(color: .black.opacity(0.05), radius: 10, y: 4)
+
+            HStack(spacing: 7) {
+                ForEach(FilterCategory.allCases) { cat in
+                    let active = selectedCategory == cat
+                    Button {
+                        selectedCategory = cat
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text(cat.rawValue)
+                                .font(.system(size: 11.5, weight: active ? .semibold : .regular))
+                            Text("\(count(for: cat))")
+                                .font(.system(size: 10, weight: .medium, design: .rounded))
+                                .opacity(active ? 0.7 : 0.55)
+                        }
+                        .foregroundStyle(active ? Color.white : Color.black.opacity(0.62))
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule().fill(active ? LensoColors.kleinBlue : Color.black.opacity(0.045))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
             }
 
-            // 拖拽窗口移动图标提示
-            Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
-                .font(.system(size: 12))
-                .foregroundStyle(Color.secondary.opacity(0.5))
-                .help("拖拽窗口任意空白区可移动位置")
+            Spacer(minLength: 0)
 
-            // 关闭按钮
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(Color.black.opacity(0.05)))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.black.opacity(0.45))
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(Color.black.opacity(0.045)))
+                    .overlay(Circle().strokeBorder(Color.black.opacity(0.08), lineWidth: 1))
             }
             .buttonStyle(.plain)
             .help("关闭搜索 (Esc)")
         }
-        .padding(.horizontal, 16)
-        .frame(height: 50)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(focused ? LensoColors.kleinBlueBright.opacity(0.6) : Color.black.opacity(0.08), lineWidth: 1.5)
-                )
-                .shadow(color: focused ? LensoColors.kleinBlueBright.opacity(0.12) : Color.black.opacity(0.03), radius: 8, y: 2)
-        )
+        .padding(.horizontal, sidePadding)
+        .padding(.top, 18)
+        .padding(.bottom, 14)
     }
 
-    // MARK: - 分类切换与统计
+    // MARK: - 瀑布流内容
 
-    private var filterBar: some View {
-        HStack(spacing: 8) {
-            ForEach(FilterCategory.allCases) { cat in
-                Button {
-                    selectedCategory = cat
-                } label: {
-                    HStack(spacing: 5) {
-                        Text(cat.rawValue)
-                            .font(.system(size: 12, weight: selectedCategory == cat ? .semibold : .regular))
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule().fill(selectedCategory == cat ? LensoColors.kleinBlueBright : Color.black.opacity(0.04))
-                    )
-                    .foregroundStyle(selectedCategory == cat ? Color.white : Color.primary.opacity(0.75))
-                }
-                .buttonStyle(.plain)
-            }
+    private var content: some View {
+        GeometryReader { geo in
+            let available = geo.size.width - sidePadding * 2
+            let columns = columnCount(for: available)
+            let gridColumns = Array(
+                repeating: GridItem(.flexible(), spacing: gap, alignment: .top),
+                count: columns
+            )
 
-            Spacer()
-
-            Text("共 \(filteredItems.count) 项 · 按时间倒序")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-
-            // 清空剪贴板历史
-            Button {
-                clearHistory()
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22, height: 22)
-            }
-            .buttonStyle(.plain)
-            .help("清空剪贴板历史记录")
-        }
-        .padding(.horizontal, 4)
-    }
-
-    // MARK: - 方块形铺满内容流（类似照片相册卡片）
-
-    private var scrollContent: some View {
-        Group {
-            if filteredItems.isEmpty {
-                VStack(spacing: 12) {
-                    Spacer()
-                    Image(systemName: searchText.isEmpty ? "photo.stack" : "magnifyingglass")
-                        .font(.system(size: 38))
-                        .foregroundStyle(LensoColors.kleinBlueBright.opacity(0.45))
-                    Text(searchText.isEmpty ? "暂无最近复制记录" : "未找到匹配的内容")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    Text(searchText.isEmpty ? "截取图片或复制任何文字，将自动在此形成方块卡片归集" : "请尝试更换关键词")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary.opacity(0.7))
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
+            ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVGrid(columns: gridColumns, spacing: 14) {
-                        ForEach(filteredItems) { item in
-                            tileView(for: item)
+                    if filteredItems.isEmpty {
+                        emptyState
+                    } else {
+                        LazyVStack(alignment: .leading, spacing: 24) {
+                            ForEach(daySections) { section in
+                                VStack(alignment: .leading, spacing: 11) {
+                                    sectionHeader(section)
+
+                                    LazyVGrid(columns: gridColumns, alignment: .leading, spacing: gap) {
+                                        ForEach(section.items) { item in
+                                            tile(item)
+                                                .id(item.id)
+                                        }
+                                    }
+                                }
+                            }
                         }
+                        .padding(.horizontal, sidePadding)
+                        .padding(.top, 2)
+                        .padding(.bottom, 26)
                     }
-                    .padding(.vertical, 6)
                 }
+                .onChange(of: selection) { _, newValue in
+                    guard let newValue else { return }
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        proxy.scrollTo(newValue, anchor: .center)
+                    }
+                }
+                .onAppear { currentColumnCount = columns }
+                .onChange(of: columns) { _, newValue in currentColumnCount = newValue }
             }
         }
     }
 
-    // MARK: - 方块卡片分发
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: searchText.isEmpty ? "photo.stack" : "magnifyingglass")
+                .font(.system(size: 40, weight: .light))
+                .foregroundStyle(Color.black.opacity(0.18))
+            Text(searchText.isEmpty ? "暂无最近复制记录" : "未找到匹配的内容")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Color.black.opacity(0.62))
+            Text(searchText.isEmpty ? "截取图片或复制任意文字，都会在这里形成画廊" : "试试更换关键词")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 120)
+    }
+
+    private func sectionHeader(_ section: DaySection) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(section.title)
+                .font(.system(size: 16.5, weight: .bold))
+                .foregroundStyle(Color.black.opacity(0.82))
+            Text("\(section.items.count) 项")
+                .font(.system(size: 11.5))
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+    }
+
+    // MARK: - 单块内容
 
     @ViewBuilder
-    private func tileView(for item: FeedItem) -> some View {
+    private func tile(_ item: FeedItem) -> some View {
         switch item.kind {
         case .image(let cgImage, _):
-            SearchPanelScreenshotTile(
+            ImmersiveImageTile(
                 item: item,
-                cgImage: cgImage,
+                image: cgImage,
+                height: Self.tileHeight,
+                isSelected: selection == item.id,
                 isCopied: copiedID == item.id,
-                onCopy: { copyItem(item) },
-                onInspect: { inspectingItem = item }
+                onSelect: { selection = item.id },
+                onOpen: { inspectingItem = item },
+                onCopy: { copyItem(item) }
             )
         case .text(let content):
-            SearchPanelTextTile(
+            ImmersiveTextTile(
                 item: item,
                 content: content,
+                height: Self.tileHeight,
+                isSelected: selection == item.id,
                 isCopied: copiedID == item.id,
-                onCopy: { copyItem(item) },
-                onInspect: { inspectingItem = item },
-                webStore: webStore
+                onSelect: { selection = item.id },
+                onOpen: { inspectingItem = item },
+                onCopy: { copyItem(item) }
             )
         }
+    }
+
+    // MARK: - 底部状态栏
+
+    private var footer: some View {
+        HStack(spacing: 16) {
+            hint("↑↓←→", "选择")
+            hint("↵", "复制")
+            hint("space", "预览")
+            hint("esc", "关闭")
+            Spacer()
+            Text("共 \(filteredItems.count) 项")
+                .font(.system(size: 10.5))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, sidePadding)
+        .padding(.top, 8)
+        .padding(.bottom, 12)
+    }
+
+    private func hint(_ key: String, _ text: String) -> some View {
+        HStack(spacing: 4) {
+            Text(key)
+                .font(.system(size: 9.5, weight: .medium))
+                .foregroundStyle(Color.black.opacity(0.55))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .strokeBorder(Color.black.opacity(0.12), lineWidth: 1)
+                )
+            Text(text)
+                .font(.system(size: 10.5))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - 瀑布流布局计算
+
+    private struct DaySection: Identifiable {
+        let id: TimeInterval
+        let title: String
+        let items: [FeedItem]
+    }
+
+    private var daySections: [DaySection] {
+        let calendar = Calendar.current
+        var order: [TimeInterval] = []
+        var buckets: [TimeInterval: [FeedItem]] = [:]
+
+        for item in filteredItems {
+            let day = calendar.startOfDay(for: item.createdAt)
+            let key = day.timeIntervalSince1970
+            if buckets[key] == nil {
+                buckets[key] = []
+                order.append(key)
+            }
+            buckets[key]?.append(item)
+        }
+
+        return order.map { key in
+            let date = Date(timeIntervalSince1970: key)
+            let title: String
+            if calendar.isDateInToday(date) {
+                title = "今天"
+            } else if calendar.isDateInYesterday(date) {
+                title = "昨天"
+            } else if calendar.component(.year, from: date) == calendar.component(.year, from: .now) {
+                title = date.formatted(.dateTime.month(.defaultDigits).day())
+            } else {
+                title = date.formatted(.dateTime.year().month(.defaultDigits).day())
+            }
+            return DaySection(id: key, title: title, items: buckets[key] ?? [])
+        }
+    }
+
+    private func columnCount(for width: CGFloat) -> Int {
+        let target: CGFloat = 205
+        let count = Int((width + gap) / (target + gap))
+        return max(3, min(7, count))
     }
 
     // MARK: - 过滤逻辑
 
+    private func matches(_ item: FeedItem, category: FilterCategory) -> Bool {
+        switch category {
+        case .all: break
+        case .text:
+            if case .image = item.kind { return false }
+        case .images:
+            if case .text = item.kind { return false }
+        }
+
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        if query.isEmpty { return true }
+        if item.title.localizedCaseInsensitiveContains(query) { return true }
+        if item.subtitle.localizedCaseInsensitiveContains(query) { return true }
+        if let raw = item.rawText, raw.localizedCaseInsensitiveContains(query) { return true }
+        if let app = item.sourceApp, app.localizedCaseInsensitiveContains(query) { return true }
+        return false
+    }
+
+    private func count(for category: FilterCategory) -> Int {
+        items.reduce(0) { $0 + (matches($1, category: category) ? 1 : 0) }
+    }
+
     private var filteredItems: [FeedItem] {
-        items.filter { item in
-            // 分类过滤
-            switch selectedCategory {
-            case .all: break
-            case .text:
-                if case .image = item.kind { return false }
-            case .images:
-                if case .text = item.kind { return false }
+        items.filter { matches($0, category: selectedCategory) }
+    }
+
+    // MARK: - 键盘导航
+
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // 输入法组词期间全部放行，避免抢走候选框的方向键
+            if let textView = event.window?.firstResponder as? NSTextView, textView.hasMarkedText() {
+                return event
             }
 
-            // 关键词过滤
-            let query = searchText.trimmingCharacters(in: .whitespaces)
-            if query.isEmpty { return true }
-            if item.title.localizedCaseInsensitiveContains(query) { return true }
-            if item.subtitle.localizedCaseInsensitiveContains(query) { return true }
-            if let raw = item.rawText, raw.localizedCaseInsensitiveContains(query) { return true }
-            if let app = item.sourceApp, app.localizedCaseInsensitiveContains(query) { return true }
-            return false
+            switch event.keyCode {
+            case 123: moveSelection(-1); return nil
+            case 124: moveSelection(1); return nil
+            case 125: moveSelection(currentColumnCount); return nil
+            case 126: moveSelection(-currentColumnCount); return nil
+            case 36, 76: // Return / 小键盘 Enter
+                if event.modifierFlags.contains(.command) {
+                    openSelected()
+                } else {
+                    copySelectedOrFirst()
+                }
+                return nil
+            case 49: // Space：快速预览选中项（输入框里打字时放行）
+                if event.window?.firstResponder is NSTextView { return event }
+                openSelected()
+                return nil
+            case 8: // ⌘C：复制选中项（输入框里放行，保留系统复制）
+                guard event.modifierFlags.contains(.command),
+                      !(event.window?.firstResponder is NSTextView) else { return event }
+                copySelectedOrFirst()
+                return nil
+            default:
+                return event
+            }
         }
     }
 
+    private func removeKeyMonitor() {
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        keyMonitor = nil
+    }
+
+    private func moveSelection(_ delta: Int) {
+        let list = filteredItems
+        guard !list.isEmpty else { return }
+        guard let current = selection,
+              let index = list.firstIndex(where: { $0.id == current }) else {
+            selection = list[min(max(0, delta), list.count - 1)].id
+            return
+        }
+        let next = min(max(0, index + delta), list.count - 1)
+        selection = list[next].id
+    }
+
+    private func copySelectedOrFirst() {
+        if let current = selection, let item = filteredItems.first(where: { $0.id == current }) {
+            copyItem(item)
+        } else if let first = filteredItems.first {
+            selection = first.id
+            copyItem(first)
+        }
+    }
+
+    private func openSelected() {
+        if let current = selection, let item = filteredItems.first(where: { $0.id == current }) {
+            inspectingItem = item
+        } else if let first = filteredItems.first {
+            inspectingItem = first
+        }
+    }
+
+    // MARK: - 数据加载
+
+    private struct FeedLoadResult: @unchecked Sendable {
+        let items: [FeedItem]
+    }
+
     private func reloadFeed() {
+        Task {
+            let result = await Self.buildFeed()
+            items = result.items
+            if selection == nil { selection = result.items.first?.id }
+        }
+    }
+
+    /// 读盘与解码全部在 MainActor 之外完成；截图只取缩略图，全尺寸图按需加载。
+    nonisolated private static func buildFeed() async -> FeedLoadResult {
         let store = ScreenshotStore.shared
         var feed: [FeedItem] = []
         var seenTexts = Set<String>()
         var seenImageHashes = Set<String>()
+        /// 剪贴板里的图片：用于把「同一张图既是剪贴板图片又是截图记录」的旧数据去重
+        var clipboardImages: [(width: Int, height: Int, at: Date)] = []
 
         // 1. 读取剪贴板历史（图文混合，最准确的复制时间流）
         if let clipItems = try? store.listClipboard(limit: 120) {
@@ -330,7 +601,6 @@ struct SearchPanelView: View {
                 switch clip.kind {
                 case .text:
                     if let text = clip.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        // 文本内容去重：只保留最新的复制时间点，避免重复卡片
                         if seenTexts.contains(text) { continue }
                         seenTexts.insert(text)
 
@@ -343,16 +613,17 @@ struct SearchPanelView: View {
                             createdAt: clip.createdAt,
                             rawText: text,
                             thumbnail: nil,
-                            clipboardID: clip.id
+                            clipboardID: clip.id,
+                            record: nil
                         ))
                     }
                 case .image:
                     let cgImage = store.loadClipboardImage(clip)
-                    // 图片特征哈希去重：相同的图片只保留最新复制的那张，节省空间
                     if let cgImage {
                         let hash = ScreenshotStore.computeImageHash(cgImage)
                         if seenImageHashes.contains(hash) { continue }
                         seenImageHashes.insert(hash)
+                        clipboardImages.append((cgImage.width, cgImage.height, clip.createdAt))
                     }
 
                     feed.append(FeedItem(
@@ -364,7 +635,8 @@ struct SearchPanelView: View {
                         createdAt: clip.createdAt,
                         rawText: nil,
                         thumbnail: cgImage,
-                        clipboardID: clip.id
+                        clipboardID: clip.id,
+                        record: nil
                     ))
                 }
             }
@@ -385,7 +657,8 @@ struct SearchPanelView: View {
                     createdAt: note.updatedAt,
                     rawText: note.content,
                     thumbnail: nil,
-                    clipboardID: nil
+                    clipboardID: nil,
+                    record: nil
                 ))
             }
         }
@@ -393,7 +666,14 @@ struct SearchPanelView: View {
         // 3. 读取本地截图记录（若为历史截图且未在剪贴板中展示，融合进来）
         if let records = try? store.list() {
             for record in records {
-                let thumb = store.loadThumbnail(record) ?? store.loadImage(record)
+                // 旧版本会把截图同时写进剪贴板历史：同尺寸且时间接近的，视为同一条
+                if clipboardImages.contains(where: {
+                    $0.width == record.width
+                        && $0.height == record.height
+                        && abs($0.at.timeIntervalSince(record.capturedAt)) < 15
+                }) { continue }
+
+                let thumb = store.loadThumbnail(record)
                 if let thumb {
                     let hash = ScreenshotStore.computeImageHash(thumb)
                     if seenImageHashes.contains(hash) { continue }
@@ -402,40 +682,43 @@ struct SearchPanelView: View {
 
                 feed.append(FeedItem(
                     id: record.id,
-                    kind: .image(cgImage: store.loadImage(record), recordID: record.id),
+                    kind: .image(cgImage: thumb, recordID: record.id),
                     title: record.filename,
                     subtitle: "\(record.width) × \(record.height) · \(byteString(record.fileSize))",
-                    sourceApp: "截图",
+                    sourceApp: (record.sourceApp?.isEmpty == false ? record.sourceApp : "截图"),
                     createdAt: record.capturedAt,
                     rawText: nil,
                     thumbnail: thumb,
-                    clipboardID: nil
+                    clipboardID: nil,
+                    record: record
                 ))
             }
         }
 
-        // 严格按时间绝对倒序（最新复制/截图排在第 1 个，即左上角最顶端）
         feed.sort { $0.createdAt > $1.createdAt }
-        items = feed
+        return FeedLoadResult(items: feed)
     }
 
     // MARK: - 交互操作
 
     private func copyItem(_ item: FeedItem) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-
         switch item.kind {
         case .text(let content):
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
             pasteboard.setString(content, forType: .string)
-            SaveToastController.shared.show(title: "已复制文本", subtitle: "到剪贴板", thumbnail: nil)
+            // 自己写剪贴板不算新内容，避免历史刷新导致卡片跳到最前
+            ClipboardMonitor.shared.markSelfWrite()
 
         case .image(let cgImage, _):
-            if let cgImage {
-                if let tiff = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height)).tiffRepresentation {
-                    pasteboard.setData(tiff, forType: .tiff)
+            if let record = item.record {
+                Task {
+                    if let image = await ScreenshotStore.loadImageAsync(record) {
+                        Self.copyImageToPasteboard(image)
+                    }
                 }
-                SaveToastController.shared.show(title: "已复制图片", subtitle: "到剪贴板", thumbnail: cgImage)
+            } else if let cgImage {
+                Self.copyImageToPasteboard(cgImage)
             }
         }
 
@@ -448,6 +731,15 @@ struct SearchPanelView: View {
         }
     }
 
+    private static func copyImageToPasteboard(_ cgImage: CGImage) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        if let tiff = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height)).tiffRepresentation {
+            pasteboard.setData(tiff, forType: .tiff)
+        }
+        ClipboardMonitor.shared.markSelfWrite()
+    }
+
     private func openFloatingPreview(_ cgImage: CGImage) {
         CaptureCoordinator.shared.pin(image: cgImage, isPreview: true)
         onDismiss()
@@ -458,7 +750,289 @@ struct SearchPanelView: View {
         reloadFeed()
     }
 
-    private func byteString(_ bytes: Int) -> String {
+    nonisolated private static func byteString(_ bytes: Int) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+    }
+}
+
+// MARK: - 图片块
+
+private struct ImmersiveImageTile: View {
+    let item: SearchPanelView.FeedItem
+    let image: CGImage?
+    let height: CGFloat
+    let isSelected: Bool
+    let isCopied: Bool
+    let onSelect: () -> Void
+    let onOpen: () -> Void
+    let onCopy: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                // 浅灰留白底：完整截图等比居中，不裁内容
+                Color(red: 0.947, green: 0.953, blue: 0.965)
+
+                if let image {
+                    Image(decorative: image, scale: 2)
+                        .resizable()
+                        .scaledToFit()
+                } else {
+                    VStack(spacing: 6) {
+                        Image(systemName: "photo")
+                            .font(.system(size: 22, weight: .light))
+                            .foregroundStyle(Color.black.opacity(0.22))
+                        Text("截图")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if isCopied {
+                    copiedOverlay
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+
+            // 常驻信息行：来源应用 + 时间，放在图片下方，不遮挡画面
+            HStack(spacing: 5) {
+                SourceAppIcon(name: item.sourceApp, size: 12)
+                Text(displayApp)
+                    .font(.system(size: 9.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Text(timeText)
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.secondary.opacity(0.85))
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 22)
+            .background(Color.white)
+        }
+        .frame(height: height)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(
+                    isSelected ? LensoColors.kleinBlueBright : Color.black.opacity(hovering ? 0.14 : 0.07),
+                    lineWidth: isSelected ? 2 : 1
+                )
+        )
+        .overlay(alignment: .topTrailing) {
+            // 悬停时右上角浮出「复制 / 预览」快捷操作
+            if hovering {
+                TileQuickActions(onCopy: onCopy, onOpen: onOpen)
+                    .padding(6)
+                    .transition(.opacity)
+            }
+        }
+        .shadow(color: .black.opacity(hovering ? 0.14 : 0.06), radius: hovering ? 12 : 5, y: hovering ? 5 : 2)
+        .animation(.easeOut(duration: 0.16), value: hovering)
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .onHover { hovering = $0 }
+        .onTapGesture(count: 2) { onCopy() }
+        .onTapGesture { onSelect() }
+        .help(item.title)
+    }
+
+    private var copiedOverlay: some View {
+        ZStack {
+            Color.white.opacity(0.86)
+            VStack(spacing: 5) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(LensoColors.kleinBlueBright)
+                Text("已复制")
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(Color.black.opacity(0.65))
+            }
+        }
+    }
+
+    private var displayApp: String {
+        guard let app = item.sourceApp, !app.isEmpty else { return "剪贴板" }
+        return app
+    }
+
+    private var timeText: String {
+        item.createdAt.formatted(date: .omitted, time: .standard)
+    }
+}
+
+// MARK: - 文字块
+
+private struct ImmersiveTextTile: View {
+    let item: SearchPanelView.FeedItem
+    let content: String
+    let height: CGFloat
+    let isSelected: Bool
+    let isCopied: Bool
+    let onSelect: () -> Void
+    let onOpen: () -> Void
+    let onCopy: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(content)
+                .font(.system(size: 11.5))
+                .lineSpacing(2.2)
+                .foregroundStyle(Color.black.opacity(0.78))
+                .lineLimit(5)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 5) {
+                Text(kindLabel)
+                    .font(.system(size: 8.5, weight: .medium))
+                    .foregroundStyle(LensoColors.kleinBlue)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1.5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(LensoColors.kleinBlueSoft)
+                    )
+                SourceAppIcon(name: item.sourceApp, size: 13)
+                Text(displayApp)
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Text(timeText)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(.secondary.opacity(0.85))
+            }
+        }
+        .padding(.horizontal, 11)
+        .padding(.top, 11)
+        .padding(.bottom, 10)
+        .frame(height: height, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(
+                    isSelected ? LensoColors.kleinBlueBright : Color.black.opacity(hovering ? 0.14 : 0.07),
+                    lineWidth: isSelected ? 2 : 1
+                )
+        )
+        .overlay(alignment: .topTrailing) {
+            // 悬停时右上角浮出「复制 / 预览」快捷操作
+            if hovering {
+                TileQuickActions(onCopy: onCopy, onOpen: onOpen)
+                    .padding(6)
+                    .transition(.opacity)
+            }
+        }
+        .overlay {
+            if isCopied {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.white.opacity(0.88))
+                    VStack(spacing: 5) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(LensoColors.kleinBlueBright)
+                        Text("已复制")
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .foregroundStyle(Color.black.opacity(0.65))
+                    }
+                }
+            }
+        }
+        .shadow(color: .black.opacity(hovering ? 0.14 : 0.06), radius: hovering ? 12 : 5, y: hovering ? 5 : 2)
+        .animation(.easeOut(duration: 0.16), value: hovering)
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .onHover { hovering = $0 }
+        .onTapGesture(count: 2) { onCopy() }
+        .onTapGesture { onSelect() }
+        .help(content)
+    }
+
+    private var kindLabel: String {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.contains("SELECT ") || trimmed.contains("{") && trimmed.contains(";") {
+            return "代码"
+        }
+        return "文字"
+    }
+
+    private var displayApp: String {
+        guard let app = item.sourceApp, !app.isEmpty else { return "剪贴板" }
+        return app
+    }
+
+    private var timeText: String {
+        item.createdAt.formatted(date: .omitted, time: .standard)
+    }
+}
+
+// MARK: - 悬停快捷操作
+
+/// 卡片右上角的「复制 / 预览」小胶囊：白底不透明，任何画面上都清晰可点
+private struct TileQuickActions: View {
+    let onCopy: () -> Void
+    let onOpen: () -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Button(action: onCopy) {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(Color.black.opacity(0.62))
+                    .frame(width: 27, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("复制 (↵)")
+
+            Rectangle()
+                .fill(Color.black.opacity(0.10))
+                .frame(width: 1, height: 12)
+
+            Button(action: onOpen) {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color.black.opacity(0.62))
+                    .frame(width: 27, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("预览 (space)")
+        }
+        .background(Capsule().fill(Color.white))
+        .overlay(Capsule().strokeBorder(Color.black.opacity(0.10), lineWidth: 1))
+        .shadow(color: .black.opacity(0.16), radius: 6, y: 2)
+    }
+}
+
+// MARK: - 顶部拖动带
+
+/// 顶部留白处的透明拖动条：按住即可移动搜索窗口，光标显示为抓手
+private struct SearchPanelDragStrip: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { DragView() }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class DragView: NSView {
+        override func resetCursorRects() {
+            addCursorRect(bounds, cursor: .openHand)
+        }
+
+        override func mouseDown(with event: NSEvent) {
+            // 交给系统处理窗口拖动，位置会随窗口移动，关闭时记忆
+            window?.performDrag(with: event)
+        }
     }
 }

@@ -111,12 +111,23 @@ enum SelectorRectEditor {
 
 // MARK: - 单显示器覆盖面板
 
+/// 面板容器：用 cursor rect 注册自绘十字光标。
+/// 只靠 mouseMoved 里 set() 会被系统的光标管理覆盖，cursor rect 才是可靠入口。
+final class CursorContainerView: NSView {
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        addCursorRect(bounds, cursor: LensoCursor.crosshair)
+    }
+}
+
 /// 单显示器覆盖面板：透明，选区里直接透出实时桌面 + 暗幕，选区挖空，Esc 取消。
 final class RegionSelectorPanel: NSPanel {
     private weak var controller: RegionSelectorController?
     private let sizeLabel: NSTextField
     private let frozenView: NSImageView
     private let dimSelectionView: SelectionView
+    private let colorBadge = PixelColorBadgeView()
+    private var handlesVisible = false
     let screenFrame: CGRect
     let ownDisplayID: CGDirectDisplayID
 
@@ -154,11 +165,12 @@ final class RegionSelectorPanel: NSPanel {
         self.becomesKeyOnlyIfNeeded = false
         self.worksWhenModal = true
 
-        let container = NSView(frame: NSRect(origin: .zero, size: screen.frame.size))
+        let container = CursorContainerView(frame: NSRect(origin: .zero, size: screen.frame.size))
         container.autoresizingMask = [.width, .height]
         container.addSubview(frozenView)
         container.addSubview(dimSelectionView)
         container.addSubview(sizeLabel)
+        container.addSubview(colorBadge)
         self.contentView = container
         self.setFrame(screen.frame, display: false)
         selLog.info("panel init screen=\(NSStringFromRect(screen.frame), privacy: .public) frame=\(NSStringFromRect(self.frame), privacy: .public)")
@@ -166,10 +178,11 @@ final class RegionSelectorPanel: NSPanel {
 
     var screenFrameForDisplay: CGRect { screenFrame }
 
-    /// 冻结帧到位后铺上（抓图是异步的，通常 100~200ms 后到）
+    /// 冻结帧到位后铺上（抓图是异步的，通常几十毫秒后到）
     func setFrozenImage(_ image: CGImage) {
         frozenView.image = NSImage(cgImage: image, size: screenFrame.size)
         frozenView.isHidden = false
+        colorBadge.setFrozenImage(image)
     }
 
     override var canBecomeKey: Bool { true }
@@ -195,7 +208,9 @@ final class RegionSelectorPanel: NSPanel {
     }
 
     func setHandlesVisible(_ visible: Bool) {
+        handlesVisible = visible
         dimSelectionView.showsHandles = visible
+        if visible { colorBadge.hide() }
     }
 
     override func cancelOperation(_ sender: Any?) {
@@ -209,17 +224,24 @@ final class RegionSelectorPanel: NSPanel {
 
     override func mouseDown(with event: NSEvent) {
         controller?.mouseDown(at: NSEvent.mouseLocation, panel: self)
+        updateColorBadge(atWindowPoint: event.locationInWindow)
     }
 
     override func mouseDragged(with event: NSEvent) {
         let location = NSEvent.mouseLocation
         controller?.mouseDragged(to: location)
+        updateColorBadge(atWindowPoint: event.locationInWindow)
     }
 
     override func mouseMoved(with event: NSEvent) {
         let location = NSEvent.mouseLocation
         controller?.mouseMovedOrHovered(at: location)
         controller?.cursor(at: location).set()
+        if handlesVisible {
+            colorBadge.hide()
+        } else {
+            updateColorBadge(atWindowPoint: event.locationInWindow)
+        }
     }
 
     override func mouseUp(with event: NSEvent) {
@@ -228,14 +250,21 @@ final class RegionSelectorPanel: NSPanel {
             return
         }
         controller?.mouseUp(at: NSEvent.mouseLocation)
+        colorBadge.hide()
+    }
+
+    /// 光标在窗口内的位置 → 面板坐标，驱动色值提示跟随
+    private func updateColorBadge(atWindowPoint point: CGPoint) {
+        guard let container = contentView else { return }
+        let local = container.convert(point, from: nil)
+        colorBadge.update(cursor: local, panelSize: container.bounds.size)
     }
 }
 
 // MARK: - 暗幕与选区
 
-/// 暗幕视图：选区外半透明黑，选区边框白色 1px，悬停窗口高亮，选区 8 手柄。
+/// 选区视图：不压暗屏幕，只在选区上画蓝色描边、悬停窗口高亮、选区 8 手柄。
 private final class SelectionView: NSView {
-    private let dimLayer = CAShapeLayer()
     private let borderLayer = CAShapeLayer()
     private let hoverBorderLayer = CAShapeLayer()
     private let handlesLayer = CAShapeLayer()
@@ -246,18 +275,15 @@ private final class SelectionView: NSView {
         self.screenFrame = screenFrame
         super.init(frame: frame)
         wantsLayer = true
-        dimLayer.fillColor = NSColor.black.withAlphaComponent(0.28).cgColor
-        dimLayer.fillRule = .evenOdd
         borderLayer.fillColor = NSColor.clear.cgColor
-        borderLayer.strokeColor = NSColor.white.withAlphaComponent(0.9).cgColor
-        borderLayer.lineWidth = 1
+        borderLayer.strokeColor = NSColor(red: 5/255, green: 56/255, blue: 224/255, alpha: 0.9).cgColor
+        borderLayer.lineWidth = 1.5
         hoverBorderLayer.fillColor = NSColor.clear.cgColor
-        hoverBorderLayer.strokeColor = NSColor.systemBlue.withAlphaComponent(0.9).cgColor
+        hoverBorderLayer.strokeColor = NSColor(red: 5/255, green: 56/255, blue: 224/255, alpha: 0.85).cgColor
         hoverBorderLayer.lineWidth = 2
         handlesLayer.fillColor = NSColor.white.cgColor
-        handlesLayer.strokeColor = NSColor.controlAccentColor.cgColor
+        handlesLayer.strokeColor = NSColor(red: 5/255, green: 56/255, blue: 224/255, alpha: 1).cgColor
         handlesLayer.lineWidth = 1.5
-        layer?.addSublayer(dimLayer)
         layer?.addSublayer(borderLayer)
         layer?.addSublayer(hoverBorderLayer)
         layer?.addSublayer(handlesLayer)
@@ -294,22 +320,6 @@ private final class SelectionView: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
-        let brightGlobal: CGRect?
-        if selection.width > 0 {
-            brightGlobal = selection
-        } else {
-            brightGlobal = hoverFrame
-        }
-        let dimPath = CGMutablePath()
-        dimPath.addRect(bounds)
-        if let brightGlobal {
-            let brightLocal = localRect(brightGlobal).intersection(bounds)
-            if !brightLocal.isEmpty {
-                dimPath.addRect(brightLocal)
-            }
-        }
-        dimLayer.path = dimPath
-        dimLayer.frame = bounds
 
         if selection.width > 0 {
             let local = localRect(selection)

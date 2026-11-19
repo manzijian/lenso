@@ -103,7 +103,11 @@ final class AppSettings {
     }
     /// 菜单栏显示图标（关掉后菜单栏入口消失，用 Dock 图标点开图库再进设置）。
     var showMenuBarIcon: Bool {
-        didSet { persist(.showMenuBarIcon, showMenuBarIcon) }
+        didSet {
+            persist(.showMenuBarIcon, showMenuBarIcon)
+            // 自建状态栏：开关图标时重建/移除 NSStatusItem
+            Task { @MainActor in StatusBarController.shared.reinstallIfNeeded() }
+        }
     }
     /// 在下方应用栏（程序坞）显示图标（关掉后隐藏下方图标，只有顶部状态栏常驻；默认开启）。
     var showInDock: Bool {
@@ -165,6 +169,8 @@ final class AppSettings {
     var menuBarIconStyle: MenuBarIconStyle {
         didSet {
             defaults.set(menuBarIconStyle.rawValue, forKey: Self.keyPrefix + "menuBarIconStyle")
+            // 重建一次状态栏图标，刷新当前使用的 icon
+            Task { @MainActor in StatusBarController.shared.reinstallIfNeeded() }
         }
     }
 

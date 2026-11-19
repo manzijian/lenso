@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LENSO · 标注流程与界面</title>
+<style>
+  :root{
+    --blue:#0538E0;
+    --blue-soft:rgba(5,56,224,.07);
+    --ink:#15171C;
+    --slate:#4C5261;
+    --muted:#8A90A0;
+    --line:rgba(16,24,40,.09);
+    --line2:rgba(16,24,40,.14);
+    --page:#F1F3F8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif;
+    background:var(--page);color:var(--ink);-webkit-font-smoothing:antialiased;
+    padding:54px 40px 120px;display:flex;flex-direction:column;align-items:center;
+  }
+  .wrap{width:100%;max-width:1150px;}
+  header{margin-bottom:40px;}
+  .eyebrow{display:inline-flex;align-items:center;gap:7px;font-size:10.5px;font-weight:650;letter-spacing:.16em;color:var(--blue);text-transform:uppercase;margin-bottom:13px;}
+  .eyebrow i{width:5px;height:5px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 3px rgba(5,56,224,.10);}
+  h1{font-size:28px;font-weight:650;letter-spacing:-.025em;}
+  .lede{margin-top:12px;font-size:13px;line-height:1.85;color:var(--slate);max-width:800px;}
+  .lede b{color:var(--ink);font-weight:600;}
+
+  .caps{display:flex;gap:7px;flex-wrap:wrap;margin-top:16px;}
+  .cap{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--slate);background:#fff;border-radius:999px;padding:4px 9px;box-shadow:0 0 0 .5px var(--line2);}
+  .cap svg{width:11px;height:11px;stroke:var(--blue);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+
+  .case{display:grid;grid-template-columns:760px minmax(250px,1fr);gap:38px;align-items:start;margin-bottom:56px;}
+  .case-head{display:flex;align-items:baseline;gap:10px;margin-bottom:6px;}
+  .case-no{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10.5px;font-weight:600;color:var(--blue);}
+  .case-head h2{font-size:15.5px;font-weight:650;letter-spacing:-.01em;}
+  .case-head span{font-size:11px;color:var(--muted);}
+  .flow{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);margin-bottom:11px;}
+  .flow b{font-weight:600;color:var(--slate);background:#fff;border-radius:5px;padding:2px 7px;box-shadow:0 0 0 .5px var(--line2);}
+  .flow .ar{color:#C3C9D6;}
+
+  .stage{
+    width:760px;height:470px;border-radius:16px;display:flex;align-items:center;justify-content:center;
+    background:
+      radial-gradient(200px 150px at 22% 18%, rgba(5,56,224,.12), transparent 70%),
+      radial-gradient(240px 180px at 82% 84%, rgba(120,150,255,.18), transparent 70%),
+      linear-gradient(145deg,#E7EBF6,#F5F7FC 55%,#E3E9F6);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.7);
+  }
+  .win{
+    width:720px;height:424px;background:#fff;border-radius:12px;overflow:hidden;position:relative;display:flex;
+    box-shadow:0 0 0 .5px rgba(16,24,40,.14),0 18px 44px rgba(20,30,70,.16);
+  }
+
+  /* 假截图 */
+  .shot{position:relative;background:#F7F8FB;overflow:hidden;}
+  .fake{position:relative;display:flex;height:100%;}
+  .fake .side{width:26%;background:#FBFBFD;border-right:.5px solid var(--line);padding:11px 9px;display:flex;flex-direction:column;gap:6px;}
+  .fake .side i{display:block;height:7px;border-radius:3px;background:#E2E6EF;}
+  .fake .side i.w1{width:64%;background:#C9D2E4;}
+  .fake .side i.w2{width:80%;}
+  .fake .side i.w3{width:52%;}
+  .fake .main{flex:1;padding:13px 15px;display:flex;flex-direction:column;gap:9px;}
+  .fake .hd{display:flex;align-items:center;gap:8px;}
+  .fake .hd b{width:19px;height:19px;border-radius:6px;background:var(--blue);display:block;opacity:.9;}
+  .fake .hd i{display:block;height:8px;border-radius:3px;background:#DDE3EE;width:34%;}
+  .fake .hero{height:100px;border-radius:9px;background:linear-gradient(135deg,#E8EDFA,#DCE4F6);}
+  .fake .rowline{display:flex;gap:8px;}
+  .fake .rowline i{flex:1;height:50px;border-radius:8px;background:#EEF1F8;}
+  .fake .txt i{display:block;height:6px;border-radius:3px;background:#E4E8F1;margin-bottom:6px;}
+  .fake .txt i:nth-child(1){width:86%;}
+  .fake .txt i:nth-child(2){width:94%;}
+  .fake .txt i:nth-child(3){width:58%;}
+
+  /* 画布上的标注示例 */
+  .anno{position:absolute;pointer-events:none;}
+  .anno.rect{left:34%;top:42%;width:27%;height:33%;border:1.6px solid var(--blue);border-radius:2px;}
+  .anno.arrow{left:47%;top:26%;width:70px;height:2px;background:var(--blue);transform:rotate(-27deg);}
+  .anno.arrow::after{content:"";position:absolute;right:-1px;top:-4px;width:8px;height:8px;border-top:2px solid var(--blue);border-right:2px solid var(--blue);transform:rotate(45deg);}
+  .anno.note{left:60%;top:55%;background:var(--blue);color:#fff;font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;}
+  .anno.mosaic{right:8%;top:60%;width:64px;height:38px;background:
+    repeating-linear-gradient(45deg,#C7CEDD 0 4px,#E3E8F1 4px 8px);border-radius:3px;}
+
+  /* 01 检查器式 */
+  .inspector{width:188px;flex:none;border-left:.5px solid var(--line);background:#FDFDFE;display:flex;flex-direction:column;padding:11px 12px 10px;}
+  .in-title{font-size:11px;font-weight:700;}
+  .in-sub{font-size:9px;color:var(--muted);font-family:ui-monospace,"SF Mono",Menlo,monospace;margin-top:2px;}
+  .in-label{font-size:8.5px;font-weight:650;letter-spacing:.1em;color:#B9BEC9;text-transform:uppercase;margin:12px 0 5px;}
+  .tools{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;}
+  .tool{height:30px;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;color:var(--slate);box-shadow:inset 0 0 0 .8px var(--line2);background:#fff;}
+  .tool svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+  .tool span{font-size:7px;}
+  .tool.on{background:var(--blue);color:#fff;box-shadow:0 2px 5px rgba(5,56,224,.24);}
+  .props{display:flex;align-items:center;gap:5px;margin-top:6px;}
+  .sw{width:15px;height:15px;border-radius:50%;box-shadow:0 0 0 .8px rgba(16,24,40,.14);}
+  .sw.on{box-shadow:0 0 0 2px #fff,0 0 0 3.4px var(--blue);}
+  .wdot{height:15px;flex:1;border-radius:8px;box-shadow:inset 0 0 0 .8px var(--line2);display:flex;align-items:center;justify-content:center;gap:3px;}
+  .wdot i{display:block;border-radius:50%;background:#8A90A0;}
+  .wdot i:nth-child(1){width:3px;height:3px;}
+  .wdot i:nth-child(2){width:5px;height:5px;background:#4C5261;}
+  .wdot i:nth-child(3){width:7px;height:7px;background:var(--blue);}
+  .in-bottom{margin-top:auto;display:flex;flex-direction:column;gap:6px;}
+  .btn{height:27px;border-radius:7px;display:flex;align-items:center;justify-content:center;gap:5px;font-size:10.5px;}
+  .btn.p{background:var(--blue);color:#fff;font-weight:600;box-shadow:0 2px 6px rgba(5,56,224,.24);}
+  .btn.g{color:var(--slate);box-shadow:inset 0 0 0 .8px var(--line2);background:#fff;}
+  .btn svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+  .legend{margin-top:9px;font-size:8.5px;color:var(--muted);line-height:1.6;}
+
+  /* 02 沉浸 + 底部坞 + 浮属性 */
+  .shot-2{flex:1;margin:8px;border-radius:9px;box-shadow:0 0 0 .5px rgba(16,24,40,.10);}
+  .dock{
+    position:absolute;left:50%;bottom:12px;transform:translateX(-50%);
+    display:flex;align-items:center;gap:2px;padding:5px;border-radius:13px;
+    background:rgba(255,255,255,.97);
+    box-shadow:0 0 0 .5px rgba(16,24,40,.10),0 8px 22px rgba(20,30,70,.16);
+  }
+  .dock .d{width:31px;height:30px;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;color:var(--slate);}
+  .dock .d svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+  .dock .d span{font-size:6.5px;font-weight:550;}
+  .dock .d.on{background:var(--blue-soft);color:var(--blue);}
+  .dock .sep{width:1px;height:19px;background:var(--line);margin:0 3px;}
+  .dock .pri{display:flex;align-items:center;gap:5px;height:30px;padding:0 10px;border-radius:9px;background:var(--blue);color:#fff;font-size:10px;font-weight:600;box-shadow:0 2px 6px rgba(5,56,224,.28);}
+  .dock .pri svg{width:11px;height:11px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .propbar{
+    position:absolute;left:50%;bottom:56px;transform:translateX(-50%);
+    display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:9px;
+    background:rgba(255,255,255,.97);box-shadow:0 0 0 .5px rgba(16,24,40,.10),0 4px 14px rgba(20,30,70,.12);
+  }
+  .propbar .sw{width:14px;height:14px;}
+  .propbar .sp{width:1px;height:12px;background:var(--line);}
+  .chipy{position:absolute;left:14px;top:13px;display:flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.94);box-shadow:0 0 0 .5px var(--line);font-size:9.5px;color:var(--slate);}
+  .chipy .dot{width:4px;height:4px;border-radius:50%;background:var(--blue);}
+
+  /* 03 原地 */
+  .snip{position:relative;width:520px;height:300px;}
+  .snip-shot{position:absolute;inset:0;overflow:hidden;background:#F7F8FB;box-shadow:0 0 0 1px rgba(5,56,224,.85),0 14px 34px rgba(20,30,70,.26);}
+  .snip-dims{position:absolute;right:0;top:-24px;padding:2px 6px;border-radius:4px;background:rgba(9,12,20,.72);color:#fff;font-size:9px;font-family:ui-monospace,"SF Mono",Menlo,monospace;}
+  .snip-bar{position:absolute;left:0;bottom:-40px;display:flex;align-items:center;gap:2px;padding:4px;border-radius:8px;background:#FCFCFE;box-shadow:0 0 0 .5px rgba(16,24,40,.14),0 6px 18px rgba(20,30,70,.20);}
+  .snip-bar .sb{width:26px;height:24px;border-radius:5px;display:grid;place-items:center;color:var(--slate);}
+  .snip-bar .sb svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+  .snip-bar .sb.on{background:var(--blue);color:#fff;}
+  .snip-bar .sep{width:1px;height:16px;background:var(--line);margin:0 3px;}
+  .snip-bar .sb.blue{color:var(--blue);}
+
+  .notes{padding-top:2px;}
+  .ref{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.05em;color:var(--blue);background:var(--blue-soft);border-radius:5px;padding:3px 7px;margin-bottom:10px;}
+  .notes h3{font-size:15.5px;font-weight:650;letter-spacing:-.015em;margin-bottom:5px;}
+  .notes .pos{font-size:12px;line-height:1.78;color:var(--slate);margin-bottom:13px;}
+  .notes dl{display:flex;flex-direction:column;gap:10px;}
+  .notes dt{font-size:9px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#B9BEC9;margin-bottom:2px;}
+  .notes dd{font-size:11.5px;line-height:1.7;color:var(--slate);}
+  .notes dd b{color:var(--ink);font-weight:600;}
+  .pick{margin-top:13px;padding:9px 11px;border-left:2px solid var(--blue);background:rgba(5,56,224,.035);font-size:11px;line-height:1.65;color:var(--slate);}
+  .pick b{color:#002FA7;font-weight:600;}
+
+  .compare h2{font-size:17px;font-weight:650;letter-spacing:-.015em;margin-bottom:6px;}
+  .compare .sub{font-size:12px;color:var(--muted);margin-bottom:15px;}
+  table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 0 0 .5px var(--line2);}
+  th,td{text-align:left;padding:11px 15px;font-size:11.5px;border-bottom:.5px solid var(--line);}
+  th{font-size:10px;font-weight:650;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);background:#FAFBFD;}
+  td:first-child{font-weight:550;width:148px;}
+  tr:last-child td{border-bottom:none;}
+
+  .reco{margin-top:32px;border-radius:14px;background:#fff;padding:25px 29px;box-shadow:0 0 0 .5px var(--line2),0 10px 32px rgba(20,30,70,.05);}
+  .reco h2{font-size:16px;font-weight:650;letter-spacing:-.015em;margin-bottom:9px;}
+  .reco p{font-size:12.5px;line-height:1.85;color:var(--slate);max-width:880px;}
+  .reco p + p{margin-top:7px;}
+  .reco strong{color:var(--ink);font-weight:600;}
+  .reco .ask{margin-top:15px;padding-top:13px;border-top:.5px solid var(--line);font-size:11.5px;color:var(--muted);}
+  .reco .ask b{color:var(--blue);font-weight:600;}
+
+  @media (max-width:1140px){
+    .case{grid-template-columns:1fr;gap:18px;}
+    .stage{width:100%;max-width:760px;}
+    .notes{max-width:760px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><i></i>LENSO / ANNOTATION</div>
+    <h1>标注功能：能力不减，流程和界面重做</h1>
+    <p class="lede">
+      你要的矩形、箭头、画笔、文字、马赛克都会做。这里比较的不是“有没有”，而是<b>什么时候进入编辑、工具放在哪</b>。
+      Snipaste 是「松手即可标注」，我们三个方案分别对应三种进入时机与容器。
+    </p>
+    <div class="caps">
+      <span class="cap"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/></svg>矩形</span>
+      <span class="cap"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8" ry="6"/></svg>椭圆</span>
+      <span class="cap"><svg viewBox="0 0 24 24"><path d="M5 19L19 5M19 5h-5M19 5v5"/></svg>箭头</span>
+      <span class="cap"><svg viewBox="0 0 24 24"><path d="M4 19l4-1 10-10-3-3L5 15z"/></svg>画笔</span>
+      <span class="cap"><svg viewBox="0 0 24 24"><path d="M5 6h14M12 6v13"/></svg>文字</span>
+      <span class="cap"><svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>马赛克</span>
+      <span class="cap"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 10-2.3 5.7M20 6v6h-6"/></svg>撤销</span>
+    </div>
+  </header>
+
+  <!-- 01 -->
+  <section class="case">
+    <div>
+      <div class="case-head"><span class="case-no">01</span><h2>先预览，再标注</h2><span>检查器承载工具</span></div>
+      <div class="flow"><b>框选</b><span class="ar">→</span><b>落库并预览</b><span class="ar">→</span><b>点「标注」进入编辑</b><span class="ar">→</span><b>保存为新版本</b></div>
+      <div class="stage">
+        <div class="win">
+          <div class="shot" style="flex:1;margin:8px 0 8px 8px;border-radius:9px;box-shadow:0 0 0 .5px rgba(16,24,40,.10);">
+            <div class="fake">
+              <div class="side"><i class="w1"></i><i class="w2"></i><i class="w3"></i><i class="w2"></i><i class="w1"></i></div>
+              <div class="main">
+                <div class="hd"><b></b><i></i></div>
+                <div class="hero"></div>
+                <div class="rowline"><i></i><i></i><i></i></div>
+                <div class="txt"><i></i><i></i><i></i></div>
+              </div>
+            </div>
+            <div class="anno rect"></div>
+            <div class="anno arrow"></div>
+            <div class="anno note">这里有问题</div>
+          </div>
+          <div class="inspector">
+            <div class="in-title">标注</div>
+            <div class="in-sub">编辑中 · 可撤销</div>
+
+            <div class="in-label">工具</div>
+            <div class="tools">
+              <div class="tool on"><svg viewBox="0 0 24 24"><path d="M5 19L19 5M19 5h-5M19 5v5"/></svg><span>箭头</span></div>
+              <div class="tool"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/></svg><span>矩形</span></div>
+              <div class="tool"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8" ry="6"/></svg><span>椭圆</span></div>
+              <div class="tool"><svg viewBox="0 0 24 24"><path d="M4 19l4-1 10-10-3-3L5 15z"/></svg><span>画笔</span></div>
+              <div class="tool"><svg viewBox="0 0 24 24"><path d="M5 6h14M12 6v13"/></svg><span>文字</span></div>
+              <div class="tool"><svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>马赛克</span></div>
+            </div>
+
+            <div class="in-label">属性</div>
+            <div class="props">
+              <div class="sw on" style="background:#0538E0"></div>
+              <div class="sw" style="background:#E5484D"></div>
+              <div class="sw" style="background:#111318"></div>
+              <div class="sw" style="background:#F5C518"></div>
+              <div class="wdot"><i></i><i></i><i></i></div>
+            </div>
+
+            <div class="in-label">缩放</div>
+            <div class="props" style="box-shadow:inset 0 0 0 .8px rgba(16,24,40,.14);border-radius:6px;padding:3px 7px;justify-content:space-between;">
+              <span style="font-size:9.5px;font-family:ui-monospace,Menlo,monospace;color:#4C5261;">100%</span>
+              <span style="font-size:9px;color:#8A90A0;">适应窗口</span>
+            </div>
+
+            <div class="in-bottom">
+              <div class="btn p"><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>完成并保存</div>
+              <div class="btn g"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 10-2.3 5.7M20 6v6h-6"/></svg>撤销</div>
+              <div class="legend">Esc 取消 · ⌘Z 撤销 · ⌘S 保存</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <div class="ref">参考 · 文字查看器 / 检查器语言</div>
+      <h3>工具和属性都常驻</h3>
+      <p class="pos">先进预览，点「标注」右侧检查器切换成工具网格 + 颜色/粗细，图片区保持稳定不重排。</p>
+      <dl>
+        <div><dt>优点</dt><dd>与主界面最一致；工具、属性、快捷键提示都有位置；不标注也能直接复制。</dd></div>
+        <div><dt>缺点</dt><dd>多一次“点标注”的动作；图片可视宽度少 188px。</dd></div>
+        <div><dt>适合</dt><dd>标注是偶尔用，更多时候只是查看/复制。</dd></div>
+      </dl>
+      <div class="pick"><b>稳：</b>改动最小，和现有预览窗口顺接。</div>
+    </aside>
+  </section>
+
+  <!-- 02 -->
+  <section class="case">
+    <div>
+      <div class="case-head"><span class="case-no">02</span><h2>框选即编辑</h2><span>没有中间预览，完成后才落库</span></div>
+      <div class="flow"><b>框选</b><span class="ar">→</span><b>直接进入标注画布</b><span class="ar">→</span><b>完成即保存</b><span class="ar">→</span><b>短暂预览</b></div>
+      <div class="stage">
+        <div class="win">
+          <div class="shot shot-2">
+            <div class="fake">
+              <div class="side"><i class="w1"></i><i class="w2"></i><i class="w3"></i><i class="w2"></i><i class="w1"></i></div>
+              <div class="main">
+                <div class="hd"><b></b><i></i></div>
+                <div class="hero"></div>
+                <div class="rowline"><i></i><i></i><i></i></div>
+                <div class="txt"><i></i><i></i><i></i></div>
+              </div>
+            </div>
+            <div class="anno rect"></div>
+            <div class="anno arrow"></div>
+            <div class="anno mosaic"></div>
+            <div class="chipy"><span class="dot"></span>Safari<span style="font-family:ui-monospace,Menlo,monospace;color:#8A90A0;">1512 × 982</span></div>
+
+            <div class="propbar">
+              <div class="sw on" style="background:#0538E0"></div>
+              <div class="sw" style="background:#E5484D"></div>
+              <div class="sw" style="background:#111318"></div>
+              <div class="sp"></div>
+              <div class="wdot" style="flex:none;width:44px;"><i></i><i></i><i></i></div>
+            </div>
+
+            <div class="dock">
+              <div class="d on"><svg viewBox="0 0 24 24"><path d="M5 19L19 5M19 5h-5M19 5v5"/></svg><span>箭头</span></div>
+              <div class="d"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/></svg><span>矩形</span></div>
+              <div class="d"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8" ry="6"/></svg><span>椭圆</span></div>
+              <div class="d"><svg viewBox="0 0 24 24"><path d="M4 19l4-1 10-10-3-3L5 15z"/></svg><span>画笔</span></div>
+              <div class="d"><svg viewBox="0 0 24 24"><path d="M5 6h14M12 6v13"/></svg><span>文字</span></div>
+              <div class="d"><svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>马赛克</span></div>
+              <div class="sep"></div>
+              <div class="d"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 10-2.3 5.7M20 6v6h-6"/></svg><span>撤销</span></div>
+              <div class="sep"></div>
+              <div class="pri"><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>完成</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <div class="ref">参考 · CleanShot / 系统截图（简化版）</div>
+      <h3>最少一次点击就能标</h3>
+      <p class="pos">松开选区就直接进编辑态，工具在底部坞，颜色/粗细在坞上方第二条，图片占满窗口。</p>
+      <dl>
+        <div><dt>优点</dt><dd>最快；工具离手最近；不产生“未标注的中间版本”。</dd></div>
+        <div><dt>缺点</dt><dd>必须点完成或 Esc 才能离开；纯查看也要走一遍编辑态。</dd></div>
+        <div><dt>适合</dt><dd>截图几乎都要标一笔的工作流。</dd></div>
+      </dl>
+      <div class="pick"><b>最快：</b>和 Snipaste 的节奏最接近，但工具条仍是我们的语言。</div>
+    </aside>
+  </section>
+
+  <!-- 03 -->
+  <section class="case">
+    <div>
+      <div class="case-head"><span class="case-no">03</span><h2>原地标注</h2><span>选区不动，工具贴边</span></div>
+      <div class="flow"><b>框选</b><span class="ar">→</span><b>选区原地可编辑</b><span class="ar">→</span><b>完成即落库</b><span class="ar">→</span><b>可贴图</b></div>
+      <div class="stage">
+        <div class="snip">
+          <div class="snip-dims">1512 × 982</div>
+          <div class="snip-shot">
+            <div class="fake">
+              <div class="side"><i class="w1"></i><i class="w2"></i><i class="w3"></i><i class="w2"></i><i class="w1"></i></div>
+              <div class="main">
+                <div class="hd"><b></b><i></i></div>
+                <div class="hero"></div>
+                <div class="rowline"><i></i><i></i><i></i></div>
+                <div class="txt"><i></i><i></i><i></i></div>
+              </div>
+            </div>
+            <div class="anno rect" style="left:30%;top:40%;width:30%;height:34%;"></div>
+            <div class="anno arrow" style="left:45%;top:24%;"></div>
+          </div>
+          <div class="snip-bar">
+            <div class="sb on"><svg viewBox="0 0 24 24"><path d="M5 19L19 5M19 5h-5M19 5v5"/></svg></div>
+            <div class="sb"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/></svg></div>
+            <div class="sb"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8" ry="6"/></svg></div>
+            <div class="sb"><svg viewBox="0 0 24 24"><path d="M4 19l4-1 10-10-3-3L5 15z"/></svg></div>
+            <div class="sb"><svg viewBox="0 0 24 24"><path d="M5 6h14M12 6v13"/></svg></div>
+            <div class="sb"><svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg></div>
+            <div class="sep"></div>
+            <div class="sb blue"><svg viewBox="0 0 24 24"><path d="M9 4h6l1 4h3v11a2 2 0 01-2 2H7a2 2 0 01-2-2V8h3z"/></svg></div>
+            <div class="sb"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg></div>
+            <div class="sb"><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <div class="ref">参考 · Snipaste（换皮为 lenso 语言）</div>
+      <h3>最接近 Snipaste 的节奏</h3>
+      <p class="pos">松手后选区带着细蓝边留在原地，工具条紧贴下方，标注直接画在选区上，完成即落库，也可一键贴图。</p>
+      <dl>
+        <div><dt>优点</dt><dd>零转场、零窗口，最“丝滑”；符合肌肉记忆。</dd></div>
+        <div><dt>缺点</dt><dd>属性（颜色/粗细）没地方常驻，只能浮层；大图缩小后标注精度下降。</dd></div>
+        <div><dt>适合</dt><dd>以快速标注截图为主，几乎不回看。</dd></div>
+      </dl>
+      <div class="pick"><b>最像 Snipaste：</b>但要接受属性浮层和较小的画布。</div>
+    </aside>
+  </section>
+
+  <section class="compare">
+    <h2>比较</h2>
+    <p class="sub">三种都具备完整标注能力，差别在进入时机、容器和属性位置。</p>
+    <table>
+      <thead><tr><th>维度</th><th>01 先预览再标注</th><th>02 框选即编辑</th><th>03 原地标注</th></tr></thead>
+      <tbody>
+        <tr><td>进入编辑</td><td>手动点「标注」</td><td>自动</td><td>自动</td></tr>
+        <tr><td>画布大小</td><td>中（−188px）</td><td>最大</td><td>选区实际大小</td></tr>
+        <tr><td>工具位置</td><td>右侧检查器</td><td>底部坞</td><td>选区下方贴边</td></tr>
+        <tr><td>属性（颜色/粗细）</td><td>常驻可见</td><td>浮条常驻</td><td>浮层，需展开</td></tr>
+        <tr><td>纯查看的路径</td><td>最短（不用进编辑）</td><td>要先完成/退出</td><td>要先完成/退出</td></tr>
+        <tr><td>与主界面一致性</td><td>最高</td><td>中高</td><td>中</td></tr>
+        <tr><td>实现成本</td><td>低</td><td>中</td><td>高（需原地绘制 + 屏幕坐标）</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="reco">
+    <div class="eyebrow"><i></i>RECOMMENDATION</div>
+    <h2>我建议 02，把 01 作为“纯查看”路径</h2>
+    <p>
+      你的第一优先级是<b>丝滑</b>。框选完直接能画，比“先看再点标注”少一次判断和点击，这一点最接近 Snipaste 的体感；
+      工具坞 + 属性浮条也符合我们主界面的视觉语言，不必像 03 那样做一套原地绘制。
+    </p>
+    <p>
+      折中方案：框选后进入编辑态，但底部同时提供“完成并复制”，<strong>不标注的人一次点击就能走</strong>，
+      想标注的人也不用多一步。这样 02 的缺点基本被抹平。
+    </p>
+    <div class="ask">回复 <b>01 / 02 / 03</b>，或直接说「按 02 做」，我就开始实现标注系统。</div>
+  </section>
+
+</div>
+</body>
+</html>

@@ -350,7 +350,11 @@ final class PinnedScreenshotController: NSObject {
     func saveImage() {
         let composited = imageView.renderCompositedImage()
         do {
-            let record = try ScreenshotStore.shared.save(image: composited, capturedAt: Date())
+            let record = try ScreenshotStore.shared.save(
+                image: composited,
+                capturedAt: Date(),
+                sourceApp: coordinator?.lastSourceApp
+            )
             if AppSettings.shared.autoCopyAfterCapture {
                 coordinator?.copyToClipboard(image: composited)
             }

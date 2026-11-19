@@ -45,6 +45,8 @@ final class SystemClipboardWriter: ClipboardWriting {
 
         // 3. 原生图像对象写入（支持系统级粘贴）
         pasteboard.writeObjects([nsImage])
+        // 截图本身已经进图库，剪贴板里不需要再存一份，否则搜索会出现两条
+        ClipboardMonitor.shared.markSelfWrite()
     }
 
     func writeText(_ text: String) {

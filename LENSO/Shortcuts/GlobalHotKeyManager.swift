@@ -135,9 +135,10 @@ final class GlobalHotKeyManager {
         let action = ShortcutAction.allCases[index]
         hotKeyLog.info("global hotkey fired: \(action.rawValue, privacy: .public)")
 
-        // 截图：直接执行，不等激活、不走响应链
+        // 截图：直接执行，不激活 App。
+        // 激活会把 lenso 自己的窗口（图库等）带到最前面，用户就没法给别的应用截图了。
+        // 选区面板是非激活型 NSPanel，可以自己成为 key window，不需要 App 激活。
         if let direct = directHandlers[action] {
-            NSApp.activate(ignoringOtherApps: true)
             direct()
             return
         }

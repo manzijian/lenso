@@ -21,6 +21,25 @@ final class LensoMCPServer: @unchecked Sendable {
     let isoFormatter = ISO8601DateFormatter()
     private let lock = NSLock()
     private var responseCallback: (([String: Any]) -> Void)?
+    private var activeCall: MCPCallContext?
+    private var clientName: String?
+
+    /// 单次调用的日志上下文（仅在持有 lock 时读写）
+    private final class MCPCallContext {
+        let method: String
+        let name: String
+        let client: String?
+        let start: DispatchTime
+        var failed = false
+        var detail: String?
+
+        init(method: String, name: String, client: String?) {
+            self.method = method
+            self.name = name
+            self.client = client
+            self.start = .now()
+        }
+    }
 
     /// 提供给本地 HTTP / SSE 服务的请求处理入口
     func process(json: [String: Any]) -> [String: Any]? {
@@ -46,17 +65,23 @@ final class LensoMCPServer: @unchecked Sendable {
             let json: [String: Any]
             do {
                 guard let parsed = try JSONSerialization.jsonObject(with: lineData) as? [String: Any] else {
+                    lock.lock()
                     sendError(id: nil, code: -32600, message: "Invalid JSON-RPC payload")
+                    lock.unlock()
                     continue
                 }
                 json = parsed
             } catch {
                 mcpLog.error("JSON parse error from stdio: \(error.localizedDescription)")
+                lock.lock()
                 sendError(id: nil, code: -32700, message: "Parse error: \(error.localizedDescription)")
+                lock.unlock()
                 continue
             }
 
+            lock.lock()
             handleMessage(json)
+            lock.unlock()
         }
     }
 
@@ -79,7 +104,14 @@ final class LensoMCPServer: @unchecked Sendable {
     }
 
     func sendError(id: Any?, code: Int, message: String) {
+        markCallFailed(message)
         sendRaw(MCPMessageCodec.makeErrorResponse(id: id, code: code, message: message))
+    }
+
+    /// 标记当前调用失败（协议级错误与工具级 isError 都走这里）
+    func markCallFailed(_ message: String) {
+        activeCall?.failed = true
+        activeCall?.detail = message
     }
 
     func sendRaw(_ dict: [String: Any]) {
@@ -105,6 +137,9 @@ final class LensoMCPServer: @unchecked Sendable {
         let method = json["method"] as? String ?? ""
         let id = json["id"]
         let params = json["params"] as? [String: Any] ?? [:]
+
+        let call = beginCall(method: method, params: params)
+        defer { endCall(call) }
 
         switch method {
         case "initialize":
@@ -136,6 +171,43 @@ final class LensoMCPServer: @unchecked Sendable {
         }
     }
 
+    // MARK: - 使用日志
+
+    /// 只为工具调用、资源读取与客户端连接建立日志上下文
+    private func beginCall(method: String, params: [String: Any]) -> MCPCallContext? {
+        if method == "initialize",
+           let info = params["clientInfo"] as? [String: Any],
+           let name = info["name"] as? String,
+           !name.isEmpty {
+            clientName = name
+        }
+
+        guard method == "tools/call" || method == "resources/read" || method == "initialize" else {
+            return nil
+        }
+
+        let rawName = (params["name"] as? String) ?? (params["uri"] as? String) ?? ""
+        let displayName = method == "initialize" ? "客户端连接" : rawName
+        let context = MCPCallContext(method: method, name: displayName, client: clientName)
+        activeCall = context
+        return context
+    }
+
+    private func endCall(_ context: MCPCallContext?) {
+        guard let context else { return }
+        activeCall = nil
+
+        let elapsed = DispatchTime.now().uptimeNanoseconds - context.start.uptimeNanoseconds
+        MCPUsageLog.shared.record(
+            method: context.method,
+            name: context.name,
+            client: context.client,
+            durationMS: max(Int(elapsed / 1_000_000), 1),
+            success: !context.failed,
+            detail: context.detail
+        )
+    }
+
     // MARK: - Handlers
 
     private func handleInitialize(id: Any?, params: [String: Any]) {
@@ -154,7 +226,7 @@ final class LensoMCPServer: @unchecked Sendable {
                 "name": "lenso-mcp",
                 "version": "1.0.0"
             ],
-            "instructions": "LENSO MCP 服务：可检索和读取用户在 macOS 上最近复制的文字、截图历史及便签，支持写入系统剪贴板。"
+            "instructions": "LENSO MCP 服务：可检索剪贴板历史、截图记录与文字便签，支持按来源应用/时间/收藏筛选，列出截图文件路径，以及向系统剪贴板写入内容。"
         ]
         sendResponse(id: id, result: result)
     }

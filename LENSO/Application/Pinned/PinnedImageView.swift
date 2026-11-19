@@ -124,7 +124,7 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
     override func resetCursorRects() {
         super.resetCursorRects()
         if state.activeKind != nil {
-            addCursorRect(bounds, cursor: .crosshair)
+            addCursorRect(bounds, cursor: LensoCursor.crosshair)
         } else {
             addCursorRect(bounds, cursor: .arrow)
         }

@@ -1,8 +1,9 @@
 import SwiftUI
 import AppKit
 
-/// 文本详情全量查看与智能格式化高亮弹窗
-/// 支持长文本无截断阅读、JSON 美化与压缩、C/C++ 代码语法高亮与自动对齐、网页富卡片预览及一键打开
+/// 文本详情查看器（检查器式布局）
+/// 左侧阅读 / 右侧常驻元信息与显示方式，底部主操作常驻；
+/// 正文采用限宽阅读栏，JSON 与代码保持全宽 + 行号。
 struct TextDetailInspectorSheet: View {
     let rawContent: String
     let sourceApp: String?
@@ -17,38 +18,33 @@ struct TextDetailInspectorSheet: View {
     @State private var copied: Bool = false
     @State private var searchQuery: String = ""
 
+    private let pageBackground = Color(red: 0.973, green: 0.976, blue: 0.986)
+    private let sidebarBackground = Color(red: 0.966, green: 0.970, blue: 0.982)
+    private let hairline = Color.black.opacity(0.06)
+    private let cardShape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+
     var body: some View {
         VStack(spacing: 0) {
-            // 顶部导航栏
             headerBar
+            Rectangle().fill(hairline).frame(height: 0.5)
 
-            Divider().opacity(0.6)
+            HStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    if case .url(let url, let originalStr) = contentType {
+                        urlBannerCard(url: url, originalString: originalStr)
+                    }
 
-            // 如果是网址，呈现专属精美网页预览卡片
-            if case .url(let url, let originalStr) = contentType {
-                urlBannerCard(url: url, originalString: originalStr)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 14)
+                    contentArea
+
+                    Rectangle().fill(hairline).frame(height: 0.5)
+                    footerBar
+                }
+
+                sidebar
             }
-
-            // 操作控制与模式切换工具栏
-            formatToolbar
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-
-            Divider().opacity(0.5)
-
-            // 核心正文查看区（带行号、语法高亮与全选复制）
-            mainContentView
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            Divider().opacity(0.6)
-
-            // 底部状态与操作栏
-            footerBar
         }
-        .frame(minWidth: 700, idealWidth: 780, maxWidth: 900, minHeight: 520, idealHeight: 580)
-        .background(Color(red: 0.985, green: 0.988, blue: 0.995))
+        .frame(minWidth: 780, idealWidth: 880, maxWidth: 980, minHeight: 540, idealHeight: 600)
+        .background(pageBackground)
         .onAppear {
             contentType = TextIntelligence.detect(rawContent)
             if case .url(_, let originalStr) = contentType {
@@ -58,290 +54,239 @@ struct TextDetailInspectorSheet: View {
         .lensoColorScheme()
     }
 
-    // MARK: - 顶部导航栏
+    // MARK: - 顶部栏
 
     private var headerBar: some View {
-        HStack(spacing: 10) {
-            // 类型标志
+        HStack(spacing: 9) {
             HStack(spacing: 6) {
                 Image(systemName: typeIcon)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(LensoColors.kleinBlueBright)
+                    .font(.system(size: 12, weight: .semibold))
                 Text(typeTitle)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Color.primary.opacity(0.9))
+                    .font(.system(size: 12, weight: .semibold))
             }
+            .foregroundStyle(LensoColors.kleinBlueBright)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(Capsule().fill(LensoColors.kleinBlueSoft))
 
             if let app = sourceApp, !app.isEmpty {
                 Text(app)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(Color.primary.opacity(0.62))
                     .padding(.horizontal, 7)
-                    .padding(.vertical, 2.5)
-                    .background(Capsule().fill(Color.black.opacity(0.04)))
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.black.opacity(0.045)))
             }
 
             Spacer()
 
-            // 精准时间戳
-            Text(DateFormatter.lensoFullDateTime.string(from: createdAt))
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(.secondary)
+            Text(createdAt.lensoRelativeDayTime)
+                .font(.system(size: 10.5, design: .monospaced))
+                .foregroundStyle(Color.primary.opacity(0.42))
 
-            // 关闭按钮
+            searchField
+
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 24, height: 24)
+                    .font(.system(size: 10.5, weight: .bold))
+                    .foregroundStyle(Color.primary.opacity(0.55))
+                    .frame(width: 22, height: 22)
                     .background(Circle().fill(Color.black.opacity(0.05)))
             }
             .buttonStyle(.plain)
             .help("关闭 (Esc)")
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .frame(height: 52)
+        .background(Color.white)
     }
 
-    // MARK: - 专属网页卡片 Banner (当识别到是网址时呈现)
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 10.5))
+                .foregroundStyle(Color.primary.opacity(0.4))
+            TextField("搜索正文", text: $searchQuery)
+                .textFieldStyle(.plain)
+                .font(.system(size: 11))
+                .frame(width: 112)
+            if !searchQuery.isEmpty {
+                Button {
+                    searchQuery = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.primary.opacity(0.35))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background(Capsule().fill(Color.black.opacity(0.045)))
+    }
+
+    // MARK: - 网页卡片
 
     private func urlBannerCard(url: URL, originalString: String) -> some View {
         let webTitle = webStore.title(for: originalString) ?? url.host ?? originalString
 
-        return HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [LensoColors.kleinBlueBright, LensoColors.kleinBlue],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 44, height: 44)
-                Image(systemName: "globe")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(.white)
-            }
+        return HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(LensoColors.kleinBlueSoft)
+                .frame(width: 38, height: 38)
+                .overlay(
+                    Image(systemName: "globe")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(LensoColors.kleinBlueBright)
+                )
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(webTitle)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(Color.primary.opacity(0.92))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.primary.opacity(0.9))
                         .lineLimit(1)
                     if let host = url.host {
                         Text(host)
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(size: 9.5, weight: .semibold))
                             .foregroundStyle(LensoColors.kleinBlueBright)
                             .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
+                            .padding(.vertical, 1.5)
                             .background(Capsule().fill(LensoColors.kleinBlueSoft))
                     }
                 }
-
                 Text(originalString)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundStyle(Color.primary.opacity(0.5))
                     .lineLimit(1)
+                    .truncationMode(.middle)
             }
 
             Spacer()
 
-            // 在默认浏览器中打开
             Button {
                 NSWorkspace.shared.open(url)
             } label: {
                 HStack(spacing: 4) {
-                    Text("打开网页")
+                    Text("打开")
                     Image(systemName: "arrow.up.right")
                 }
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
                 .background(Capsule().fill(LensoColors.kleinBlueBright))
-                .shadow(color: LensoColors.kleinBlueBright.opacity(0.25), radius: 4, y: 1.5)
             }
             .buttonStyle(.plain)
-            .help("在系统默认浏览器中打开此网页")
+            .help("在系统默认浏览器中打开")
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(Color.black.opacity(0.06), lineWidth: 1)
-                )
-                .shadow(color: Color.black.opacity(0.03), radius: 6, y: 2)
-        )
+        .padding(12)
+        .background(cardShape.fill(Color.white))
+        .overlay(cardShape.strokeBorder(hairline, lineWidth: 0.8))
+        .padding(.horizontal, 18)
+        .padding(.top, 14)
     }
 
-    // MARK: - 模式与格式化工具栏
+    // MARK: - 正文区
 
-    private var formatToolbar: some View {
-        HStack(spacing: 12) {
-            // 模式切换
-            switch contentType {
-            case .json:
-                Picker("", selection: $jsonMode) {
-                    Text("美化格式化 (2格缩进)").tag(0)
-                    Text("紧凑单行").tag(1)
-                    Text("原始纯文本").tag(2)
+    private var contentArea: some View {
+        Group {
+            if isStructuredContent {
+                // 代码 / JSON：长行保留行号对齐，允许横向滚动，不压缩排版
+                ScrollView([.horizontal, .vertical]) {
+                    structuredContent
+                        .background(cardShape.fill(Color.white))
+                        .overlay(cardShape.strokeBorder(hairline, lineWidth: 0.8))
+                        .padding(18)
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 270)
-
-            case .code:
-                Picker("", selection: $codeMode) {
-                    Text("语法高亮美化").tag(0)
-                    Text("原始代码").tag(1)
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 180)
-
-            case .url, .plainText:
-                Picker("", selection: $textMode) {
-                    Text("自然排版").tag(0)
-                    Text("等宽代码模式").tag(1)
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 180)
-            }
-
-            Spacer()
-
-            // 搜索框
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                TextField("在正文中搜索…", text: $searchQuery)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 11))
-                    .frame(width: 130)
-                if !searchQuery.isEmpty {
-                    Button {
-                        searchQuery = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(Color.black.opacity(0.04)))
-        }
-    }
-
-    // MARK: - 正文内容视图 (支持代码高亮、长文本滚动阅读与行号)
-
-    private var mainContentView: some View {
-        ScrollView([.horizontal, .vertical]) {
-            HStack(alignment: .top, spacing: 14) {
-                // 行号栏 (在代码模式或JSON模式下呈现)
-                if shouldShowLineNumbers {
-                    VStack(alignment: .trailing, spacing: 4.5) {
-                        ForEach(1...max(1, displayedLinesCount), id: \.self) { lineNum in
-                            Text("\(lineNum)")
-                                .font(.system(size: 11.5, design: .monospaced))
-                                .foregroundStyle(Color.secondary.opacity(0.45))
-                        }
-                    }
-                    .padding(.vertical, 14)
-                    .padding(.leading, 14)
-
-                    Divider().opacity(0.3)
-                }
-
-                // 核心文字正文
-                VStack(alignment: .leading, spacing: 0) {
-                    renderedText
-                        .textSelection(.enabled)
-                        .padding(.vertical, 14)
-                        .padding(.trailing, 20)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-        }
-        .background(Color.white)
-    }
-
-    // MARK: - 动态文本渲染
-
-    @ViewBuilder
-    private var renderedText: some View {
-        switch contentType {
-        case .json(let pretty, let minified):
-            if jsonMode == 0 {
-                Text(TextIntelligence.highlightJSON(pretty))
-                    .lineSpacing(4)
-            } else if jsonMode == 1 {
-                Text(minified)
-                    .font(.system(size: 12.5, design: .monospaced))
-                    .foregroundStyle(Color(red: 0.15, green: 0.15, blue: 0.2))
-                    .lineSpacing(4)
             } else {
-                Text(rawContent)
-                    .font(.system(size: 12.5, design: .monospaced))
-                    .lineSpacing(4)
+                // 普通文本：只做纵向滚动，正文始终在可视宽度内换行
+                ScrollView(.vertical) {
+                    readableContent
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 24)
+                        .padding(.horizontal, 24)
+                        .background(cardShape.fill(Color.white))
+                        .overlay(cardShape.strokeBorder(hairline, lineWidth: 0.8))
+                        .padding(18)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .background(pageBackground)
+    }
+
+    /// 普通文本 / 网页链接：限宽阅读栏
+    private var readableContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let title = plainTitle {
+                Text(searchHighlighted(AttributedString(title)))
+                    .font(.system(size: 17, weight: .semibold))
+                    .tracking(-0.2)
+                    .foregroundStyle(Color.primary.opacity(0.92))
+                    .lineSpacing(3)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 12)
             }
 
-        case .code(let lang, let formatted):
-            if codeMode == 0 {
-                Text(TextIntelligence.highlight(code: formatted, language: lang))
-                    .lineSpacing(4)
-            } else {
-                Text(rawContent)
-                    .font(.system(size: 12.5, design: .monospaced))
-                    .foregroundStyle(Color(red: 0.15, green: 0.15, blue: 0.2))
-                    .lineSpacing(4)
+            Text(readableAttributed)
+                .lineSpacing(textMode == 0 ? 6.5 : 5)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: 620, alignment: .leading)
+    }
+
+    /// JSON / 代码：全宽 + 行号
+    private var structuredContent: some View {
+        HStack(alignment: .top, spacing: 0) {
+            if shouldShowLineNumbers {
+                VStack(alignment: .trailing, spacing: 0) {
+                    ForEach(1...max(1, displayedLinesCount), id: \.self) { line in
+                        Text("\(line)")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(Color.primary.opacity(0.25))
+                            .frame(height: 21, alignment: .top)
+                    }
+                }
+                .padding(.top, 14)
+                .padding(.leading, 14)
+                .padding(.trailing, 12)
+
+                Rectangle().fill(hairline).frame(width: 0.5)
             }
 
-        case .url(_, let originalStr):
-            Text(originalStr)
-                .font(.system(size: textMode == 0 ? 14 : 12.5, design: textMode == 0 ? .default : .monospaced))
-                .foregroundStyle(Color.primary.opacity(0.9))
-                .lineSpacing(4)
-
-        case .plainText:
-            Text(rawContent)
-                .font(.system(size: textMode == 0 ? 13.5 : 12.5, design: textMode == 0 ? .default : .monospaced))
-                .foregroundStyle(Color.primary.opacity(0.9))
-                .lineSpacing(textMode == 0 ? 5 : 4)
+            Text(structuredAttributed)
+                .lineSpacing(6)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: true, vertical: true)
+                .padding(.vertical, 14)
+                .padding(.leading, 14)
+                .padding(.trailing, 18)
         }
     }
 
-    // MARK: - 底部状态与操作栏
+    // MARK: - 底部操作栏
 
     private var footerBar: some View {
-        HStack(spacing: 16) {
-            // 统计信息
-            HStack(spacing: 12) {
-                Text("共 \(rawContent.count) 个字符")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.secondary)
-
-                Text("·")
-                    .foregroundStyle(.secondary.opacity(0.5))
-
+        HStack(spacing: 12) {
+            HStack(spacing: 8) {
+                Text("\(currentFormattedContent.count) 字符")
+                Text("·").foregroundStyle(Color.secondary.opacity(0.4))
                 Text("\(displayedLinesCount) 行")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.secondary)
             }
+            .font(.system(size: 10.5, design: .monospaced))
+            .foregroundStyle(Color.primary.opacity(0.45))
 
             Spacer()
 
-            // 存为便签
             Button {
-                _ = try? ScreenshotStore.shared.createTextNote(content: currentFormattedContent, sourceApp: sourceApp ?? "查看器")
+                _ = try? ScreenshotStore.shared.createTextNote(
+                    content: currentFormattedContent,
+                    sourceApp: sourceApp ?? "查看器"
+                )
                 SaveToastController.shared.show(title: "已保存为收纳便签", subtitle: "", thumbnail: nil)
             } label: {
                 HStack(spacing: 4) {
@@ -349,15 +294,14 @@ struct TextDetailInspectorSheet: View {
                     Text("存为便签")
                 }
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Color.primary.opacity(0.8))
-                .padding(.horizontal, 9)
-                .padding(.vertical, 4.5)
-                .background(Capsule().fill(Color.black.opacity(0.04)))
+                .foregroundStyle(Color.primary.opacity(0.72))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5.5)
+                .background(Capsule().fill(Color.black.opacity(0.045)))
             }
             .buttonStyle(.plain)
             .help("保存至文字收纳库")
 
-            // 复制按钮
             Button {
                 let pb = NSPasteboard.general
                 pb.clearContents()
@@ -370,23 +314,257 @@ struct TextDetailInspectorSheet: View {
                 }
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: copied ? "checkmark.circle.fill" : "doc.on.doc.fill")
-                    Text(copied ? "已复制" : "复制当前文本")
+                    Image(systemName: copied ? "checkmark" : "doc.on.doc.fill")
+                    Text(copied ? "已复制" : "复制全部")
                 }
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 12)
-                .padding(.vertical, 5)
-                .background(Capsule().fill(copied ? Color.green : LensoColors.kleinBlueBright))
+                .padding(.vertical, 6)
+                .background(Capsule().fill(copied ? Color(red: 0.11, green: 0.55, blue: 0.33) : LensoColors.kleinBlueBright))
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 16)
+        .frame(height: 58)
         .background(Color.white)
     }
 
-    // MARK: - 辅助计算
+    // MARK: - 右侧检查器
+
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sideLabel("元信息")
+            metaRow("类型", typeTitle)
+            metaRow("来源", (sourceApp?.isEmpty == false ? sourceApp! : "—"))
+            metaRow("时间", createdAt.lensoRelativeDayTime)
+            metaRow("字符", "\(currentFormattedContent.count)")
+            metaRow("行数", "\(displayedLinesCount)")
+
+            sideLabel("显示")
+                .padding(.top, 20)
+                .padding(.bottom, 4)
+
+            VStack(spacing: 2) {
+                ForEach(modeOptions) { option in
+                    modeRow(option)
+                }
+            }
+
+            Spacer(minLength: 16)
+
+            HStack(spacing: 6) {
+                Text("Esc")
+                    .font(.system(size: 9.5, design: .monospaced))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color.black.opacity(0.055)))
+                    .foregroundStyle(Color.primary.opacity(0.55))
+                Text("关闭")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.primary.opacity(0.35))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 16)
+        .padding(.bottom, 14)
+        .frame(width: 190)
+        .background(sidebarBackground)
+        .overlay(alignment: .leading) {
+            Rectangle().fill(hairline).frame(width: 0.5)
+        }
+    }
+
+    private func sideLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 9.5, weight: .semibold))
+            .tracking(0.8)
+            .foregroundStyle(Color.primary.opacity(0.35))
+            .padding(.bottom, 6)
+    }
+
+    private func metaRow(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundStyle(Color.primary.opacity(0.45))
+            Spacer(minLength: 4)
+            Text(value)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color.primary.opacity(0.85))
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .padding(.vertical, 6.5)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(hairline).frame(height: 0.5)
+        }
+    }
+
+    private func modeRow(_ option: ModeOption) -> some View {
+        let selected = selectedMode == option.id
+        return Button {
+            selectMode(option.id)
+        } label: {
+            HStack(spacing: 6) {
+                Text(option.title)
+                    .font(.system(size: 11.5, weight: selected ? .semibold : .regular))
+                Spacer()
+                if selected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9, weight: .bold))
+                }
+            }
+            .foregroundStyle(selected ? LensoColors.kleinBlueBright : Color.primary.opacity(0.7))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(selected ? LensoColors.kleinBlueSoft : Color.clear)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - 显示模式
+
+    private struct ModeOption: Identifiable {
+        let id: Int
+        let title: String
+    }
+
+    private var modeOptions: [ModeOption] {
+        switch contentType {
+        case .json:
+            return [.init(id: 0, title: "美化"), .init(id: 1, title: "压缩"), .init(id: 2, title: "原始")]
+        case .code:
+            return [.init(id: 0, title: "语法高亮"), .init(id: 1, title: "原始代码")]
+        case .url, .plainText:
+            return [.init(id: 0, title: "自然排版"), .init(id: 1, title: "等宽")]
+        }
+    }
+
+    private var selectedMode: Int {
+        switch contentType {
+        case .json: return jsonMode
+        case .code: return codeMode
+        case .url, .plainText: return textMode
+        }
+    }
+
+    private func selectMode(_ id: Int) {
+        switch contentType {
+        case .json: jsonMode = id
+        case .code: codeMode = id
+        case .url, .plainText: textMode = id
+        }
+    }
+
+    // MARK: - 正文内容构建
+
+    private var isStructuredContent: Bool {
+        switch contentType {
+        case .json, .code: return true
+        default: return false
+        }
+    }
+
+    /// 纯文本首行提为标题（仅自然排版、且确实存在后续正文时）
+    private var plainTitle: String? {
+        splitPlainText.title
+    }
+
+    private var plainBody: String {
+        splitPlainText.body
+    }
+
+    private var splitPlainText: (title: String?, body: String) {
+        guard case .plainText = contentType, textMode == 0 else { return (nil, rawContent) }
+        let lines = rawContent.components(separatedBy: .newlines)
+        guard lines.count > 1 else { return (nil, rawContent) }
+
+        let first = lines[0].trimmingCharacters(in: .whitespaces)
+        guard first.count >= 4, first.count <= 64 else { return (nil, rawContent) }
+
+        let rest = lines.dropFirst()
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !rest.isEmpty else { return (nil, rawContent) }
+
+        return (first, rest)
+    }
+
+    private var readableAttributed: AttributedString {
+        let text: String
+        switch contentType {
+        case .plainText:
+            text = textMode == 0 ? plainBody : rawContent
+        case .url(_, let originalStr):
+            text = originalStr
+        default:
+            text = rawContent
+        }
+
+        var attributed = AttributedString(text)
+        attributed.font = textMode == 0
+            ? .system(size: 13.5)
+            : .system(size: 12.5, design: .monospaced)
+        attributed.foregroundColor = Color.primary.opacity(0.9)
+        return searchHighlighted(attributed)
+    }
+
+    private var structuredAttributed: AttributedString {
+        let base: AttributedString
+        switch contentType {
+        case .json(let pretty, let minified):
+            switch jsonMode {
+            case 0: base = TextIntelligence.highlightJSON(pretty)
+            case 1: base = monospacedText(minified)
+            default: base = monospacedText(rawContent)
+            }
+        case .code(let lang, let formatted):
+            base = codeMode == 0
+                ? TextIntelligence.highlight(code: formatted, language: lang)
+                : monospacedText(rawContent)
+        default:
+            base = monospacedText(rawContent)
+        }
+        return searchHighlighted(base)
+    }
+
+    private func monospacedText(_ string: String) -> AttributedString {
+        var attributed = AttributedString(string)
+        attributed.font = .system(size: 12.5, design: .monospaced)
+        attributed.foregroundColor = Color(red: 0.15, green: 0.15, blue: 0.2)
+        return attributed
+    }
+
+    /// 在已渲染的富文本上叠加搜索高亮
+    private func searchHighlighted(_ base: AttributedString) -> AttributedString {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return base }
+
+        var result = base
+        let plain = String(base.characters)
+        var cursor = plain.startIndex
+
+        while cursor < plain.endIndex,
+              let range = plain.range(of: query, options: .caseInsensitive, range: cursor..<plain.endIndex) {
+            let offset = plain.distance(from: plain.startIndex, to: range.lowerBound)
+            let length = plain.distance(from: range.lowerBound, to: range.upperBound)
+            if length > 0 {
+                let lower = result.characters.index(result.startIndex, offsetBy: offset)
+                let upper = result.characters.index(lower, offsetBy: length)
+                result[lower..<upper].backgroundColor = Color.yellow.opacity(0.35)
+                result[lower..<upper].foregroundColor = Color.black
+            }
+            cursor = range.upperBound
+        }
+        return result
+    }
+
+    // MARK: - 状态与辅助
 
     private var currentFormattedContent: String {
         switch contentType {
