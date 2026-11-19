@@ -27,7 +27,7 @@ ZIP_PATH="$DIST_DIR/LENSO-$VERSION.zip"
 echo "==> 生成 Xcode 项目 (XcodeGen)"
 xcodegen generate
 
-echo "==> 编译 Release（版本 $VERSION / build $BUILD）"
+echo "==> 编译 Release（版本 ${VERSION} / build ${BUILD}）"
 xcodebuild -project LENSO.xcodeproj -scheme LENSO -configuration Release build \
   MARKETING_VERSION="$VERSION" \
   CURRENT_PROJECT_VERSION="$BUILD" \
