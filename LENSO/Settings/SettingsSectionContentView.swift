@@ -298,6 +298,10 @@ struct SettingsSectionContentView: View {
 
                         Divider()
 
+                        repoRow
+
+                        Divider()
+
                         updateRow
                     }
                     .padding(16)
@@ -346,6 +350,39 @@ struct SettingsSectionContentView: View {
     }
 
     // MARK: - 检查更新
+
+    private static let repoURL = URL(string: "https://github.com/manzijian/lenso")!
+
+    private var repoRow: some View {
+        Button {
+            NSWorkspace.shared.open(Self.repoURL)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "chevron.left.forwardslash.chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(LensoColors.kleinBlueBright)
+                    .frame(width: 24, height: 24)
+                    .background(Circle().fill(LensoColors.kleinBlueSoft))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("GitHub 仓库")
+                        .font(.system(size: 12, weight: .medium))
+                    Text("github.com/manzijian/lenso")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(LensoColors.kleinBlueBright)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("在浏览器中打开 GitHub 仓库")
+    }
 
     private var updateRow: some View {
         HStack(spacing: 10) {
