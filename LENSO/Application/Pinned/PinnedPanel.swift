@@ -4,6 +4,7 @@ import AppKit
 final class PinnedPanel: NSPanel {
     var onCancel: (() -> Void)?
     var onSpace: (() -> Void)?
+    var onKeyCommand: ((NSEvent) -> Bool)?
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
@@ -13,11 +14,14 @@ final class PinnedPanel: NSPanel {
     }
 
     override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 { // Esc 键立即彻底关闭
+        if onKeyCommand?(event) == true {
+            return
+        }
+        if event.keyCode == 53 { // Esc 键
             onCancel?()
             return
         }
-        if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "w" { // ⌘W
+        if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers?.lowercased() == "w" { // ⌘W
             onCancel?()
             return
         }

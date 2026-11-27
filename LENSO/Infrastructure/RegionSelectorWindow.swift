@@ -44,16 +44,16 @@ final class RegionSelectorController: NSObject {
         self.selection = nil
         panels = NSScreen.screens.map { RegionSelectorPanel(screen: $0, controller: self) }
         // orderFrontRegardless 绕过 App 激活状态限制，保证 screenSaver 层级面板上屏
+        let mouseLocation = NSEvent.mouseLocation
+        let mousePanel = panels.first { $0.screenFrameForDisplay.contains(mouseLocation) } ?? panels.first
         for panel in panels {
             panel.setFrame(panel.screenFrameForDisplay, display: true)
-            panel.orderFrontRegardless()
+            LensoWindowMotion.present(panel, duration: 0.12, makeKey: panel === mousePanel)
         }
         LensoCursor.crosshair.set()
         // 键盘（Esc 取消 / Return 确认）依赖面板是 key window。
         // 面板是 .nonactivatingPanel，可以不激活 App 直接成为 key window，
         // 这样按热键时 lenso 的图库等窗口不会被带到前面，不打断当前正在操作的应用。
-        let mousePanel = panels.first { $0.screenFrameForDisplay.contains(NSEvent.mouseLocation) }
-        mousePanel?.makeKey()
         if NSApp.keyWindow == nil { panels.first?.makeKey() }
         freezeDisplays()
         // 窗口枚举（CGWindowListCopyWindowInfo）放到下一拍再做：
@@ -323,7 +323,25 @@ final class RegionSelectorController: NSObject {
 
     func cancel() {
         selLog.info("selector cancelled")
-        end()
+        isDismissed = true
+        if let rightClickMonitor {
+            NSEvent.removeMonitor(rightClickMonitor)
+            self.rightClickMonitor = nil
+        }
+        let panelsToDismiss = panels
+        panels.removeAll()
+        downPanel = nil
+        hoverWindowFrame = nil
+        selection = nil
+        onComplete = nil
+        frozenFrames.removeAll()
+        NSCursor.arrow.set()
+
+        for panel in panelsToDismiss {
+            LensoWindowMotion.dismiss(panel, duration: 0.10) {
+                panel.close()
+            }
+        }
     }
 
     /// 进入可确认状态：显示手柄 + 完成/取消条

@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import Observation
 import OSLog
 
 private let hotKeyLog = Logger(subsystem: "com.lenso.app", category: "hotkey")
@@ -12,6 +13,7 @@ private let hotKeyLog = Logger(subsystem: "com.lenso.app", category: "hotkey")
 ///
 /// 触发后不自己实现动作，而是转成对主菜单对应菜单项的 `sendAction`：
 /// 菜单项和全局热键共用同一份实现，改一处两边同时生效。
+@Observable
 @MainActor
 final class GlobalHotKeyManager {
     static let shared = GlobalHotKeyManager()
@@ -19,8 +21,9 @@ final class GlobalHotKeyManager {
     /// 'LSOH'
     private static let signature: OSType = OSType(0x4C534F48)
 
-    private var refs: [ShortcutAction: EventHotKeyRef] = [:]
-    private var eventHandler: EventHandlerRef?
+    private(set) var failedActions: Set<ShortcutAction> = []
+    @ObservationIgnored private var refs: [ShortcutAction: EventHotKeyRef] = [:]
+    @ObservationIgnored private var eventHandler: EventHandlerRef?
 
     private init() {}
 
@@ -29,12 +32,13 @@ final class GlobalHotKeyManager {
     /// 按当前配置重新注册全部全局热键。设置里改了快捷键就调这个。
     func refresh(using store: ShortcutStore) {
         unregisterAll()
+        failedActions.removeAll()
         installEventHandlerIfNeeded()
         for action in ShortcutAction.allCases {
             let combo = store.combo(for: action)
             register(action: action, combo: combo)
         }
-        hotKeyLog.info("registered \(self.refs.count) global hotkey(s)")
+        hotKeyLog.info("registered \(self.refs.count) global hotkey(s), failed=\(self.failedActions.count)")
     }
 
     /// 装一个全局事件处理器，接收 kEventHotKeyPressed。
@@ -78,6 +82,7 @@ final class GlobalHotKeyManager {
     private func register(action: ShortcutAction, combo: ShortcutCombo) {
         guard let keyCode = combo.carbonKeyCode else {
             hotKeyLog.error("no carbon key code for \(action.rawValue, privacy: .public) key=\(combo.key, privacy: .public)")
+            failedActions.insert(action)
             return
         }
         let index = ShortcutAction.allCases.firstIndex(of: action) ?? 0
@@ -91,6 +96,7 @@ final class GlobalHotKeyManager {
         )
         guard status == noErr, let ref else {
             hotKeyLog.error("RegisterEventHotKey failed for \(action.rawValue, privacy: .public) status=\(status)")
+            failedActions.insert(action)
             return
         }
         refs[action] = ref

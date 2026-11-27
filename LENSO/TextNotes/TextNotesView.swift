@@ -12,7 +12,10 @@ struct TextNotesView: View {
     @State private var hoveredNoteID: UUID?
     @State private var draft = ""
     @State private var copiedID: UUID?
+    @State private var noteToDelete: TextNote?
+    @State private var showDeleteConfirm = false
     @ObservedObject private var webStore = WebMetadataStore.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let hairline = Color.black.opacity(0.06)
 
@@ -22,12 +25,15 @@ struct TextNotesView: View {
                 header
                 if notes.isEmpty {
                     emptyState
+                } else if visibleNotes.isEmpty {
+                    noMatchState
                 } else {
                     splitContent(showsPreview: proxy.size.width >= 720)
                 }
             }
             .padding(14)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .lensoAnimation(LensoAnimations.snappy, value: query, reduceMotion: reduceMotion)
         }
         .sheet(item: $editing) { note in
             NoteEditorSheet(
@@ -47,8 +53,24 @@ struct TextNotesView: View {
                 rawContent: note.content,
                 sourceApp: note.sourceApp,
                 createdAt: note.createdAt,
+                isSavedNote: true,
                 onDismiss: { inspecting = nil }
             )
+        }
+        .alert(
+            "确定删除这条便签？",
+            isPresented: $showDeleteConfirm,
+            presenting: noteToDelete
+        ) { note in
+            Button("删除", role: .destructive) {
+                delete(note)
+                noteToDelete = nil
+            }
+            Button("取消", role: .cancel) {
+                noteToDelete = nil
+            }
+        } message: { _ in
+            Text("删除后将无法恢复，此操作不可撤销。")
         }
         .onAppear(perform: reload)
         .onReceive(NotificationCenter.default.publisher(for: .textNotesChanged)) { _ in reload() }
@@ -63,6 +85,7 @@ struct TextNotesView: View {
                 Text("\(visibleNotes.count) 条")
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(.secondary)
+                    .lensoNumericTransition()
             }
 
             Spacer()
@@ -78,6 +101,15 @@ struct TextNotesView: View {
             "还没有文字收纳卡片",
             systemImage: "text.alignleft",
             description: Text("复制的文字或截图 OCR 提取的内容会自动在此生成条目")
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var noMatchState: some View {
+        ContentUnavailableView(
+            "没有匹配的笔记",
+            systemImage: "magnifyingglass",
+            description: Text("换个关键词再试试")
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -177,6 +209,12 @@ struct TextNotesView: View {
         .onHover { hovering in
             hoveredNoteID = hovering ? note.id : (hoveredNoteID == note.id ? nil : hoveredNoteID)
         }
+        .lensoAnimation(LensoAnimations.hover, value: hovered, reduceMotion: reduceMotion)
+        .onAppear {
+            if case .url(_, let originalStr) = type {
+                webStore.fetchTitleIfNeeded(for: originalStr)
+            }
+        }
         .onTapGesture(count: 2) {
             selectedNoteID = note.id
             inspecting = note
@@ -185,7 +223,9 @@ struct TextNotesView: View {
             if opensOnTap {
                 inspecting = note
             } else {
-                selectedNoteID = note.id
+                LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                    selectedNoteID = note.id
+                }
             }
         }
         .help(opensOnTap ? "打开全文" : "单击预览 · 双击打开完整查看器")
@@ -198,7 +238,10 @@ struct TextNotesView: View {
                 draft = note.content
                 editing = note
             }
-            Button("删除", role: .destructive) { delete(note) }
+            Button("删除", role: .destructive) {
+                noteToDelete = note
+                showDeleteConfirm = true
+            }
         }
     }
 
@@ -253,27 +296,20 @@ struct TextNotesView: View {
                 .font(.system(size: 9.5, design: .monospaced))
                 .foregroundStyle(Color.primary.opacity(0.35))
 
-            Button {
+            FavoriteStarButton(isFavorite: note.isFavorite, size: 11) {
                 toggleFavorite(note)
-            } label: {
-                Image(systemName: note.isFavorite ? "star.fill" : "star")
-                    .font(.system(size: 11))
-                    .foregroundStyle(note.isFavorite ? Color.yellow : Color.primary.opacity(0.4))
-                    .frame(width: 22, height: 22)
             }
-            .buttonStyle(.plain)
-            .help(note.isFavorite ? "取消收藏" : "收藏")
 
             Button {
                 inspecting = note
             } label: {
-                Image(systemName: "arrow.up.left.and.arrow.down.right")
-                    .font(.system(size: 10, weight: .semibold))
+                Image(systemName: "eye")
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(LensoColors.kleinBlueBright)
-                    .frame(width: 22, height: 22)
+                    .frame(width: 24, height: 24)
                     .background(Circle().fill(LensoColors.kleinBlueSoft))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle())
             .help("打开完整查看器")
 
             Menu {
@@ -281,7 +317,10 @@ struct TextNotesView: View {
                     draft = note.content
                     editing = note
                 }
-                Button("删除", role: .destructive) { delete(note) }
+                Button("删除", role: .destructive) {
+                    noteToDelete = note
+                    showDeleteConfirm = true
+                }
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 11))
@@ -393,6 +432,7 @@ struct TextNotesView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: isCopied ? "checkmark" : "doc.on.doc.fill")
+                        .lensoSymbolReplace()
                     Text(isCopied ? "已复制" : "复制全部")
                 }
                 .font(.system(size: 10.5, weight: .semibold))
@@ -407,7 +447,8 @@ struct TextNotesView: View {
                     )
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle())
+            .lensoAnimation(LensoAnimations.snappy, value: isCopied, reduceMotion: reduceMotion)
         }
         .padding(.horizontal, 14)
         .frame(height: 50)

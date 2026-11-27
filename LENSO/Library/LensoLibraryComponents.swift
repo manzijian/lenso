@@ -7,40 +7,52 @@ struct LibraryTopToolbarView: View {
     @Binding var viewMode: LensoLibraryView.ViewMode
     @Binding var timeFilter: LensoLibraryView.TimeFilter
     @Binding var searchText: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var viewModeNamespace
 
     var body: some View {
         HStack(spacing: 12) {
             // 网格 / 列表视图切换器
             HStack(spacing: 2) {
                 Button {
-                    viewMode = .grid
+                    LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                        viewMode = .grid
+                    }
                 } label: {
                     Image(systemName: "square.grid.2x2")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(viewMode == .grid ? LensoColors.kleinBlueBright : Color.secondary)
                         .frame(width: 28, height: 26)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(viewMode == .grid ? Color.white : Color.clear)
-                                .shadow(color: Color.black.opacity(viewMode == .grid ? 0.08 : 0), radius: 2, y: 1)
-                        )
+                        .background {
+                            if viewMode == .grid {
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.white)
+                                    .shadow(color: Color.black.opacity(0.08), radius: 2, y: 1)
+                                    .matchedGeometryEffect(id: "viewModePill", in: viewModeNamespace)
+                            }
+                        }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LensoPressButtonStyle())
 
                 Button {
-                    viewMode = .list
+                    LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                        viewMode = .list
+                    }
                 } label: {
                     Image(systemName: "list.bullet")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(viewMode == .list ? LensoColors.kleinBlueBright : Color.secondary)
                         .frame(width: 28, height: 26)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(viewMode == .list ? Color.white : Color.clear)
-                                .shadow(color: Color.black.opacity(viewMode == .list ? 0.08 : 0), radius: 2, y: 1)
-                        )
+                        .background {
+                            if viewMode == .list {
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.white)
+                                    .shadow(color: Color.black.opacity(0.08), radius: 2, y: 1)
+                                    .matchedGeometryEffect(id: "viewModePill", in: viewModeNamespace)
+                            }
+                        }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LensoPressButtonStyle())
             }
             .padding(2)
             .background(RoundedRectangle(cornerRadius: 8).fill(Color.black.opacity(0.04)))
@@ -100,9 +112,11 @@ struct LibraryTopToolbarView: View {
                             .font(.system(size: 12))
                             .foregroundStyle(Color.secondary)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(LensoPressButtonStyle())
+                    .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
                 }
             }
+            .lensoAnimation(LensoAnimations.snappy, value: searchText.isEmpty, reduceMotion: reduceMotion)
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
             .background(
@@ -125,7 +139,7 @@ struct LibraryTopToolbarView: View {
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(Color.white).overlay(Circle().stroke(Color.black.opacity(0.08), lineWidth: 1)))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle())
             .help("呼出全局搜索 (⇧⌘F)")
         }
     }
@@ -138,6 +152,7 @@ struct LibraryFooterView: View {
     @Binding var selectedIDs: Set<UUID>
     let allIDs: [UUID]
     let onBatchDelete: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 12) {
@@ -145,11 +160,13 @@ struct LibraryFooterView: View {
                 Text("\(totalCount) 张截图 · 全部保存在本地磁盘")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+                    .lensoNumericTransition()
             } else {
                 HStack(spacing: 8) {
                     Text("已选择 \(selectedIDs.count) 张")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(LensoColors.kleinBlueBright)
+                        .lensoNumericTransition()
 
                     Text("·")
                         .foregroundStyle(.secondary)
@@ -157,17 +174,18 @@ struct LibraryFooterView: View {
                     Button("全选") {
                         selectedIDs = Set(allIDs)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(LensoPressButtonStyle())
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(LensoColors.kleinBlueBright)
 
                     Button("取消选择") {
                         selectedIDs.removeAll()
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(LensoPressButtonStyle())
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                 }
+                .transition(LensoTransitions.bottomExpand(reduceMotion: reduceMotion))
             }
 
             Spacer()
@@ -177,6 +195,7 @@ struct LibraryFooterView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "trash")
                         Text("直接删除 (\(selectedIDs.count))")
+                            .lensoNumericTransition()
                     }
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.white)
@@ -184,10 +203,12 @@ struct LibraryFooterView: View {
                     .padding(.vertical, 5)
                     .background(Capsule().fill(Color.red))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LensoPressButtonStyle())
+                .transition(LensoTransitions.bottomExpand(reduceMotion: reduceMotion))
                 .help("直接彻底从磁盘清除所选项")
             }
         }
+        .lensoAnimation(LensoAnimations.snappy, value: selectedIDs.isEmpty, reduceMotion: reduceMotion)
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(
@@ -212,6 +233,9 @@ struct LibraryScreenshotListRow: View {
     let onDelete: () -> Void
     let onOpenPreview: () -> Void
     let onToggleSelection: () -> Void
+
+    @State private var isCopied = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 12) {
@@ -239,13 +263,27 @@ struct LibraryScreenshotListRow: View {
                 onToggleFavorite()
             }
 
-            Button(action: onCopy) {
-                Image(systemName: "doc.on.doc")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+            Button {
+                onCopy()
+                LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                    isCopied = true
+                }
+                Task {
+                    try? await Task.sleep(for: .seconds(1.2))
+                    await MainActor.run {
+                        LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                            isCopied = false
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 12, weight: isCopied ? .bold : .regular))
+                    .foregroundStyle(isCopied ? Color(red: 0.11, green: 0.55, blue: 0.33) : .secondary)
+                    .lensoSymbolReplace()
                     .frame(width: 24, height: 24)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle())
             .help("复制图片")
 
             Button(action: onDelete) {
@@ -254,7 +292,7 @@ struct LibraryScreenshotListRow: View {
                     .foregroundStyle(Color.red)
                     .frame(width: 24, height: 24)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle())
             .help("直接删除")
         }
         .padding(8)
@@ -267,6 +305,7 @@ struct LibraryScreenshotListRow: View {
                 )
                 .shadow(color: Color.black.opacity(0.03), radius: 3, y: 1)
         )
+        .lensoAnimation(LensoAnimations.snappy, value: isSelected, reduceMotion: reduceMotion)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
             onOpenPreview()
@@ -281,19 +320,46 @@ struct LibraryScreenshotListRow: View {
 
 struct LibraryEmptyStateView: View {
     let searchText: String
+    var timeFilter: LensoLibraryView.TimeFilter = .all
+    var onResetTimeFilter: (() -> Void)? = nil
+
+    private var titleText: String {
+        if !searchText.isEmpty { return "未找到匹配截图" }
+        if timeFilter != .all { return "该时间段内暂无截图" }
+        return "图库空空如也"
+    }
+
+    private var subtitleText: String {
+        if !searchText.isEmpty { return "请尝试更换关键词搜索" }
+        if timeFilter != .all { return "当前筛选范围：\(timeFilter.rawValue)" }
+        return "按 ⇧⌘1 截取一张屏幕画面，或在菜单栏直接截图"
+    }
 
     var body: some View {
         VStack(spacing: 12) {
             Spacer()
-            Image(systemName: "photo.on.rectangle.angled")
+            Image(systemName: timeFilter != .all && searchText.isEmpty ? "calendar.badge.exclamationmark" : "photo.on.rectangle.angled")
                 .font(.system(size: 38))
                 .foregroundStyle(LensoColors.kleinBlueBright.opacity(0.5))
-            Text(searchText.isEmpty ? "图库空空如也" : "未找到匹配截图")
+            Text(titleText)
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(Color.primary.opacity(0.8))
-            Text(searchText.isEmpty ? "按 ⇧⌘1 截取一张屏幕画面，或在菜单栏直接截图" : "请尝试更换关键词搜索")
+            Text(subtitleText)
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
+
+            if timeFilter != .all && searchText.isEmpty, let onResetTimeFilter {
+                Button(action: onResetTimeFilter) {
+                    Text("查看全部")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(LensoColors.kleinBlueBright))
+                }
+                .buttonStyle(LensoPressButtonStyle())
+                .padding(.top, 4)
+            }
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -349,6 +415,8 @@ struct LibraryImageCell: View {
     let onDelete: () -> Void
 
     @State private var hovering = false
+    @State private var isCopied = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 截图卡片上的精确时间（时:分:秒）
     private static let clockFormatter: DateFormatter = {
@@ -392,6 +460,7 @@ struct LibraryImageCell: View {
                         )
                         .shadow(color: LensoColors.kleinBlueBright.opacity(0.3), radius: 3, y: 1)
                         .padding(7)
+                        .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
                 }
             }
             .overlay(alignment: .topLeading) {
@@ -423,17 +492,31 @@ struct LibraryImageCell: View {
                                 .frame(width: 22, height: 22)
                                 .background(Circle().fill(Color.white))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(LensoPressButtonStyle())
                         .help("双击打开预览")
 
-                        Button(action: onCopy) {
-                            Image(systemName: "doc.on.doc.fill")
-                                .font(.system(size: 10))
-                                .foregroundStyle(Color.primary.opacity(0.8))
+                        Button {
+                            onCopy()
+                            LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                                isCopied = true
+                            }
+                            Task {
+                                try? await Task.sleep(for: .seconds(1.2))
+                                await MainActor.run {
+                                    LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                                        isCopied = false
+                                    }
+                                }
+                            }
+                        } label: {
+                            Image(systemName: isCopied ? "checkmark" : "doc.on.doc.fill")
+                                .font(.system(size: 10, weight: isCopied ? .bold : .regular))
+                                .foregroundStyle(isCopied ? Color(red: 0.11, green: 0.55, blue: 0.33) : Color.primary.opacity(0.8))
+                                .lensoSymbolReplace()
                                 .frame(width: 22, height: 22)
                                 .background(Circle().fill(Color.white))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(LensoPressButtonStyle())
                         .help("复制到剪贴板")
 
                         Button(action: onDelete) {
@@ -443,17 +526,20 @@ struct LibraryImageCell: View {
                                 .frame(width: 22, height: 22)
                                 .background(Circle().fill(Color.white))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(LensoPressButtonStyle())
                         .help("直接彻底删除")
                     }
                     .padding(4)
                     .background(Capsule().fill(Color.black.opacity(0.25)))
                     .padding(6)
+                    .transition(.opacity)
                 }
             }
             .shadow(color: Color.black.opacity(isSelected ? 0.12 : (hovering ? 0.08 : 0.04)), radius: hovering ? 8 : 4, y: hovering ? 4 : 2)
             .contentShape(Rectangle())
             .onHover { hovering = $0 }
+            .lensoAnimation(LensoAnimations.hover, value: hovering, reduceMotion: reduceMotion)
+            .lensoAnimation(LensoAnimations.snappy, value: isSelected, reduceMotion: reduceMotion)
             .contextMenu {
                 Button("打开预览", action: onOpen)
                 Button("复制到剪贴板", action: onCopy)

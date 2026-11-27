@@ -105,6 +105,7 @@ final class AppSettings {
     var showMenuBarIcon: Bool {
         didSet {
             persist(.showMenuBarIcon, showMenuBarIcon)
+            ensureAtLeastOneEntryPoint(changed: .menuBar)
             // 自建状态栏：开关图标时重建/移除 NSStatusItem
             Task { @MainActor in StatusBarController.shared.reinstallIfNeeded() }
         }
@@ -113,6 +114,7 @@ final class AppSettings {
     var showInDock: Bool {
         didSet {
             persist(.showInDock, showInDock)
+            ensureAtLeastOneEntryPoint(changed: .dock)
             applyDockVisibility()
         }
     }
@@ -194,6 +196,10 @@ final class AppSettings {
     /// 自定义时长数值（例如 12、48、7）
     var customRetentionValue: Int {
         didSet {
+            if customRetentionValue < 1 {
+                customRetentionValue = 1
+                return
+            }
             defaults.set(customRetentionValue, forKey: Self.keyPrefix + "customRetentionValue")
             if retentionPreset == .custom { runAutoCleanup() }
         }
@@ -249,7 +255,7 @@ final class AppSettings {
         showPreviewAfterCapture = Self.read(.showPreviewAfterCapture, default: false, defaults: defaults)
         autoCopyAfterCapture = Self.read(.autoCopyAfterCapture, default: true, defaults: defaults)
         showFloatingPreview = Self.read(.showFloatingPreview, default: true, defaults: defaults)
-        followSystemAppearance = Self.read(.followSystemAppearance, default: false, defaults: defaults)
+        followSystemAppearance = Self.read(.followSystemAppearance, default: true, defaults: defaults)
         glassEffect = Self.read(.glassEffect, default: true, defaults: defaults)
         enableMCPServer = Self.read(.enableMCPServer, default: true, defaults: defaults)
 
@@ -298,6 +304,31 @@ final class AppSettings {
     // MARK: - Apply
 
     private var applyingLoginItem = false
+    private var ensuringEntryPoint = false
+
+    private enum EntryPoint { case menuBar, dock }
+
+    private func ensureAtLeastOneEntryPoint(changed: EntryPoint) {
+        guard !ensuringEntryPoint, !showMenuBarIcon, !showInDock else { return }
+        ensuringEntryPoint = true
+        defer { ensuringEntryPoint = false }
+        switch changed {
+        case .menuBar:
+            showInDock = true
+            SaveToastController.shared.show(
+                title: "已保留程序坞图标",
+                subtitle: "菜单栏与程序坞图标不能同时隐藏",
+                thumbnail: nil
+            )
+        case .dock:
+            showMenuBarIcon = true
+            SaveToastController.shared.show(
+                title: "已保留菜单栏图标",
+                subtitle: "菜单栏与程序坞图标不能同时隐藏",
+                thumbnail: nil
+            )
+        }
+    }
 
     private func applyLaunchAtLogin(from oldValue: Bool) {
         guard !applyingLoginItem else { return }
@@ -310,8 +341,14 @@ final class AppSettings {
                 try SMAppService.mainApp.unregister()
             }
         } catch {
-            // 注册失败（如 ad-hoc 调试包未签名）：恢复旧值，开关不说谎。
+            // 注册失败（如 ad-hoc 调试包未签名）：恢复旧值并提示用户原因。
             launchAtLogin = oldValue
+            SaveToastController.shared.show(
+                title: "无法更改开机启动",
+                subtitle: error.localizedDescription,
+                thumbnail: nil,
+                isError: true
+            )
         }
     }
 

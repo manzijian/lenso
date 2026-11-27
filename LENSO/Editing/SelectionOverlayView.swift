@@ -340,10 +340,14 @@ struct SelectionContent: View {
                 if state.draft == nil {
                     state.draft = Annotation(
                         kind: kind, start: norm.start, end: norm.end,
-                        colorIndex: state.colorIndex, strokeWidth: state.strokeWidth
+                        colorIndex: state.colorIndex, strokeWidth: state.strokeWidth,
+                        points: kind == .brush ? [norm.start, norm.end] : []
                     )
                 } else {
                     state.draft?.end = norm.end
+                    if kind == .brush {
+                        state.draft?.points.append(norm.end)
+                    }
                 }
             }
             .onEnded { value in
@@ -414,9 +418,26 @@ struct SelectionInner: View {
                                 y: p2.y - headLen * sin(angle + delta)
                             ))
                         }
-                    case .brush, .highlight: path.addRect(rect)
-                    case .mosaic: path.addRect(rect)
-                    case .text: path.addRect(rect)
+                    case .brush:
+                        let pts = annotation.points.isEmpty
+                            ? [p1, p2]
+                            : annotation.points.map { CGPoint(x: $0.x * sw, y: $0.y * sh) }
+                        if let first = pts.first {
+                            path.move(to: first)
+                            if pts.count == 2 {
+                                path.addLine(to: pts[1])
+                            } else if pts.count > 2 {
+                                for i in 1..<(pts.count - 1) {
+                                    let mid = CGPoint(
+                                        x: (pts[i].x + pts[i + 1].x) * 0.5,
+                                        y: (pts[i].y + pts[i + 1].y) * 0.5
+                                    )
+                                    path.addQuadCurve(to: mid, control: pts[i])
+                                }
+                                path.addLine(to: pts[pts.count - 1])
+                            }
+                        }
+                    case .highlight, .mosaic, .text: path.addRect(rect)
                     }
                 }
                 let alpha: Double = annotation.kind == .highlight ? 0.4 : 1.0
@@ -435,7 +456,11 @@ struct SelectionInner: View {
                         .foregroundColor(color)
                     context.draw(text, at: p1, anchor: .topLeading)
                 } else {
-                    context.stroke(stroke, with: .color(color.opacity(alpha)), lineWidth: annotation.strokeWidth)
+                    context.stroke(
+                        stroke,
+                        with: .color(color.opacity(alpha)),
+                        style: StrokeStyle(lineWidth: annotation.strokeWidth, lineCap: .round, lineJoin: .round)
+                    )
                 }
 
                 // 选中的标注给出可拖动的虚线提示

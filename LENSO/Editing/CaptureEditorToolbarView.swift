@@ -17,6 +17,7 @@ struct ToolIcon: View {
     let action: () -> Void
 
     @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isActive: Bool {
         guard let kind else { return false }
@@ -24,29 +25,35 @@ struct ToolIcon: View {
     }
 
     var body: some View {
-        Image(systemName: icon)
-            .font(.system(size: 13.5, weight: .medium))
-            .foregroundStyle(isActive ? brandBlue : iconIdle)
-            .opacity(disabled ? 0.3 : 1)
-            .frame(width: 30, height: 30)
-            .background {
-                if isActive {
-                    // 浮起的白胶囊：靠内高光与轻投影立起来，不用实心色块
-                    Circle()
-                        .fill(Color.white)
-                        .shadow(color: .black.opacity(0.10), radius: 2, y: 1)
-                        .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
-                        .overlay(Circle().strokeBorder(Color.black.opacity(0.05), lineWidth: 0.5))
-                } else if hovering && !disabled {
-                    Circle().fill(Color.black.opacity(0.05))
+        Button {
+            guard !disabled else { return }
+            action()
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 13.5, weight: .medium))
+                .foregroundStyle(isActive ? brandBlue : iconIdle)
+                .opacity(disabled ? 0.3 : 1)
+                .frame(width: 30, height: 30)
+                .background {
+                    if isActive {
+                        // 浮起的白胶囊：靠内高光与轻投影立起来，不用实心色块
+                        Circle()
+                            .fill(Color.white)
+                            .shadow(color: .black.opacity(0.10), radius: 2, y: 1)
+                            .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
+                            .overlay(Circle().strokeBorder(Color.black.opacity(0.05), lineWidth: 0.5))
+                    } else if hovering && !disabled {
+                        Circle().fill(Color.black.opacity(0.05))
+                    }
                 }
-            }
-            .contentShape(Circle())
-            .onHover { hovering = $0 }
-            .onTapGesture { guard !disabled else { return }; action() }
-            .help(tooltip ?? "")
-            .animation(.easeOut(duration: 0.12), value: hovering)
-            .animation(.easeOut(duration: 0.12), value: isActive)
+                .contentShape(Circle())
+        }
+        .buttonStyle(LensoPressButtonStyle(scale: 0.92))
+        .disabled(disabled)
+        .onHover { hovering = $0 }
+        .help(tooltip ?? "")
+        .lensoAnimation(LensoAnimations.hover, value: hovering, reduceMotion: reduceMotion)
+        .lensoAnimation(LensoAnimations.snappy, value: isActive, reduceMotion: reduceMotion)
     }
 }
 
@@ -163,26 +170,28 @@ struct CaptureEditorToolbarView: View {
     }
 
     private var finishButton: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "checkmark")
-                .font(.system(size: 9.5, weight: .bold))
-            Text("完成")
-                .font(.system(size: 10.5, weight: .semibold))
+        Button(action: onFinish) {
+            HStack(spacing: 4) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9.5, weight: .bold))
+                Text("完成")
+                    .font(.system(size: 10.5, weight: .semibold))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 11)
+            .frame(height: 28)
+            .background(
+                Capsule()
+                    .fill(LinearGradient(colors: [brandBlueDeep, brandBlue], startPoint: .top, endPoint: .bottom))
+            )
+            .overlay(
+                Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5)
+            )
+            .shadow(color: brandBlue.opacity(0.34), radius: 8, y: 2)
+            .contentShape(Capsule())
         }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 11)
-        .frame(height: 28)
-        .background(
-            Capsule()
-                .fill(LinearGradient(colors: [brandBlueDeep, brandBlue], startPoint: .top, endPoint: .bottom))
-        )
-        .overlay(
-            Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5)
-        )
-        .shadow(color: brandBlue.opacity(0.34), radius: 8, y: 2)
+        .buttonStyle(LensoPressButtonStyle(scale: 0.95))
         .padding(.leading, 4)
-        .contentShape(Capsule())
-        .onTapGesture { onFinish() }
         .help("完成并保存（⏎）")
     }
 }

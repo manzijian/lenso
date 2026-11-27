@@ -77,7 +77,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             UserDefaults.standard.set(true, forKey: "pendingOpenLibrary")
             NotificationCenter.default.post(name: .openLibraryOnLaunch, object: nil)
-            NSApp.activate(ignoringOtherApps: true)
+            if NSApp.isActive {
+                NSApp.activate(ignoringOtherApps: true)
+            }
         }
 
         // 从 GitHub Releases 静默检查更新（每天最多一次，失败不打扰）

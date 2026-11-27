@@ -7,6 +7,14 @@ struct JSONToolView: View {
     var initialText: String? = nil
     @State private var model = JSONWorkbenchModel()
     @State private var hoveredAction: JSONAction?
+    @State private var clipboardJSONCandidate: String?
+    @State private var confirmClear = false
+    @Namespace private var viewModeNamespace
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var supportsTextTransforms: Bool {
+        model.viewMode == .edit || model.viewMode == .tree
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,6 +37,10 @@ struct JSONToolView: View {
         .onAppear {
             if let initialText, model.input.isEmpty {
                 model.input = initialText
+            } else if model.input.isEmpty,
+                      let clip = NSPasteboard.general.string(forType: .string),
+                      JSONClipboard.looksLikeJSON(clip) {
+                clipboardJSONCandidate = clip
             }
         }
     }
@@ -96,12 +108,14 @@ struct JSONToolView: View {
                 Label(model.copied ? "已复制" : "复制结果",
                       systemImage: model.copied ? "checkmark" : "doc.on.doc")
                     .font(.system(size: 11.5, weight: .medium))
+                    .lensoSymbolReplace()
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
             .tint(LensoColors.kleinBlueBright)
             .keyboardShortcut("c", modifiers: [.command, .shift])
             .disabled(!hasCopyableResult)
+            .lensoAnimation(LensoAnimations.snappy, value: model.copied, reduceMotion: reduceMotion)
         }
         .padding(.horizontal, 16)
         .padding(.top, 13)
@@ -123,9 +137,13 @@ struct JSONToolView: View {
             viewModePicker
             Spacer(minLength: 8)
             actionGroup
-            Divider().frame(height: 16)
-            indentMenu
+            if supportsTextTransforms {
+                Divider().frame(height: 16)
+                indentMenu
+                    .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
+            }
         }
+        .lensoAnimation(LensoAnimations.snappy, value: supportsTextTransforms, reduceMotion: reduceMotion)
         .padding(.horizontal, 16)
         .padding(.bottom, 10)
     }
@@ -135,7 +153,9 @@ struct JSONToolView: View {
             ForEach(JSONViewMode.allCases) { mode in
                 let selected = model.viewMode == mode
                 Button {
-                    model.viewMode = mode
+                    LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                        model.viewMode = mode
+                    }
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: mode.symbol)
@@ -151,12 +171,12 @@ struct JSONToolView: View {
                             RoundedRectangle(cornerRadius: 7, style: .continuous)
                                 .fill(LensoColors.accentGradient)
                                 .shadow(color: LensoColors.kleinBlueBright.opacity(0.28), radius: 3, y: 1)
+                                .matchedGeometryEffect(id: "jsonViewMode", in: viewModeNamespace)
                         }
                     }
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .animation(.easeOut(duration: 0.16), value: model.viewMode)
+                .buttonStyle(LensoPressButtonStyle())
             }
         }
         .padding(3)
@@ -170,6 +190,7 @@ struct JSONToolView: View {
         HStack(spacing: 1) {
             ForEach(JSONAction.allCases) { action in
                 let hovered = hoveredAction == action
+                let enabled = model.hasInput && supportsTextTransforms
                 Button {
                     model.perform(action)
                 } label: {
@@ -179,21 +200,21 @@ struct JSONToolView: View {
                         Text(action.rawValue)
                             .font(.system(size: 10.5, weight: .medium))
                     }
-                    .foregroundStyle(hovered ? LensoColors.kleinBlueBright : Color.primary.opacity(0.66))
+                    .foregroundStyle(hovered && enabled ? LensoColors.kleinBlueBright : Color.primary.opacity(enabled ? 0.66 : 0.35))
                     .padding(.horizontal, 8)
                     .frame(height: 24)
                     .background(
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(hovered ? LensoColors.kleinBlueSoft : Color.clear)
+                            .fill(hovered && enabled ? LensoColors.kleinBlueSoft : Color.clear)
                     )
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LensoPressButtonStyle())
                 .onHover { hovering in
                     hoveredAction = hovering ? action : nil
                 }
                 .help(actionHelp(action))
-                .disabled(!model.hasInput)
+                .disabled(!enabled)
             }
         }
         .padding(2)
@@ -257,17 +278,74 @@ struct JSONToolView: View {
                 detail: inputDetail
             ) {
                 PaneIconButton(symbol: "doc.on.clipboard", help: "从剪贴板粘贴") {
-                    if let string = NSPasteboard.general.string(forType: .string) {
+                    if let string = NSPasteboard.general.string(forType: .string), !string.isEmpty {
                         model.paste(string)
+                        clipboardJSONCandidate = nil
+                    } else {
+                        SaveToastController.shared.show(
+                            title: "剪贴板为空",
+                            subtitle: "未检测到可粘贴的文本内容",
+                            thumbnail: nil,
+                            isError: true
+                        )
                     }
                 }
                 PaneIconButton(symbol: "trash", help: "清空输入") {
-                    model.clear()
+                    confirmClear = true
                 }
                 .disabled(model.input.isEmpty)
+                .confirmationDialog(
+                    "确认清空当前 JSON 输入？",
+                    isPresented: $confirmClear,
+                    titleVisibility: .visible
+                ) {
+                    Button("清空输入", role: .destructive) {
+                        model.clear()
+                    }
+                    Button("取消", role: .cancel) {}
+                }
             }
 
             Divider().opacity(0.3)
+
+            if model.input.isEmpty, let candidate = clipboardJSONCandidate {
+                HStack(spacing: 8) {
+                    Image(systemName: "doc.on.clipboard.fill")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(LensoColors.kleinBlueBright)
+                    Text("检测到剪贴板中有 JSON 内容")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Color.primary.opacity(0.85))
+                    Spacer()
+                    Button("从剪贴板导入 JSON") {
+                        LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                            model.paste(candidate)
+                            clipboardJSONCandidate = nil
+                        }
+                    }
+                    .buttonStyle(LensoPressButtonStyle())
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3.5)
+                    .background(Capsule().fill(LensoColors.kleinBlueBright))
+
+                    Button {
+                        LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                            clipboardJSONCandidate = nil
+                        }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9.5, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(LensoPressButtonStyle())
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(LensoColors.kleinBlueSoft)
+                .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
+            }
 
             ZStack(alignment: .topLeading) {
                 if model.input.isEmpty {
@@ -325,18 +403,21 @@ struct JSONToolView: View {
                                 .font(.system(size: 8, weight: .semibold))
                                 .foregroundStyle(LensoColors.kleinBlueBright)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(LensoPressButtonStyle())
                         .help("恢复到自动格式化结果")
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Capsule().fill(LensoColors.kleinBlueSoft))
+                    .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
                 }
                 PaneIconButton(symbol: model.copied ? "checkmark" : "doc.on.doc",
                                help: "复制结果") {
                     model.copyCurrent()
                 }
                 .disabled(!hasCopyableResult)
+                .lensoSymbolReplace()
+                .lensoAnimation(LensoAnimations.snappy, value: model.copied, reduceMotion: reduceMotion)
             }
 
             Divider().opacity(0.3)
@@ -471,15 +552,18 @@ struct JSONToolView: View {
                 Text("·")
                     .foregroundStyle(.tertiary)
                 Text("\(metrics.nodes) 节点")
+                    .lensoNumericTransition()
                 Text("·")
                     .foregroundStyle(.tertiary)
                 Text("\(byteText(metrics.inputBytes)) → \(byteText(metrics.outputBytes))")
                 Text("·")
                     .foregroundStyle(.tertiary)
                 Text("\(metrics.lines) 行")
+                    .lensoNumericTransition()
                 Text("·")
                     .foregroundStyle(.tertiary)
                 Text("\(metrics.durationMS) ms")
+                    .lensoNumericTransition()
             }
 
             Spacer()
@@ -539,7 +623,7 @@ private struct PaneIconButton: View {
                 )
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LensoPressButtonStyle(scale: 0.92))
         .onHover { hovering = $0 }
         .help(help)
     }

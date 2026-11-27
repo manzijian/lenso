@@ -32,6 +32,9 @@ struct SettingsSectionContentView: View {
     @State private var shortcutStore = ShortcutStore.shared
     @State private var settings = AppSettings.shared
     @State private var updater = UpdateChecker.shared
+    @State private var confirmCleanup = false
+    @State private var confirmResetShortcuts = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         switch category {
@@ -45,10 +48,6 @@ struct SettingsSectionContentView: View {
                     SettingToggleRow(label: "在下方应用栏（程序坞）显示图标", subtitle: "关闭后隐藏下方图标，仅在顶部状态栏常驻（默认开启）", isOn: $settings.showInDock)
                     rowDivider
                     SettingToggleRow(label: "截图保存后打开预览窗口", subtitle: "截完图后自动打开独立无极缩放预览", isOn: $settings.showPreviewAfterCapture)
-                    rowDivider
-                    SettingToggleRow(label: "复制与保存成功后在右下角弹出提醒", subtitle: "复制文本、图片或截图保存时，在屏幕右下角显示浮动气泡反馈", isOn: $settings.showFloatingPreview)
-                    rowDivider
-                    SettingToggleRow(label: "开启 MCP 本地服务", subtitle: "允许本地 AI Agent（Claude、Cursor 等）安全读取历史与剪贴板", isOn: $settings.enableMCPServer)
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -81,14 +80,16 @@ struct SettingsSectionContentView: View {
 
                             if settings.retentionPreset == .custom {
                                 rowDivider
-                                HStack {
+                                HStack(spacing: 8) {
                                     Text("自定义保留时长")
                                         .font(.system(size: 13, weight: .medium))
                                         .foregroundStyle(Color.primary.opacity(0.9))
                                     Spacer()
                                     TextField("数值", value: $settings.customRetentionValue, format: .number)
                                         .textFieldStyle(.roundedBorder)
-                                        .frame(width: 60)
+                                        .frame(width: 56)
+                                    Stepper("", value: $settings.customRetentionValue, in: 1...3650)
+                                        .labelsHidden()
                                     Picker("", selection: $settings.customRetentionUnit) {
                                         ForEach(RetentionUnit.allCases) { u in
                                             Text(u.rawValue).tag(u)
@@ -99,16 +100,18 @@ struct SettingsSectionContentView: View {
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 8)
+                                .transition(LensoTransitions.inlineExpand(reduceMotion: reduceMotion))
                             }
 
-                            rowDivider
-                            SettingToggleRow(
-                                label: "保留星标收藏的内容",
-                                subtitle: "即使超过保存期限，已收藏的截图与文字便签也绝不会被自动删除",
-                                isOn: $settings.preserveFavoritesOnCleanup
-                            )
-
                             if settings.retentionPreset != .never {
+                                rowDivider
+                                SettingToggleRow(
+                                    label: "保留星标收藏的内容",
+                                    subtitle: "即使超过保存期限，已收藏的截图与文字便签也绝不会被自动删除",
+                                    isOn: $settings.preserveFavoritesOnCleanup
+                                )
+                                .transition(LensoTransitions.inlineExpand(reduceMotion: reduceMotion))
+
                                 rowDivider
                                 HStack {
                                     VStack(alignment: .leading, spacing: 2) {
@@ -123,21 +126,7 @@ struct SettingsSectionContentView: View {
                                     }
                                     Spacer()
                                     Button {
-                                        if let res = settings.runAutoCleanup() {
-                                            if res.totalDeleted > 0 {
-                                                SaveToastController.shared.show(
-                                                    title: "清理完成",
-                                                    subtitle: "已删除 \(res.totalDeleted) 项过期数据",
-                                                    thumbnail: nil
-                                                )
-                                            } else {
-                                                SaveToastController.shared.show(
-                                                    title: "已是最新",
-                                                    subtitle: "当前暂无符合清理条件的过期记录",
-                                                    thumbnail: nil
-                                                )
-                                            }
-                                        }
+                                        confirmCleanup = true
                                     } label: {
                                         HStack(spacing: 4) {
                                             Image(systemName: "trash")
@@ -149,12 +138,42 @@ struct SettingsSectionContentView: View {
                                         .padding(.vertical, 5)
                                         .background(Capsule().fill(LensoColors.kleinBlueSoft))
                                     }
-                                    .buttonStyle(.plain)
+                                    .buttonStyle(LensoPressButtonStyle())
+                                    .confirmationDialog(
+                                        "确认清理过期数据？",
+                                        isPresented: $confirmCleanup,
+                                        titleVisibility: .visible
+                                    ) {
+                                        Button("确认清理", role: .destructive) {
+                                            if let res = settings.runAutoCleanup() {
+                                                if res.totalDeleted > 0 {
+                                                    SaveToastController.shared.show(
+                                                        title: "清理完成",
+                                                        subtitle: "已删除 \(res.totalDeleted) 项过期数据",
+                                                        thumbnail: nil
+                                                    )
+                                                } else {
+                                                    SaveToastController.shared.show(
+                                                        title: "已是最新",
+                                                        subtitle: "当前暂无符合清理条件的过期记录",
+                                                        thumbnail: nil
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        Button("取消", role: .cancel) {}
+                                    } message: {
+                                        Text(settings.preserveFavoritesOnCleanup
+                                             ? "将删除超过保留期限的非星标数据，此操作不可撤销。"
+                                             : "将删除所有超过保留期限的记录，此操作不可撤销。")
+                                    }
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 9)
+                                .transition(LensoTransitions.inlineExpand(reduceMotion: reduceMotion))
                             }
                         }
+                        .lensoAnimation(LensoAnimations.panel, value: settings.retentionPreset, reduceMotion: reduceMotion)
                     }
                 }
             }
@@ -181,7 +200,7 @@ struct SettingsSectionContentView: View {
                 }
 
                 Button {
-                    shortcutStore.resetAll()
+                    confirmResetShortcuts = true
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "arrow.counterclockwise")
@@ -199,7 +218,19 @@ struct SettingsSectionContentView: View {
                             .shadow(color: Color.black.opacity(0.03), radius: 2, y: 1)
                     )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LensoPressButtonStyle())
+                .confirmationDialog(
+                    "确认恢复默认快捷键？",
+                    isPresented: $confirmResetShortcuts,
+                    titleVisibility: .visible
+                ) {
+                    Button("恢复默认", role: .destructive) {
+                        shortcutStore.resetAll()
+                    }
+                    Button("取消", role: .cancel) {}
+                } message: {
+                    Text("所有自定义快捷键将重置为出厂默认组合。")
+                }
             }
 
         case .appearance:
@@ -210,49 +241,59 @@ struct SettingsSectionContentView: View {
                     SettingToggleRow(label: "玻璃材质磨砂效果", subtitle: "窗口与浮窗启用 macOS 细腻毛玻璃质感", isOn: $settings.glassEffect)
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("状态栏图标样式")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.primary.opacity(0.85))
+                if settings.showMenuBarIcon {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("状态栏图标样式")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color.primary.opacity(0.85))
 
-                    settingCard {
-                        ForEach(MenuBarIconStyle.allCases) { style in
-                            HStack(spacing: 12) {
-                                Image(systemName: style.systemSymbolName)
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundStyle(settings.menuBarIconStyle == style ? LensoColors.kleinBlueBright : Color.primary.opacity(0.8))
-                                    .frame(width: 28, height: 28)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(settings.menuBarIconStyle == style ? LensoColors.kleinBlueSoft : Color.black.opacity(0.04))
-                                    )
+                        settingCard {
+                            ForEach(MenuBarIconStyle.allCases) { style in
+                                Button {
+                                    LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                                        settings.menuBarIconStyle = style
+                                    }
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: style.systemSymbolName)
+                                            .font(.system(size: 15, weight: .medium))
+                                            .foregroundStyle(settings.menuBarIconStyle == style ? LensoColors.kleinBlueBright : Color.primary.opacity(0.8))
+                                            .frame(width: 28, height: 28)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 6)
+                                                    .fill(settings.menuBarIconStyle == style ? LensoColors.kleinBlueSoft : Color.black.opacity(0.04))
+                                            )
 
-                                Text(style.rawValue)
-                                    .font(.system(size: 13, weight: settings.menuBarIconStyle == style ? .semibold : .regular))
-                                    .foregroundStyle(Color.primary.opacity(0.9))
+                                        Text(style.rawValue)
+                                            .font(.system(size: 13, weight: settings.menuBarIconStyle == style ? .semibold : .regular))
+                                            .foregroundStyle(Color.primary.opacity(0.9))
 
-                                Spacer()
+                                        Spacer()
 
-                                if settings.menuBarIconStyle == style {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 16))
-                                        .foregroundStyle(LensoColors.kleinBlueBright)
+                                        if settings.menuBarIconStyle == style {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .font(.system(size: 16))
+                                                .foregroundStyle(LensoColors.kleinBlueBright)
+                                                .lensoSymbolReplace()
+                                                .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
+                                        }
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 9)
+                                    .contentShape(Rectangle())
                                 }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 9)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                settings.menuBarIconStyle = style
-                            }
+                                .buttonStyle(LensoPressButtonStyle(scale: 0.99))
 
-                            if style != MenuBarIconStyle.allCases.last {
-                                rowDivider
+                                if style != MenuBarIconStyle.allCases.last {
+                                    rowDivider
+                                }
                             }
                         }
                     }
+                    .transition(LensoTransitions.inlineExpand(reduceMotion: reduceMotion))
                 }
             }
+            .lensoAnimation(LensoAnimations.panel, value: settings.showMenuBarIcon, reduceMotion: reduceMotion)
 
         case .mcp:
             MCPSettingsSectionView()
@@ -332,7 +373,7 @@ struct SettingsSectionContentView: View {
                                  detail: "无账号、无网络上传，所有内容仅存于本机")
                         rowDivider
                         aboutRow(icon: "clock.arrow.circlepath", title: "自动清理",
-                                 detail: "可在「存储」中设置保留天数，收藏内容默认保留")
+                                 detail: "可在「通用」中设置保留天数，收藏内容默认保留")
                     }
                 }
 
@@ -380,17 +421,18 @@ struct SettingsSectionContentView: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LensoPressButtonStyle(scale: 0.99))
         .help("在浏览器中打开 GitHub 仓库")
     }
 
     private var updateRow: some View {
         HStack(spacing: 10) {
-            Image(systemName: "arrow.triangle.2.circlepath")
+            Image(systemName: updateRowSymbol)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(LensoColors.kleinBlueBright)
                 .frame(width: 24, height: 24)
                 .background(Circle().fill(LensoColors.kleinBlueSoft))
+                .lensoSymbolReplace()
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("软件更新")
@@ -398,11 +440,23 @@ struct SettingsSectionContentView: View {
                 Text(updateSubtitle)
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
 
             Spacer(minLength: 8)
 
             updateAction
+                .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
+        }
+        .lensoAnimation(LensoAnimations.snappy, value: updater.status, reduceMotion: reduceMotion)
+    }
+
+    private var updateRowSymbol: String {
+        switch updater.status {
+        case .upToDate: "checkmark.circle.fill"
+        case .failed: "exclamationmark.triangle.fill"
+        case .updateAvailable: "arrow.down.circle.fill"
+        default: "arrow.triangle.2.circlepath"
         }
     }
 
@@ -416,8 +470,8 @@ struct SettingsSectionContentView: View {
             "当前已是最新版本"
         case .updateAvailable(let version, _):
             "发现新版本 v\(version)"
-        case .failed:
-            "暂时无法检查更新"
+        case .failed(let message):
+            message.isEmpty ? "暂时无法检查更新" : "检查失败：\(message)"
         }
     }
 
@@ -437,13 +491,20 @@ struct SettingsSectionContentView: View {
                     .foregroundStyle(.secondary)
             }
         case .upToDate:
-            HStack(spacing: 4) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                Text("已是最新")
-                    .font(.system(size: 11, weight: .medium))
+            HStack(spacing: 6) {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .lensoSymbolReplace()
+                    Text("已是最新")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .foregroundStyle(LensoColors.kleinBlueBright)
+
+                updateButton("重新检查") {
+                    Task { await updater.check() }
+                }
             }
-            .foregroundStyle(LensoColors.kleinBlueBright)
         case .updateAvailable(_, let url):
             updateButton("前往更新") {
                 updater.openRelease(url)
@@ -464,7 +525,7 @@ struct SettingsSectionContentView: View {
                 .padding(.vertical, 5)
                 .background(Capsule().fill(LensoColors.kleinBlueSoft))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LensoPressButtonStyle())
     }
 
     private func aboutRow(icon: String, title: String, detail: String) -> some View {

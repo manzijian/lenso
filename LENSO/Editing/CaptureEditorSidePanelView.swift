@@ -26,6 +26,7 @@ struct CaptureEditorSidePanelView: View {
     @State private var translationDisplayMode = 0
     /// 结果字号，可手动放大查看
     @State private var textSize: CGFloat = 13
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 12) {
@@ -43,10 +44,26 @@ struct CaptureEditorSidePanelView: View {
             // 工具行：翻译 / OCR / 字号 / 关闭
             HStack(spacing: 12) {
                 SideTool(icon: "character.bubble", label: "翻译", active: panelTab == .translate) {
-                    onRunTranslation()
+                    LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                        if panelTab == .translate {
+                            isSidePanelVisible = false
+                        } else {
+                            panelTab = .translate
+                            if translationPhase == .idle || translationPhase == .failed {
+                                onRunTranslation()
+                            }
+                        }
+                    }
                 }
                 SideTool(icon: "doc.text.viewfinder", label: "OCR", active: panelTab == .ocr) {
-                    if ocrPhase == .idle { onRunOCR() } else { panelTab = .ocr }
+                    LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                        if panelTab == .ocr {
+                            isSidePanelVisible = false
+                        } else {
+                            panelTab = .ocr
+                            if ocrPhase == .idle { onRunOCR() }
+                        }
+                    }
                 }
                 Spacer()
                 fontSizeControls
@@ -59,14 +76,21 @@ struct CaptureEditorSidePanelView: View {
                         .frame(width: 24, height: 24)
                         .background(Circle().fill(.primary.opacity(0.06)))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LensoPressButtonStyle(scale: 0.92))
                 .help("关闭面板")
             }
 
-            switch panelTab {
-            case .annotation, .ocr: ocrResultsView
-            case .translate: translationResultsView
+            Group {
+                switch panelTab {
+                case .annotation, .ocr: ocrResultsView
+                case .translate: translationResultsView
+                }
             }
+            .lensoAnimation(LensoAnimations.fade, value: panelTab, reduceMotion: reduceMotion)
+            .lensoAnimation(LensoAnimations.fade, value: ocrPhase, reduceMotion: reduceMotion)
+            .lensoAnimation(LensoAnimations.fade, value: translationPhase, reduceMotion: reduceMotion)
+            .lensoAnimation(LensoAnimations.snappy, value: ocrDisplayMode, reduceMotion: reduceMotion)
+            .lensoAnimation(LensoAnimations.snappy, value: translationDisplayMode, reduceMotion: reduceMotion)
         }
         .padding(16)
         // 面板尺寸固定，内容撑满整张卡片，拖动带才会落在卡片顶部
@@ -181,7 +205,11 @@ struct CaptureEditorSidePanelView: View {
                 MiniButton(label: "全部复制", disabled: ocrLines.isEmpty) {
                     onCopyText(ocrLines.map(\.text).joined(separator: "\n"))
                 }
-                MiniButton(label: justSavedNote ? "已存入" : "存入收纳", disabled: ocrLines.isEmpty) {
+                MiniButton(
+                    label: justSavedNote ? "已存入" : "存入收纳",
+                    icon: justSavedNote ? "checkmark" : "square.and.arrow.down",
+                    disabled: ocrLines.isEmpty
+                ) {
                     onSaveOCRToNotes()
                 }
             }
@@ -207,8 +235,13 @@ struct CaptureEditorSidePanelView: View {
             }
             switch translationPhase {
             case .idle:
-                Text("把选区里的文字翻成目标语言（本地模型，不联网）。")
-                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                if ocrPhase == .empty {
+                    Text("当前选区里没识别到可翻译的文字。")
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                } else {
+                    Text("把选区里的文字翻成目标语言（本地模型，不联网）。")
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                }
             case .running:
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)

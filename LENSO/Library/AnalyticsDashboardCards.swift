@@ -72,10 +72,11 @@ extension AnalyticsDashboardView {
                                         .frame(height: max(3, CGFloat(item.screenshotsCount) / CGFloat(maxCount) * 140))
                                 }
                             }
+                            .lensoAnimation(LensoAnimations.gentle, value: item.totalCount, reduceMotion: reduceMotion)
                         }
                         .frame(maxWidth: .infinity)
-                        .scaleEffect(isHovered ? 1.05 : 1.0)
-                        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isHovered)
+                        .scaleEffect(isHovered && !reduceMotion ? 1.05 : 1.0)
+                        .lensoAnimation(LensoAnimations.hover, value: isHovered, reduceMotion: reduceMotion)
 
                         // X 轴日期文本
                         Text(item.dateString)
@@ -93,28 +94,37 @@ extension AnalyticsDashboardView {
             }
             .frame(height: 175)
 
-            // 悬浮条目提示详情
-            if let idx = hoveredDailyIndex, idx < stats.count {
-                let cur = stats[idx]
-                HStack(spacing: 12) {
-                    Text(cur.fullDateString)
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(LensoColors.kleinBlueBright)
-                    Text("截图: \(cur.screenshotsCount) 张")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.primary.opacity(0.85))
-                    Text("复制文字: \(cur.textCount) 条")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.primary.opacity(0.85))
-                    Text("当日合计: \(cur.totalCount) 次")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color.primary)
-                    Spacer()
+            // 悬浮条目提示详情（固定高度占位，避免悬浮抖动）
+            ZStack(alignment: .leading) {
+                if let idx = hoveredDailyIndex, idx < stats.count {
+                    let cur = stats[idx]
+                    HStack(spacing: 12) {
+                        Text(cur.fullDateString)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(LensoColors.kleinBlueBright)
+                        Text("截图: \(cur.screenshotsCount) 张")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color.primary.opacity(0.85))
+                        Text("复制文字: \(cur.textCount) 条")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color.primary.opacity(0.85))
+                        Text("当日合计: \(cur.totalCount) 次")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Color.primary)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(height: 28)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(LensoColors.kleinBlueSoft))
+                } else {
+                    Text("将鼠标悬停在柱状图上可查看当日明细")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Color.secondary.opacity(0.55))
+                        .padding(.horizontal, 4)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(RoundedRectangle(cornerRadius: 8).fill(LensoColors.kleinBlueSoft))
             }
+            .frame(height: 28)
+            .lensoAnimation(LensoAnimations.quickFade, value: hoveredDailyIndex, reduceMotion: reduceMotion)
         }
         .padding(20)
         .background(
@@ -132,13 +142,18 @@ extension AnalyticsDashboardView {
 
     func hourlyDistributionCard(_ data: ScreenshotStore.AnalyticsData) -> some View {
         let stats = data.hourlyStats
-        let maxHourlyCount = max(1, stats.map(\.totalCount).max() ?? 1)
+        let rawMaxHourlyCount = stats.map(\.totalCount).max() ?? 0
+        let maxHourlyCount = max(1, rawMaxHourlyCount)
+        let peakHourText = rawMaxHourlyCount > 0
+            ? String(format: "%02d:00 - %02d:59", data.peakHour, data.peakHour)
+            : "—"
 
         // 时段统计
         let morningSum = stats[6..<12].map(\.totalCount).reduce(0, +)
         let afternoonSum = stats[12..<18].map(\.totalCount).reduce(0, +)
         let eveningSum = stats[18..<24].map(\.totalCount).reduce(0, +)
         let nightSum = stats[0..<6].map(\.totalCount).reduce(0, +)
+        let maxPeriodSum = [morningSum, afternoonSum, eveningSum, nightSum].max() ?? 0
 
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
@@ -151,7 +166,7 @@ extension AnalyticsDashboardView {
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                     }
-                    Text("统计全天 00:00 至 23:00 的操作频次，最高峰时段为 \(String(format: "%02d:00 - %02d:59", data.peakHour, data.peakHour))")
+                    Text("统计全天 00:00 至 23:00 的操作频次，最高峰时段为 \(peakHourText)")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
@@ -160,10 +175,10 @@ extension AnalyticsDashboardView {
 
                 // 时段轻胶囊
                 HStack(spacing: 6) {
-                    periodTag("早晨 06-12", count: morningSum)
-                    periodTag("下午 12-18", count: afternoonSum, isHighlight: true)
-                    periodTag("晚上 18-24", count: eveningSum)
-                    periodTag("深夜 00-06", count: nightSum)
+                    periodTag("早晨 06-12", count: morningSum, isHighlight: maxPeriodSum > 0 && morningSum == maxPeriodSum)
+                    periodTag("下午 12-18", count: afternoonSum, isHighlight: maxPeriodSum > 0 && afternoonSum == maxPeriodSum)
+                    periodTag("晚上 18-24", count: eveningSum, isHighlight: maxPeriodSum > 0 && eveningSum == maxPeriodSum)
+                    periodTag("深夜 00-06", count: nightSum, isHighlight: maxPeriodSum > 0 && nightSum == maxPeriodSum)
                 }
             }
 
@@ -187,10 +202,11 @@ extension AnalyticsDashboardView {
                             RoundedRectangle(cornerRadius: 4, style: .continuous)
                                 .fill(isPeak ? LensoColors.kleinBlueBright : (isHovered ? Color.blue : Color(red: 0.65, green: 0.75, blue: 0.9)))
                                 .frame(height: barH)
+                                .lensoAnimation(LensoAnimations.gentle, value: hItem.totalCount, reduceMotion: reduceMotion)
                         }
                         .frame(maxWidth: .infinity)
-                        .scaleEffect(isHovered ? 1.08 : 1.0)
-                        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isHovered)
+                        .scaleEffect(isHovered && !reduceMotion ? 1.08 : 1.0)
+                        .lensoAnimation(LensoAnimations.hover, value: isHovered, reduceMotion: reduceMotion)
 
                         // 小时刻度标签（每两小时标一次或全标）
                         Text(String(format: "%02d", hItem.hour))
@@ -207,28 +223,37 @@ extension AnalyticsDashboardView {
             }
             .frame(height: 150)
 
-            // 悬浮小时详情提示
-            if let h = hoveredHour, h < stats.count {
-                let cur = stats[h]
-                HStack(spacing: 12) {
-                    Text(String(format: "时段 %02d:00 - %02d:59", cur.hour, cur.hour))
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(LensoColors.kleinBlueBright)
-                    Text("截图: \(cur.screenshotsCount) 张")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.primary.opacity(0.85))
-                    Text("复制文字: \(cur.textCount) 条")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.primary.opacity(0.85))
-                    Text("总计: \(cur.totalCount) 次")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color.primary)
-                    Spacer()
+            // 悬浮小时详情提示（固定高度占位，避免悬浮抖动）
+            ZStack(alignment: .leading) {
+                if let h = hoveredHour, h < stats.count {
+                    let cur = stats[h]
+                    HStack(spacing: 12) {
+                        Text(String(format: "时段 %02d:00 - %02d:59", cur.hour, cur.hour))
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(LensoColors.kleinBlueBright)
+                        Text("截图: \(cur.screenshotsCount) 张")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color.primary.opacity(0.85))
+                        Text("复制文字: \(cur.textCount) 条")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color.primary.opacity(0.85))
+                        Text("总计: \(cur.totalCount) 次")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Color.primary)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(height: 28)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(LensoColors.kleinBlueSoft))
+                } else {
+                    Text("将鼠标悬停在时段柱上可查看该小时明细")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Color.secondary.opacity(0.55))
+                        .padding(.horizontal, 4)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(RoundedRectangle(cornerRadius: 8).fill(LensoColors.kleinBlueSoft))
             }
+            .frame(height: 28)
+            .lensoAnimation(LensoAnimations.quickFade, value: hoveredHour, reduceMotion: reduceMotion)
         }
         .padding(20)
         .background(
@@ -309,6 +334,7 @@ extension AnalyticsDashboardView {
                                             width: max(6, geo.size.width * CGFloat(app.count) / CGFloat(maxCount)),
                                             height: 6
                                         )
+                                        .lensoAnimation(LensoAnimations.gentle, value: app.count, reduceMotion: reduceMotion)
                                 }
                             }
                             .frame(height: 6)
@@ -395,34 +421,22 @@ extension AnalyticsDashboardView {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button {
-                        if let res = settings.runAutoCleanup() {
-                            if res.totalDeleted > 0 {
-                                SaveToastController.shared.show(
-                                    title: "清理完成",
-                                    subtitle: "已删除 \(res.totalDeleted) 项过期数据",
-                                    thumbnail: nil
-                                )
-                            } else {
-                                SaveToastController.shared.show(
-                                    title: "已是最新",
-                                    subtitle: "暂无符合期限的过期记录",
-                                    thumbnail: nil
-                                )
+                    if settings.retentionCutoffDate != nil {
+                        Button {
+                            showCleanupConfirm = true
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "trash")
+                                Text("立即清理")
                             }
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(LensoColors.kleinBlueBright)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Capsule().fill(LensoColors.kleinBlueSoft))
                         }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "trash")
-                            Text("立即清理")
-                        }
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(LensoColors.kleinBlueBright)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(LensoColors.kleinBlueSoft))
+                        .buttonStyle(LensoPressButtonStyle())
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }

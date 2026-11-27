@@ -92,6 +92,7 @@ struct OCRLineRow: View {
     let onCopy: () -> Void
 
     @State private var copied = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -110,23 +111,35 @@ struct OCRLineRow: View {
         .contentShape(Rectangle())
         .onTapGesture {
             onCopy()
-            copied = true
+            LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                copied = true
+            }
             Task {
                 try? await Task.sleep(for: .seconds(1.2))
-                copied = false
+                LensoAnimations.withMotion(LensoAnimations.fade, reduceMotion: reduceMotion) {
+                    copied = false
+                }
             }
         }
         .overlay(alignment: .trailing) {
             if copied {
-                Text("已复制")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Color(nsColor: .controlAccentColor))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(Color(nsColor: .windowBackgroundColor)))
-                    .padding(.trailing, 6)
+                HStack(spacing: 3) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .lensoSymbolReplace()
+                    Text("已复制")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                .foregroundStyle(Color(nsColor: .controlAccentColor))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(Color(nsColor: .windowBackgroundColor)))
+                .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+                .padding(.trailing, 6)
+                .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
             }
         }
+        .lensoAnimation(LensoAnimations.snappy, value: copied, reduceMotion: reduceMotion)
         .help("点按复制这行")
     }
 }
@@ -138,6 +151,7 @@ struct TranslationLineRow: View {
     let onCopy: () -> Void
 
     @State private var copied = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -161,12 +175,35 @@ struct TranslationLineRow: View {
         .contentShape(Rectangle())
         .onTapGesture {
             onCopy()
-            copied = true
+            LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                copied = true
+            }
             Task {
                 try? await Task.sleep(for: .seconds(1.2))
-                copied = false
+                LensoAnimations.withMotion(LensoAnimations.fade, reduceMotion: reduceMotion) {
+                    copied = false
+                }
             }
         }
+        .overlay(alignment: .topTrailing) {
+            if copied {
+                HStack(spacing: 3) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .lensoSymbolReplace()
+                    Text("已复制")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                .foregroundStyle(Color(nsColor: .controlAccentColor))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(Color(nsColor: .windowBackgroundColor)))
+                .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+                .padding(6)
+                .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
+            }
+        }
+        .lensoAnimation(LensoAnimations.snappy, value: copied, reduceMotion: reduceMotion)
         .help("点按复制译文")
     }
 }
@@ -174,20 +211,38 @@ struct TranslationLineRow: View {
 /// 面板里的小按钮（OCR / 翻译页签用）
 struct MiniButton: View {
     let label: String
+    var icon: String? = nil
     var disabled = false
+    var tooltip: String? = nil
     let action: () -> Void
+
+    @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button(action: action) {
-            Text(label)
-                .font(.system(size: 12, weight: .medium))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(RoundedRectangle(cornerRadius: 8).fill(.primary.opacity(disabled ? 0.03 : 0.07)))
-                .foregroundStyle(disabled ? .tertiary : .primary)
+            HStack(spacing: 4) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 11, weight: .medium))
+                        .lensoSymbolReplace()
+                }
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(.primary.opacity(disabled ? 0.03 : (hovering ? 0.12 : 0.07)))
+            )
+            .foregroundStyle(disabled ? .tertiary : .primary)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LensoPressButtonStyle())
         .disabled(disabled)
+        .onHover { hovering = $0 }
+        .lensoAnimation(LensoAnimations.hover, value: hovering, reduceMotion: reduceMotion)
+        .help(tooltip ?? label)
     }
 }
 

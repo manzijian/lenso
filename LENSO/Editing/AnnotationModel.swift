@@ -39,6 +39,7 @@ struct Annotation: Identifiable {
     var colorIndex: Int
     var strokeWidth: CGFloat
     var text: String = ""
+    var points: [CGPoint] = [] // 画笔轨迹点（归一化坐标）
 }
 
 /// 标注颜色盘（参考图 7 色）
@@ -108,6 +109,18 @@ final class AnnotationState {
                 x: (end.x - new.minX) / new.width,
                 y: (end.y - new.minY) / new.height
             )
+            if !annotations[index].points.isEmpty {
+                annotations[index].points = annotations[index].points.map { pt in
+                    let absPt = CGPoint(
+                        x: old.minX + pt.x * old.width,
+                        y: old.minY + pt.y * old.height
+                    )
+                    return CGPoint(
+                        x: (absPt.x - new.minX) / new.width,
+                        y: (absPt.y - new.minY) / new.height
+                    )
+                }
+            }
             // 文字是固定字号渲染的，包围盒按新选区重算，避免拖动热区/选中框对不上
             if annotations[index].kind == .text, !annotations[index].text.isEmpty {
                 let font = NSFont.systemFont(ofSize: 16, weight: .semibold)
@@ -132,8 +145,15 @@ final class AnnotationState {
         var dy: CGFloat = 0
         if minX < 0 { dx = -minX } else if maxX > 1 { dx = 1 - maxX }
         if minY < 0 { dy = -minY } else if maxY > 1 { dy = 1 - maxY }
+        let shiftX = (start.x + dx) - annotations[index].start.x
+        let shiftY = (start.y + dy) - annotations[index].start.y
         annotations[index].start = CGPoint(x: start.x + dx, y: start.y + dy)
         annotations[index].end = CGPoint(x: end.x + dx, y: end.y + dy)
+        if !annotations[index].points.isEmpty {
+            annotations[index].points = annotations[index].points.map {
+                CGPoint(x: $0.x + shiftX, y: $0.y + shiftY)
+            }
+        }
     }
 
     func push(_ annotation: Annotation) {
@@ -234,9 +254,11 @@ enum AnnotationRenderer {
         case .arrow:
             drawArrow(ctx, from: p1, to: p2, headLen: 12 * scale)
         case .brush:
-            ctx.move(to: p1)
-            ctx.addLine(to: p2)
-            ctx.strokePath()
+            let pts = annotation.points.isEmpty
+                ? [p1, p2]
+                : annotation.points.map { CGPoint(x: $0.x * sw, y: $0.y * sh) }
+            ctx.setLineJoin(.round)
+            drawSmoothPolyline(ctx, points: pts)
         case .highlight:
             ctx.setFillColor(color.cgColor)
             ctx.fill(rect)
@@ -296,5 +318,25 @@ enum AnnotationRenderer {
         }
 
         return ctx.makeImage() ?? base
+    }
+
+    static func drawSmoothPolyline(_ ctx: CGContext, points: [CGPoint]) {
+        guard let first = points.first else { return }
+        ctx.move(to: first)
+        if points.count == 1 {
+            ctx.addLine(to: first)
+        } else if points.count == 2 {
+            ctx.addLine(to: points[1])
+        } else {
+            for i in 1..<(points.count - 1) {
+                let mid = CGPoint(
+                    x: (points[i].x + points[i + 1].x) * 0.5,
+                    y: (points[i].y + points[i + 1].y) * 0.5
+                )
+                ctx.addQuadCurve(to: mid, control: points[i])
+            }
+            ctx.addLine(to: points[points.count - 1])
+        }
+        ctx.strokePath()
     }
 }

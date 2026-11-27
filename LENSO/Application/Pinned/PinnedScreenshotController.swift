@@ -15,6 +15,10 @@ final class PinnedScreenshotController: NSObject {
     let pinnedState = PinnedEditorState()
     private var isToolbarVisible = false
 
+    var isCurrentlyEditing: Bool {
+        isToolbarVisible || state.activeKind != nil || pinnedState.isSidePanelVisible || imageView.hasActiveTextField
+    }
+
     init(image: CGImage, initialFrame: NSRect?, coordinator: CaptureCoordinator) {
         self.coordinator = coordinator
 
@@ -117,22 +121,30 @@ final class PinnedScreenshotController: NSObject {
         imageView.onToggleEditing = { [weak self] in
             self?.toggleToolbar()
         }
+        imageView.onCopy = { [weak self] in
+            self?.copyImage()
+        }
+        imageView.onSave = { [weak self] in
+            self?.saveImage()
+        }
         imageView.onWindowMovedOrResized = { [weak self] in
             self?.updatePositions()
         }
 
         (panel as? PinnedPanel)?.onCancel = { [weak self] in
-            self?.close()
+            _ = self?.imageView.stepBackOnEscape()
         }
         (panel as? PinnedPanel)?.onSpace = { [weak self] in
             self?.toggleToolbar()
         }
+        (panel as? PinnedPanel)?.onKeyCommand = { [weak self] event in
+            self?.imageView.handleKeyEvent(event) ?? false
+        }
 
         panel.contentView = imageView
         panel.setFrameOrigin(origin)
-        panel.orderFrontRegardless()
-        panel.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        LensoWindowMotion.present(panel, duration: 0.14, makeKey: true)
+        panel.makeFirstResponder(imageView)
 
         // 配置工具栏视图
         let toolbarView = PinnedToolbarView(
@@ -193,8 +205,6 @@ final class PinnedScreenshotController: NSObject {
         let sideHosting = NSHostingView(rootView: sideView)
         sideHosting.appearance = NSAppearance(named: .aqua)
         sidePanel.contentView = sideHosting
-
-        panel.orderFrontRegardless()
     }
 
     func toggleToolbar() {
@@ -208,38 +218,41 @@ final class PinnedScreenshotController: NSObject {
     func showAll() {
         guard !isToolbarVisible else { return }
         isToolbarVisible = true
-        pinnedState.isSidePanelVisible = true
-        pinnedState.panelTab = .ocr
+        imageView.isEditing = true
 
         updatePositions()
 
         if toolbarPanel.parent != panel {
             panel.addChildWindow(toolbarPanel, ordered: .above)
         }
-        toolbarPanel.orderFront(nil)
+        LensoWindowMotion.present(toolbarPanel, duration: 0.16, slideY: 6)
 
-        if sidePanel.parent != panel {
-            panel.addChildWindow(sidePanel, ordered: .above)
-        }
-        sidePanel.orderFront(nil)
-
-        // 默认自动运行一次 OCR 识别贴图文字
-        if pinnedState.ocrPhase == .idle {
-            runOCR()
+        if pinnedState.isSidePanelVisible {
+            if sidePanel.parent != panel {
+                panel.addChildWindow(sidePanel, ordered: .above)
+            }
+            LensoWindowMotion.present(sidePanel, duration: 0.16, slideY: 6)
         }
     }
 
     func hideAll() {
         guard isToolbarVisible else { return }
         isToolbarVisible = false
+        imageView.isEditing = false
         pinnedState.isSidePanelVisible = false
         state.activeKind = nil
 
-        toolbarPanel.orderOut(nil)
-        panel.removeChildWindow(toolbarPanel)
+        LensoWindowMotion.dismiss(toolbarPanel, duration: 0.12, slideY: 6) { [weak self] in
+            guard let self, !self.isToolbarVisible else { return }
+            self.panel.removeChildWindow(self.toolbarPanel)
+        }
 
-        sidePanel.orderOut(nil)
-        panel.removeChildWindow(sidePanel)
+        if sidePanel.isVisible {
+            LensoWindowMotion.dismiss(sidePanel, duration: 0.12, slideY: 6) { [weak self] in
+                guard let self, !self.pinnedState.isSidePanelVisible else { return }
+                self.panel.removeChildWindow(self.sidePanel)
+            }
+        }
 
         panel.invalidateCursorRects(for: imageView)
         imageView.needsDisplay = true
@@ -254,25 +267,32 @@ final class PinnedScreenshotController: NSObject {
     }
 
     func showSidePanel(tab: PanelTab) {
+        let wasVisible = pinnedState.isSidePanelVisible
         pinnedState.panelTab = tab
         pinnedState.isSidePanelVisible = true
         updateSidePanelPosition()
         if sidePanel.parent != panel {
             panel.addChildWindow(sidePanel, ordered: .above)
         }
-        sidePanel.orderFront(nil)
+        if !wasVisible || !sidePanel.isVisible {
+            LensoWindowMotion.present(sidePanel, duration: 0.16, slideY: 6)
+        } else {
+            sidePanel.orderFront(nil)
+        }
 
         if tab == .ocr && pinnedState.ocrPhase == .idle {
             runOCR()
-        } else if tab == .translate {
+        } else if tab == .translate && (pinnedState.translationPhase == .idle || pinnedState.translationPhase == .failed) {
             runTranslation()
         }
     }
 
     func hideSidePanel() {
         pinnedState.isSidePanelVisible = false
-        sidePanel.orderOut(nil)
-        panel.removeChildWindow(sidePanel)
+        LensoWindowMotion.dismiss(sidePanel, duration: 0.12, slideY: 6) { [weak self] in
+            guard let self, !self.pinnedState.isSidePanelVisible else { return }
+            self.panel.removeChildWindow(self.sidePanel)
+        }
     }
 
     func updatePositions() {
@@ -362,9 +382,14 @@ final class PinnedScreenshotController: NSObject {
             if AppSettings.shared.showFloatingPreview {
                 SaveToastController.shared.show(thumbnail: try? ScreenshotStore.shared.loadThumbnail(record))
             }
-            NSSound.beep()
         } catch {
             NSSound.beep()
+            SaveToastController.shared.show(
+                title: "保存失败",
+                subtitle: error.localizedDescription,
+                thumbnail: nil,
+                isError: true
+            )
         }
     }
 }

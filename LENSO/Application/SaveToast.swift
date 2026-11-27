@@ -1,32 +1,41 @@
 import SwiftUI
 
-/// 保存成功 Toast — 右下角浮现：「✓ 截图已保存 到图片库」+ 缩略图
+/// 保存/操作反馈 Toast — 右下角浮现：「✓ 截图已保存 到图片库」+ 缩略图
 @MainActor
 final class SaveToastController {
     static let shared = SaveToastController()
     private var panel: NSPanel?
     private var hideTask: Task<Void, Never>?
 
-    func show(title: String = "截图已保存", subtitle: String = "到图片库", thumbnail: CGImage?) {
-        // 用户在设置中关闭浮动提示时，直接拦截不显示
-        guard AppSettings.shared.showFloatingPreview else { return }
+    func show(
+        title: String = "截图已保存",
+        subtitle: String = "到图片库",
+        thumbnail: CGImage?,
+        isError: Bool = false
+    ) {
+        // 错误提示始终展示，普通成功提示遵循用户设置
+        if !isError {
+            guard AppSettings.shared.showFloatingPreview else { return }
+        }
 
         hideTask?.cancel()
         panel?.orderOut(nil)
         panel?.close()
 
-        let toastView = SaveToastView(title: title, subtitle: subtitle, thumbnail: thumbnail)
+        let toastView = SaveToastView(title: title, subtitle: subtitle, thumbnail: thumbnail, isError: isError)
         let hosting = NSHostingView(rootView: toastView)
         hosting.appearance = NSAppearance(named: .aqua)
         // 固定尺寸：fittingSize 在首次布局前可能为 0，导致窗口不可见
         let size = NSSize(width: 300, height: 64)
         hosting.frame = NSRect(origin: .zero, size: size)
 
-        // 右下角：主屏右下角向内 24pt
-        guard let screen = NSScreen.main else { return }
+        // 右下角：优先鼠标所在屏幕，退化为主屏
+        let mouseLocation = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first(where: { NSMouseInRect(mouseLocation, $0.frame, false) }) ?? NSScreen.main
+        guard let screen else { return }
         let frame = CGRect(
-            x: screen.frame.maxX - size.width - 24,
-            y: screen.frame.minY + 24,
+            x: screen.visibleFrame.maxX - size.width - 24,
+            y: screen.visibleFrame.minY + 24,
             width: size.width,
             height: size.height
         )
@@ -42,29 +51,19 @@ final class SaveToastController {
         panel.hasShadow = true
         panel.contentView = hosting
         panel.setFrame(frame, display: true)
-        panel.orderFrontRegardless()
         self.panel = panel
 
-        // 入场动画
-        hosting.alphaValue = 0
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.25
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            hosting.animator().alphaValue = 1
-        }
+        // 丝滑上浮入场（尊重系统减少动态效果）
+        LensoWindowMotion.present(panel, duration: 0.24, slideY: 10, makeKey: false)
 
-        hideTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(2.6))
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                NSAnimationContext.runAnimationGroup({ ctx in
-                    ctx.duration = 0.3
-                    self?.panel?.contentView?.animator().alphaValue = 0
-                }, completionHandler: {
-                    self?.panel?.orderOut(nil)
-                    self?.panel?.close()
+        hideTask = Task { [weak self, weak panel] in
+            try? await Task.sleep(for: .seconds(isError ? 3.2 : 2.4))
+            guard !Task.isCancelled, let panel else { return }
+            LensoWindowMotion.dismiss(panel, duration: 0.18, slideY: 6) { [weak self, weak panel] in
+                panel?.close()
+                if self?.panel === panel {
                     self?.panel = nil
-                })
+                }
             }
         }
     }
@@ -74,16 +73,18 @@ struct SaveToastView: View {
     var title: String = "截图已保存"
     var subtitle: String = "到图片库"
     let thumbnail: CGImage?
+    var isError: Bool = false
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "checkmark.circle.fill")
+            Image(systemName: isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
                 .font(.system(size: 20))
-                .foregroundStyle(.green)
+                .foregroundStyle(isError ? Color.orange : Color.green)
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(.system(size: 13, weight: .semibold))
-                Text(subtitle).font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(subtitle).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
             }
+            Spacer(minLength: 0)
             if let thumbnail {
                 Image(decorative: thumbnail, scale: 2)
                     .resizable()
@@ -100,7 +101,7 @@ struct SaveToastView: View {
                 .fill(Color(red: 0.98, green: 0.985, blue: 1.0).opacity(0.97))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(.black.opacity(0.08), lineWidth: 1)
+                        .strokeBorder(isError ? Color.orange.opacity(0.35) : Color.black.opacity(0.08), lineWidth: 1)
                 )
         }
         .shadow(color: .black.opacity(0.18), radius: 12, y: 4)

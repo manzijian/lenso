@@ -141,6 +141,7 @@ final class RegionSelectorPanel: NSPanel {
         let label = NSTextField(labelWithString: "")
         label.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
         label.textColor = .white
+        label.alphaValue = 0
         label.isHidden = true
         self.sizeLabel = label
         let frozen = NSImageView(frame: NSRect(origin: .zero, size: screen.frame.size))
@@ -194,7 +195,19 @@ final class RegionSelectorPanel: NSPanel {
     func drawSelection(_ globalRect: CGRect?) {
         dimSelectionView.selection = globalRect ?? .zero
         guard let globalRect else {
-            sizeLabel.isHidden = true
+            if !sizeLabel.isHidden {
+                NSAnimationContext.runAnimationGroup({ ctx in
+                    ctx.duration = LensoWindowMotion.reduceMotion ? 0.06 : 0.12
+                    ctx.timingFunction = LensoWindowMotion.easeIn
+                    sizeLabel.animator().alphaValue = 0
+                }, completionHandler: { [weak self] in
+                    Task { @MainActor in
+                        if self?.dimSelectionView.selection.width == 0 {
+                            self?.sizeLabel.isHidden = true
+                        }
+                    }
+                })
+            }
             return
         }
         let x = Int(globalRect.minX - screenFrame.origin.x)
@@ -204,7 +217,15 @@ final class RegionSelectorPanel: NSPanel {
             x: globalRect.origin.x - screenFrame.origin.x + 8,
             y: screenFrame.height - (globalRect.origin.y - screenFrame.origin.y) - 28
         )
-        sizeLabel.isHidden = false
+        if sizeLabel.isHidden {
+            sizeLabel.alphaValue = 0
+            sizeLabel.isHidden = false
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = LensoWindowMotion.reduceMotion ? 0.06 : 0.12
+                ctx.timingFunction = LensoWindowMotion.easeOut
+                sizeLabel.animator().alphaValue = 1
+            }
+        }
     }
 
     func setHandlesVisible(_ visible: Bool) {
@@ -281,9 +302,11 @@ private final class SelectionView: NSView {
         hoverBorderLayer.fillColor = NSColor.clear.cgColor
         hoverBorderLayer.strokeColor = NSColor(red: 5/255, green: 56/255, blue: 224/255, alpha: 0.85).cgColor
         hoverBorderLayer.lineWidth = 2
+        hoverBorderLayer.opacity = 0
         handlesLayer.fillColor = NSColor.white.cgColor
         handlesLayer.strokeColor = NSColor(red: 5/255, green: 56/255, blue: 224/255, alpha: 1).cgColor
         handlesLayer.lineWidth = 1.5
+        handlesLayer.opacity = 0
         layer?.addSublayer(borderLayer)
         layer?.addSublayer(hoverBorderLayer)
         layer?.addSublayer(handlesLayer)
@@ -304,10 +327,16 @@ private final class SelectionView: NSView {
         didSet { layoutLayers() }
     }
     var hoverFrame: CGRect? = nil {
-        didSet { layoutLayers() }
+        didSet {
+            guard hoverFrame != oldValue else { return }
+            updateHoverLayer(animated: selection.width == 0 && !LensoWindowMotion.reduceMotion)
+        }
     }
     var showsHandles = false {
-        didSet { layoutLayers() }
+        didSet {
+            guard showsHandles != oldValue else { return }
+            updateHandlesOpacity(animated: true)
+        }
     }
 
     override func layout() {
@@ -315,8 +344,55 @@ private final class SelectionView: NSView {
         layoutLayers()
     }
 
+    private func updateHoverLayer(animated: Bool) {
+        if let hover = hoverFrame, selection.width == 0 {
+            let localHover = localRect(hover).intersection(bounds)
+            if !localHover.isEmpty {
+                let targetPath = CGPath(rect: localHover.insetBy(dx: 1, dy: 1), transform: nil)
+                CATransaction.begin()
+                if animated {
+                    CATransaction.setAnimationDuration(0.14)
+                    CATransaction.setAnimationTimingFunction(LensoWindowMotion.easeOut)
+                } else {
+                    CATransaction.setDisableActions(true)
+                }
+                hoverBorderLayer.frame = bounds
+                hoverBorderLayer.path = targetPath
+                hoverBorderLayer.opacity = 1
+                hoverBorderLayer.isHidden = false
+                CATransaction.commit()
+                return
+            }
+        }
+        CATransaction.begin()
+        if animated {
+            CATransaction.setAnimationDuration(0.10)
+            CATransaction.setAnimationTimingFunction(LensoWindowMotion.easeIn)
+        } else {
+            CATransaction.setDisableActions(true)
+        }
+        hoverBorderLayer.opacity = 0
+        CATransaction.commit()
+    }
+
+    private func updateHandlesOpacity(animated: Bool) {
+        let targetOpacity: Float = (showsHandles && selection.width > 0) ? 1.0 : 0.0
+        if animated {
+            CATransaction.begin()
+            CATransaction.setAnimationDuration(LensoWindowMotion.reduceMotion ? 0.06 : 0.12)
+            CATransaction.setAnimationTimingFunction(showsHandles ? LensoWindowMotion.easeOut : LensoWindowMotion.easeIn)
+            handlesLayer.opacity = targetOpacity
+            CATransaction.commit()
+        } else {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            handlesLayer.opacity = targetOpacity
+            CATransaction.commit()
+        }
+    }
+
     private func layoutLayers() {
-        guard let layer else { return }
+        guard layer != nil else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
@@ -326,21 +402,9 @@ private final class SelectionView: NSView {
             borderLayer.path = CGPath(rect: local.insetBy(dx: 0.5, dy: 0.5), transform: nil)
             borderLayer.frame = bounds
             borderLayer.isHidden = false
+            hoverBorderLayer.opacity = 0
         } else {
             borderLayer.isHidden = true
-        }
-
-        if let hover = hoverFrame, selection.width == 0 {
-            let localHover = localRect(hover).intersection(bounds)
-            if !localHover.isEmpty {
-                hoverBorderLayer.path = CGPath(rect: localHover.insetBy(dx: 1, dy: 1), transform: nil)
-                hoverBorderLayer.frame = bounds
-                hoverBorderLayer.isHidden = false
-            } else {
-                hoverBorderLayer.isHidden = true
-            }
-        } else {
-            hoverBorderLayer.isHidden = true
         }
 
         if showsHandles, selection.width > 0 {
@@ -354,7 +418,7 @@ private final class SelectionView: NSView {
             handlesLayer.frame = bounds
             handlesLayer.isHidden = false
         } else {
-            handlesLayer.isHidden = true
+            handlesLayer.isHidden = !showsHandles && handlesLayer.opacity == 0
         }
     }
 }

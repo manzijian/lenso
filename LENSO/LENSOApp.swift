@@ -34,7 +34,7 @@ struct LENSOApp: App {
                 .background(WindowConfigurator(autosaveName: "lenso.settings.window"))
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .ignoresSafeArea()
-                .frame(minWidth: 620, minHeight: 420)
+                .frame(minWidth: 680, minHeight: 460)
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 680, height: 460)

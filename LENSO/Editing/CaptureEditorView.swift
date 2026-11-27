@@ -33,6 +33,9 @@ struct CaptureEditorView: View {
     @State private var translationTask: Task<Void, Never>?
     @State private var justSavedNote = false
     @State private var keyMonitor: Any?
+    @State private var confirmDiscardPending = false
+    @State private var confirmDiscardTask: Task<Void, Never>?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 马赛克预览用的块状图（整屏冻结帧的低分辨率重采样，只算一次）
     private let mosaicPreview: CGImage?
 
@@ -154,7 +157,7 @@ struct CaptureEditorView: View {
             } else if state.activeKind != nil {
                 state.activeKind = nil
             } else {
-                discard()
+                requestDiscard()
             }
         }
         .onChange(of: state.textEditingPoint) { oldValue, point in
@@ -181,11 +184,13 @@ struct CaptureEditorView: View {
             if state.textEditingPoint != nil || Self.isTextInputActive(in: window) { return event }
 
             switch event.keyCode {
-            case 53: // Esc
+            case 53: // Esc：逐级退回（输入框 → 工具 → 二次确认放弃）
                 if state.textEditingPoint != nil {
                     state.textEditingPoint = nil
+                } else if state.activeKind != nil {
+                    state.activeKind = nil
                 } else {
-                    discard()
+                    requestDiscard()
                 }
                 return nil
             case 36, 76: // Return / Enter
@@ -197,6 +202,19 @@ struct CaptureEditorView: View {
             case 125: nudgeSelection(dx: 0, dy: 1); return nil
             case 126: nudgeSelection(dx: 0, dy: -1); return nil
             default:
+                let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
+                let chars = event.charactersIgnoringModifiers?.lowercased()
+                if flags == .command {
+                    if chars == "z" { state.undo(); return nil }
+                    if chars == "c" { quickCopy(); return nil }
+                    if chars == "s" { finishEditing(); return nil }
+                } else if flags == [.command, .shift], chars == "z" {
+                    state.redo()
+                    return nil
+                } else if flags.isEmpty, chars == "v" {
+                    state.activeKind = nil
+                    return nil
+                }
                 return event
             }
         }
@@ -235,8 +253,31 @@ struct CaptureEditorView: View {
         updateSelection(clamped)
     }
 
+    /// 请求放弃截图：若有未保存标注，需 1.5s 内再按一次 Esc 确认，防止误触丢失
+    private func requestDiscard() {
+        if state.annotations.isEmpty || confirmDiscardPending {
+            confirmDiscardTask?.cancel()
+            confirmDiscardPending = false
+            discard()
+            return
+        }
+        LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+            confirmDiscardPending = true
+        }
+        confirmDiscardTask?.cancel()
+        confirmDiscardTask = Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            LensoAnimations.withMotion(LensoAnimations.fade, reduceMotion: reduceMotion) {
+                confirmDiscardPending = false
+            }
+        }
+    }
+
     /// 丢弃本次截图
     private func discard() {
+        confirmDiscardTask?.cancel()
+        confirmDiscardPending = false
         ocrTask?.cancel()
         translationTask?.cancel()
         onComplete(nil)
@@ -324,13 +365,26 @@ struct CaptureEditorView: View {
             }
 
             VStack(spacing: 8) {
+                if confirmDiscardPending {
+                    Text("再按一次 Esc 放弃标注")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(Color.black.opacity(0.78)))
+                        .shadow(color: .black.opacity(0.20), radius: 8, y: 2)
+                        .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
+                }
                 if showOptions {
                     CaptureEditorOptionsBar(state: state)
+                        .transition(LensoTransitions.bottomExpand(reduceMotion: reduceMotion))
                 }
                 bottomToolbar
             }
-            .frame(width: toolbarSize.width, height: toolbarSize.height)
-            .position(x: layout.toolbarFrame.midX, y: layout.toolbarFrame.midY)
+            .lensoAnimation(LensoAnimations.snappy, value: showOptions, reduceMotion: reduceMotion)
+            .lensoAnimation(LensoAnimations.snappy, value: confirmDiscardPending, reduceMotion: reduceMotion)
+            .frame(width: toolbarSize.width, height: toolbarSize.height + (confirmDiscardPending ? 36 : 0))
+            .position(x: layout.toolbarFrame.midX, y: layout.toolbarFrame.midY - (confirmDiscardPending ? 18 : 0))
             .zIndex(10)
         }
     }
@@ -481,6 +535,11 @@ struct CaptureEditorView: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         ClipboardMonitor.shared.markSelfWrite()
+        SaveToastController.shared.show(
+            title: "已复制文本",
+            subtitle: String(text.prefix(35)) + (text.count > 35 ? "..." : ""),
+            thumbnail: nil
+        )
     }
 
     /// 把识别结果存进文字收纳

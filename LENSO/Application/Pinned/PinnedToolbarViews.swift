@@ -17,22 +17,45 @@ struct PinnedSidePanelView: View {
 
     @State private var ocrDisplayMode = 0
     @State private var translationDisplayMode = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 14) {
             // 顶部工具行：标注 / 翻译 / OCR / 关闭
             HStack(spacing: 16) {
                 SideTool(icon: "highlighter", label: "标注", active: pinnedState.panelTab == .annotation) {
-                    pinnedState.panelTab = .annotation
-                    state.activeKind = .brush
+                    if pinnedState.panelTab == .annotation {
+                        onClose()
+                    } else {
+                        LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                            pinnedState.panelTab = .annotation
+                            if state.activeKind == nil {
+                                state.activeKind = .brush
+                            }
+                        }
+                    }
                 }
                 SideTool(icon: "character.bubble", label: "翻译", active: pinnedState.panelTab == .translate) {
-                    pinnedState.panelTab = .translate
-                    onRunTranslation()
+                    if pinnedState.panelTab == .translate {
+                        onClose()
+                    } else {
+                        LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                            pinnedState.panelTab = .translate
+                        }
+                        if pinnedState.translationPhase == .idle || pinnedState.translationPhase == .failed {
+                            onRunTranslation()
+                        }
+                    }
                 }
                 SideTool(icon: "doc.text.viewfinder", label: "OCR", active: pinnedState.panelTab == .ocr) {
-                    pinnedState.panelTab = .ocr
-                    if pinnedState.ocrPhase == .idle { onRunOCR() }
+                    if pinnedState.panelTab == .ocr {
+                        onClose()
+                    } else {
+                        LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                            pinnedState.panelTab = .ocr
+                        }
+                        if pinnedState.ocrPhase == .idle { onRunOCR() }
+                    }
                 }
                 Spacer()
                 Button(action: onClose) {
@@ -42,18 +65,25 @@ struct PinnedSidePanelView: View {
                         .frame(width: 24, height: 24)
                         .background(Circle().fill(.primary.opacity(0.06)))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LensoPressButtonStyle(scale: 0.92))
                 .help("关闭面板")
             }
 
-            switch pinnedState.panelTab {
-            case .annotation:
-                annotationControls
-            case .ocr:
-                ocrResultsView
-            case .translate:
-                translationResultsView
+            Group {
+                switch pinnedState.panelTab {
+                case .annotation:
+                    annotationControls
+                case .ocr:
+                    ocrResultsView
+                case .translate:
+                    translationResultsView
+                }
             }
+            .lensoAnimation(LensoAnimations.fade, value: pinnedState.panelTab, reduceMotion: reduceMotion)
+            .lensoAnimation(LensoAnimations.fade, value: pinnedState.ocrPhase, reduceMotion: reduceMotion)
+            .lensoAnimation(LensoAnimations.fade, value: pinnedState.translationPhase, reduceMotion: reduceMotion)
+            .lensoAnimation(LensoAnimations.snappy, value: ocrDisplayMode, reduceMotion: reduceMotion)
+            .lensoAnimation(LensoAnimations.snappy, value: translationDisplayMode, reduceMotion: reduceMotion)
         }
         .padding(16)
         .frame(width: 340)
@@ -97,15 +127,19 @@ struct PinnedSidePanelView: View {
                     .frame(width: 36)
             }
 
-            // 形状快捷行
-            HStack(spacing: 22) {
-                ShapeQuick(icon: "line.diagonal", kind: .brush, state: state) { state.activeKind = .brush }
-                ShapeQuick(icon: "arrow.right", kind: .arrow, state: state) { state.activeKind = .arrow }
-                ShapeQuick(icon: "rectangle", kind: .rect, state: state) { state.activeKind = .rect }
-                ShapeQuick(icon: "circle", kind: .ellipse, state: state) { state.activeKind = .ellipse }
-                ShapeQuick(icon: "arrow.up.right", kind: .arrow, state: state) { state.activeKind = .arrow }
+            // 形状快捷行（与 AnnotationKind 图标对齐）
+            HStack(spacing: 18) {
+                ForEach([AnnotationKind.brush, .arrow, .rect, .ellipse, .text], id: \.self) { kind in
+                    ShapeQuick(icon: kind.icon, kind: kind, state: state) {
+                        LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                            state.activeKind = kind
+                        }
+                    }
+                    .help(kind.label)
+                }
             }
             .padding(.vertical, 10)
+            .padding(.horizontal, 12)
             .background(RoundedRectangle(cornerRadius: 12).fill(.primary.opacity(0.04)))
 
             // 马赛克 / 高亮 开关行
@@ -193,7 +227,11 @@ struct PinnedSidePanelView: View {
             HStack(spacing: 8) {
                 MiniButton(label: "重新识别") { onRunOCR() }
                 MiniButton(label: "全部复制", disabled: pinnedState.ocrLines.isEmpty) { onCopyAllOCR() }
-                MiniButton(label: pinnedState.justSavedNote ? "已存入" : "存入收纳", disabled: pinnedState.ocrLines.isEmpty) { onSaveOCRToNotes() }
+                MiniButton(
+                    label: pinnedState.justSavedNote ? "已存入" : "存入收纳",
+                    icon: pinnedState.justSavedNote ? "checkmark" : "square.and.arrow.down",
+                    disabled: pinnedState.ocrLines.isEmpty
+                ) { onSaveOCRToNotes() }
             }
         }
     }
@@ -216,8 +254,13 @@ struct PinnedSidePanelView: View {
             }
             switch pinnedState.translationPhase {
             case .idle:
-                Text("把识别到的文字翻成目标语言（本地模型，不联网）。")
-                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                if pinnedState.ocrPhase == .empty {
+                    Text("当前贴图中没识别到可翻译的文字。")
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                } else {
+                    Text("把识别到的文字翻成目标语言（本地模型，不联网）。")
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                }
             case .running:
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -279,6 +322,7 @@ struct PinnedToolbarView: View {
     let onCopy: () -> Void
     let onSave: () -> Void
     let onClose: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 4) {
@@ -294,7 +338,7 @@ struct PinnedToolbarView: View {
                         Circle().fill(state.activeKind == nil ? Color(nsColor: .controlAccentColor) : .clear)
                     )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle(scale: 0.92))
             .help("选择与移动 (V)")
 
             ForEach([AnnotationKind.rect, .ellipse, .arrow, .brush, .text, .mosaic, .highlight], id: \.self) { kind in
@@ -310,7 +354,7 @@ struct PinnedToolbarView: View {
                                 .fill(state.activeKind == kind ? Color(nsColor: .controlAccentColor).opacity(0.15) : .clear)
                         )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LensoPressButtonStyle(scale: 0.92))
                 .help(kind.label)
             }
 
@@ -328,7 +372,7 @@ struct PinnedToolbarView: View {
                             .fill(pinnedState.isSidePanelVisible && pinnedState.panelTab == .annotation ? Color(nsColor: .controlAccentColor).opacity(0.15) : .clear)
                     )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle(scale: 0.92))
             .help("标注调色盘与粗细设置")
 
             Divider().frame(height: 18)
@@ -340,7 +384,7 @@ struct PinnedToolbarView: View {
                     .foregroundStyle(Color(red: 0.18, green: 0.18, blue: 0.22).opacity(state.canUndo ? 1.0 : 0.35))
                     .frame(width: 26, height: 26)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle(scale: 0.92))
             .disabled(!state.canUndo)
             .help("撤销 (⌘Z)")
 
@@ -350,7 +394,7 @@ struct PinnedToolbarView: View {
                     .foregroundStyle(Color(red: 0.18, green: 0.18, blue: 0.22).opacity(state.canRedo ? 1.0 : 0.35))
                     .frame(width: 26, height: 26)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle(scale: 0.92))
             .disabled(!state.canRedo)
             .help("重做 (⇧⌘Z)")
 
@@ -367,7 +411,7 @@ struct PinnedToolbarView: View {
                             .fill(pinnedState.isSidePanelVisible && pinnedState.panelTab == .translate ? Color(nsColor: .controlAccentColor).opacity(0.15) : .clear)
                     )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle(scale: 0.92))
             .help("智能翻译卡片")
 
             // OCR
@@ -381,7 +425,7 @@ struct PinnedToolbarView: View {
                             .fill(pinnedState.isSidePanelVisible && pinnedState.panelTab == .ocr ? Color(nsColor: .controlAccentColor).opacity(0.15) : .clear)
                     )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle(scale: 0.92))
             .help("文字识别 (OCR) 卡片")
 
             // 复制
@@ -391,7 +435,7 @@ struct PinnedToolbarView: View {
                     .foregroundStyle(Color(red: 0.18, green: 0.18, blue: 0.22))
                     .frame(width: 28, height: 28)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle(scale: 0.92))
             .help("复制到剪贴板 (⌘C)")
 
             // 保存
@@ -401,7 +445,7 @@ struct PinnedToolbarView: View {
                     .foregroundStyle(Color(red: 0.18, green: 0.18, blue: 0.22))
                     .frame(width: 28, height: 28)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle(scale: 0.92))
             .help("保存到历史记录 (⌘S)")
 
             // 关闭
@@ -412,9 +456,12 @@ struct PinnedToolbarView: View {
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(Color.black.opacity(0.06)))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle(scale: 0.92))
             .help("关闭贴图")
         }
+        .lensoAnimation(LensoAnimations.snappy, value: state.activeKind, reduceMotion: reduceMotion)
+        .lensoAnimation(LensoAnimations.snappy, value: pinnedState.panelTab, reduceMotion: reduceMotion)
+        .lensoAnimation(LensoAnimations.snappy, value: pinnedState.isSidePanelVisible, reduceMotion: reduceMotion)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background {

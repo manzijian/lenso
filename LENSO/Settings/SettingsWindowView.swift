@@ -4,6 +4,9 @@ import AppKit
 /// 设置窗口 — Apple 设计风格 + 经典克莱因蓝（International Klein Blue）高对比白底搭配
 struct SettingsWindowView: View {
     @State private var category: SettingsCategory = .general
+    @State private var hoveredCategory: SettingsCategory?
+    @Namespace private var sidebarNamespace
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     typealias Category = SettingsCategory
 
@@ -33,6 +36,7 @@ struct SettingsWindowView: View {
                     .padding(.bottom, 28)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .lensoAnimation(LensoAnimations.snappy, value: category, reduceMotion: reduceMotion)
             }
             .background(mainBackground)
         }
@@ -73,29 +77,45 @@ struct SettingsWindowView: View {
 
             ForEach(Category.allCases) { c in
                 let isActive = category == c
-                HStack(spacing: 9) {
-                    Image(systemName: c.icon)
-                        .font(.system(size: 13, weight: isActive ? .semibold : .medium))
-                        .frame(width: 18)
-                        .foregroundStyle(isActive ? .white : Color(red: 0.18, green: 0.18, blue: 0.22))
+                let isHovered = hoveredCategory == c
+                Button {
+                    LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                        category = c
+                    }
+                } label: {
+                    HStack(spacing: 9) {
+                        Image(systemName: c.icon)
+                            .font(.system(size: 13, weight: isActive ? .semibold : .medium))
+                            .frame(width: 18)
+                            .foregroundStyle(isActive ? .white : Color(red: 0.18, green: 0.18, blue: 0.22))
 
-                    Text(c.rawValue)
-                        .font(.system(size: 13, weight: isActive ? .semibold : .medium))
-                        .foregroundStyle(isActive ? .white : Color(red: 0.18, green: 0.18, blue: 0.22))
+                        Text(c.rawValue)
+                            .font(.system(size: 13, weight: isActive ? .semibold : .medium))
+                            .foregroundStyle(isActive ? .white : Color(red: 0.18, green: 0.18, blue: 0.22))
 
-                    Spacer()
+                        Spacer()
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background {
+                        if isActive {
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .fill(LensoColors.kleinBlueBright)
+                                .shadow(color: LensoColors.kleinBlueBright.opacity(0.28), radius: 6, y: 2)
+                                .matchedGeometryEffect(id: "activeSidebarPill", in: sidebarNamespace)
+                        } else if isHovered {
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .fill(Color.black.opacity(0.045))
+                        }
+                    }
+                    .contentShape(Rectangle())
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .background {
-                    if isActive {
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .fill(LensoColors.kleinBlueBright)
-                            .shadow(color: LensoColors.kleinBlueBright.opacity(0.28), radius: 6, y: 2)
+                .buttonStyle(LensoPressButtonStyle())
+                .onHover { hovering in
+                    LensoAnimations.withMotion(LensoAnimations.hover, reduceMotion: reduceMotion) {
+                        hoveredCategory = hovering ? c : (hoveredCategory == c ? nil : hoveredCategory)
                     }
                 }
-                .contentShape(Rectangle())
-                .onTapGesture { category = c }
             }
             Spacer()
         }

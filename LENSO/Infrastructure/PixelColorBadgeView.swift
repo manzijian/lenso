@@ -21,6 +21,7 @@ final class PixelColorBadgeView: NSView {
     init() {
         super.init(frame: .zero)
         wantsLayer = true
+        alphaValue = 0
         isHidden = true
         layer?.backgroundColor = NSColor.black.withAlphaComponent(0.78).cgColor
         layer?.cornerRadius = 6
@@ -49,14 +50,25 @@ final class PixelColorBadgeView: NSView {
     }
 
     func hide() {
-        isHidden = true
+        guard !isHidden else { return }
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = LensoWindowMotion.reduceMotion ? 0.05 : 0.10
+            ctx.timingFunction = LensoWindowMotion.easeIn
+            animator().alphaValue = 0
+        }, completionHandler: { [weak self] in
+            Task { @MainActor in
+                if self?.alphaValue == 0 {
+                    self?.isHidden = true
+                }
+            }
+        })
     }
 
     /// 光标位于面板内的坐标（左下原点）
     func update(cursor: CGPoint, panelSize: CGSize) {
         guard let image = frozenImage, panelSize.width > 1, panelSize.height > 1,
               let color = sampleColor(at: cursor, panelSize: panelSize, image: image) else {
-            isHidden = true
+            hide()
             return
         }
 
@@ -94,7 +106,14 @@ final class PixelColorBadgeView: NSView {
         frame = CGRect(origin: origin, size: CGSize(width: width, height: height))
         CATransaction.commit()
 
-        isHidden = false
+        if isHidden || alphaValue < 1 {
+            isHidden = false
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = LensoWindowMotion.reduceMotion ? 0.05 : 0.10
+                ctx.timingFunction = LensoWindowMotion.easeOut
+                animator().alphaValue = 1
+            }
+        }
     }
 
     // MARK: - 取色

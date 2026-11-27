@@ -8,6 +8,10 @@ struct SearchPanelInspectionOverlay: View {
     let onPinImage: (CGImage) -> Void
 
     @State private var fullImage: CGImage?
+    @State private var isLoadingFullImage = false
+    @State private var loadFailed = false
+    @State private var copied = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         if let currentItem = item {
@@ -17,7 +21,7 @@ struct SearchPanelInspectionOverlay: View {
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        withAnimation(.easeInOut(duration: 0.2)) {
+                        LensoAnimations.withMotion(LensoAnimations.panel, reduceMotion: reduceMotion) {
                             item = nil
                         }
                     }
@@ -31,7 +35,7 @@ struct SearchPanelInspectionOverlay: View {
                             sourceApp: currentItem.sourceApp,
                             createdAt: currentItem.createdAt,
                             onDismiss: {
-                                withAnimation(.easeInOut(duration: 0.2)) {
+                                LensoAnimations.withMotion(LensoAnimations.panel, reduceMotion: reduceMotion) {
                                     item = nil
                                 }
                             }
@@ -44,16 +48,29 @@ struct SearchPanelInspectionOverlay: View {
                         imageLightboxView(item: currentItem, cgImage: fullImage ?? cgImage)
                             .task(id: currentItem.id) {
                                 fullImage = nil
-                                guard let record = currentItem.record else { return }
+                                copied = false
+                                loadFailed = false
+                                guard let record = currentItem.record else {
+                                    isLoadingFullImage = false
+                                    loadFailed = (cgImage == nil)
+                                    return
+                                }
+                                isLoadingFullImage = true
                                 let image = await ScreenshotStore.loadImageAsync(record)
-                                if !Task.isCancelled { fullImage = image }
+                                if !Task.isCancelled {
+                                    isLoadingFullImage = false
+                                    if let image {
+                                        LensoAnimations.withMotion(LensoAnimations.fade, reduceMotion: reduceMotion) {
+                                            fullImage = image
+                                        }
+                                    } else if cgImage == nil {
+                                        loadFailed = true
+                                    }
+                                }
                             }
                     }
                 }
-                .transition(.asymmetric(
-                    insertion: .scale(scale: 0.96).combined(with: .opacity),
-                    removal: .scale(scale: 0.96).combined(with: .opacity)
-                ))
+                .transition(LensoTransitions.overlayCard(reduceMotion: reduceMotion))
             }
             .transition(.opacity)
         }
@@ -102,27 +119,55 @@ struct SearchPanelInspectionOverlay: View {
                         .padding(.vertical, 4)
                         .background(Capsule().fill(LensoColors.kleinBlueSoft))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(LensoPressButtonStyle())
 
                     Button {
                         onCopyItem(item)
+                        LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                            copied = true
+                        }
+                        Task {
+                            try? await Task.sleep(for: .seconds(1.5))
+                            await MainActor.run {
+                                LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                                    copied = false
+                                }
+                            }
+                        }
                     } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "doc.on.doc")
-                                .font(.system(size: 10))
-                            Text("复制图片")
+                            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                                .font(.system(size: 10, weight: copied ? .semibold : .regular))
+                                .foregroundStyle(copied ? Color.green : Color.primary.opacity(0.85))
+                                .lensoSymbolReplace()
+                            Text(copied ? "已复制" : "复制图片")
                                 .font(.system(size: 11, weight: .medium))
                         }
-                        .foregroundStyle(Color.primary.opacity(0.85))
+                        .foregroundStyle(copied ? Color.green : Color.primary.opacity(0.85))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Capsule().fill(Color.black.opacity(0.06)))
+                        .background(Capsule().fill(copied ? Color.green.opacity(0.12) : Color.black.opacity(0.06)))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(LensoPressButtonStyle())
+                }
+
+                HStack(spacing: 4) {
+                    Text("Esc")
+                        .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                        .foregroundStyle(Color.secondary.opacity(0.8))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .strokeBorder(Color.black.opacity(0.12), lineWidth: 1)
+                        )
+                    Text("关闭")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
                 }
 
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    LensoAnimations.withMotion(LensoAnimations.panel, reduceMotion: reduceMotion) {
                         self.item = nil
                     }
                 } label: {
@@ -130,7 +175,7 @@ struct SearchPanelInspectionOverlay: View {
                         .font(.system(size: 17))
                         .foregroundStyle(Color.secondary.opacity(0.7))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LensoPressButtonStyle())
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -148,9 +193,31 @@ struct SearchPanelInspectionOverlay: View {
                         .aspectRatio(contentMode: .fit)
                         .padding(20)
                         .shadow(color: Color.black.opacity(0.12), radius: 10, y: 4)
-                } else {
+                        .transition(.opacity)
+                } else if isLoadingFullImage {
+                    ProgressView()
+                        .controlSize(.small)
+                } else if loadFailed {
                     Text("无法加载图片内容")
                         .foregroundStyle(.secondary)
+                }
+
+                if cgImage != nil && isLoadingFullImage {
+                    VStack {
+                        Spacer()
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .controlSize(.mini)
+                            Text("正在加载高清原图…")
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(Color.white.opacity(0.9)))
+                        .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
+                        .padding(.bottom, 12)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

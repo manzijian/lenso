@@ -301,7 +301,19 @@ final class JSONWorkbenchModel {
         panel.allowedContentTypes = [.json, .plainText, .text]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        if let window = NSApp.keyWindow ?? NSApp.mainWindow {
+            panel.beginSheetModal(for: window) { [weak self] response in
+                guard response == .OK, let url = panel.url else { return }
+                Task { @MainActor in
+                    self?.loadFile(from: url)
+                }
+            }
+        } else if panel.runModal() == .OK, let url = panel.url {
+            loadFile(from: url)
+        }
+    }
+
+    private func loadFile(from url: URL) {
         do {
             let text = try String(contentsOf: url, encoding: .utf8)
             input = text
@@ -319,7 +331,19 @@ final class JSONWorkbenchModel {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
         panel.nameFieldStringValue = "formatted.json"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        if let window = NSApp.keyWindow ?? NSApp.mainWindow {
+            panel.beginSheetModal(for: window) { [weak self] response in
+                guard response == .OK, let url = panel.url else { return }
+                Task { @MainActor in
+                    self?.writeFile(content, to: url)
+                }
+            }
+        } else if panel.runModal() == .OK, let url = panel.url {
+            writeFile(content, to: url)
+        }
+    }
+
+    private func writeFile(_ content: String, to url: URL) {
         do {
             try content.write(to: url, atomically: true, encoding: .utf8)
         } catch {

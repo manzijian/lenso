@@ -12,8 +12,11 @@ struct LibraryFeedView: View {
     var groupsByFavoriteDate: Bool = false
 
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var editingNote: TextNote?
     @State private var inspectingNote: TextNote?
+    @State private var noteToDelete: TextNote?
+    @State private var showDeleteConfirm = false
     @State private var draft = ""
     @State private var copiedID: String?
     @State private var query = ""
@@ -66,6 +69,7 @@ struct LibraryFeedView: View {
                 }
             }
         }
+        .lensoAnimation(LensoAnimations.snappy, value: query, reduceMotion: reduceMotion)
         .sheet(item: $editingNote) { note in
             NoteEditorSheet(
                 text: $draft,
@@ -83,8 +87,24 @@ struct LibraryFeedView: View {
                 rawContent: note.content,
                 sourceApp: note.sourceApp,
                 createdAt: note.createdAt,
+                isSavedNote: true,
                 onDismiss: { inspectingNote = nil }
             )
+        }
+        .alert(
+            "确定删除这条便签？",
+            isPresented: $showDeleteConfirm,
+            presenting: noteToDelete
+        ) { note in
+            Button("删除", role: .destructive) {
+                delete(note)
+                noteToDelete = nil
+            }
+            Button("取消", role: .cancel) {
+                noteToDelete = nil
+            }
+        } message: { _ in
+            Text("删除后将无法恢复，此操作不可撤销。")
         }
     }
 
@@ -141,7 +161,7 @@ struct LibraryFeedView: View {
                 } label: {
                     rowIcon("eye", active: false)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LensoPressButtonStyle())
                 .help("打开预览")
             }
         }
@@ -151,6 +171,7 @@ struct LibraryFeedView: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(hoveredID == entry.id ? Color.black.opacity(0.03) : Color.clear)
         )
+        .lensoAnimation(LensoAnimations.hover, value: hoveredID == entry.id, reduceMotion: reduceMotion)
         .contentShape(Rectangle())
         .onHover { hovering in
             hoveredID = hovering ? entry.id : (hoveredID == entry.id ? nil : hoveredID)
@@ -205,7 +226,7 @@ struct LibraryFeedView: View {
                 } label: {
                     rowIcon("eye", active: false)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LensoPressButtonStyle())
                 .help("查看全文与格式化")
 
                 Menu {
@@ -213,7 +234,10 @@ struct LibraryFeedView: View {
                         draft = note.content
                         editingNote = note
                     }
-                    Button("删除便签", role: .destructive) { delete(note) }
+                    Button("删除便签", role: .destructive) {
+                        noteToDelete = note
+                        showDeleteConfirm = true
+                    }
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 11, weight: .medium))
@@ -231,9 +255,15 @@ struct LibraryFeedView: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(hoveredID == entry.id ? Color.black.opacity(0.03) : Color.clear)
         )
+        .lensoAnimation(LensoAnimations.hover, value: hoveredID == entry.id, reduceMotion: reduceMotion)
         .contentShape(Rectangle())
         .onHover { hovering in
             hoveredID = hovering ? entry.id : (hoveredID == entry.id ? nil : hoveredID)
+        }
+        .onAppear {
+            if case .url(_, let originalStr) = type {
+                webStore.fetchTitleIfNeeded(for: originalStr)
+            }
         }
         .onTapGesture(count: 2) { inspectingNote = note }
         .onTapGesture { copy(note, entry: entry) }
@@ -246,7 +276,10 @@ struct LibraryFeedView: View {
                 draft = note.content
                 editingNote = note
             }
-            Button("删除便签", role: .destructive) { delete(note) }
+            Button("删除便签", role: .destructive) {
+                noteToDelete = note
+                showDeleteConfirm = true
+            }
         }
     }
 
@@ -271,6 +304,7 @@ struct LibraryFeedView: View {
             if isCopied {
                 HStack(spacing: 3) {
                     Image(systemName: "checkmark")
+                        .lensoSymbolReplace()
                     Text("已复制")
                 }
                 .font(.system(size: 9, weight: .semibold))
@@ -278,6 +312,7 @@ struct LibraryFeedView: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(Capsule().fill(Color(red: 0.11, green: 0.55, blue: 0.33).opacity(0.10)))
+                .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
             } else {
                 Text(label)
                     .font(.system(size: 9, weight: .semibold))
@@ -285,6 +320,7 @@ struct LibraryFeedView: View {
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Capsule().fill(Color.black.opacity(0.045)))
+                    .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
             }
 
             Text(Self.timeOnlyFormatter.string(from: date))
@@ -293,6 +329,7 @@ struct LibraryFeedView: View {
 
             actions()
         }
+        .lensoAnimation(LensoAnimations.snappy, value: isCopied, reduceMotion: reduceMotion)
     }
 
     private func rowIcon(_ name: String, active: Bool) -> some View {

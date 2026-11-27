@@ -20,9 +20,11 @@ struct LensoLibraryView: View {
     // 触控板双指缩放：按比例调整卡片大小与列数
     @State private var cardScale: CGFloat = 1.0
     @State private var gestureStartScale: CGFloat = 1.0
+    @State private var gridContainerWidth: CGFloat = 680
     @FocusState private var gridFocused: Bool
 
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     typealias Section = LibrarySection
     enum ViewMode { case grid, list }
@@ -34,6 +36,10 @@ struct LensoLibraryView: View {
     }
 
     private var cardWidth: CGFloat { 200 * cardScale }
+
+    private var currentGridColumnsCount: Int {
+        max(1, Int((max(0, gridContainerWidth - 32) + 14) / (cardWidth + 14)))
+    }
 
     private var gridColumns: [GridItem] {
         [GridItem(.adaptive(minimum: cardWidth, maximum: cardWidth + 2), spacing: 14)]
@@ -125,9 +131,19 @@ struct LensoLibraryView: View {
                 }
             }
             .background(mainBackground)
+            .lensoAnimation(LensoAnimations.snappy, value: section, reduceMotion: reduceMotion)
+            .lensoAnimation(LensoAnimations.snappy, value: viewMode, reduceMotion: reduceMotion)
+            .lensoAnimation(LensoAnimations.snappy, value: timeFilter, reduceMotion: reduceMotion)
         }
         .frame(minWidth: 840, minHeight: 560)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .onChange(of: filteredImages.map(\.id)) { visibleIDs in
+            let validSet = Set(visibleIDs)
+            let pruned = selectedIDs.intersection(validSet)
+            if pruned != selectedIDs {
+                selectedIDs = pruned
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openAnalyticsSection)) { _ in
             section = .analytics
         }
@@ -269,6 +285,13 @@ struct LensoLibraryView: View {
             }
             .padding(.bottom, 20)
         }
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { gridContainerWidth = geo.size.width }
+                    .onChange(of: geo.size.width) { gridContainerWidth = $0 }
+            }
+        )
         .simultaneousGesture(magnifyGesture)
         .focusable()
         .focused($gridFocused)
@@ -276,14 +299,24 @@ struct LensoLibraryView: View {
         .onAppear { gridFocused = true }
         .onKeyPress(.leftArrow) { moveSelection(by: -1); return .handled }
         .onKeyPress(.rightArrow) { moveSelection(by: 1); return .handled }
-        .onKeyPress(.upArrow) { moveSelection(by: -3); return .handled }
-        .onKeyPress(.downArrow) { moveSelection(by: 3); return .handled }
+        .onKeyPress(.upArrow) { moveSelection(by: -currentGridColumnsCount); return .handled }
+        .onKeyPress(.downArrow) { moveSelection(by: currentGridColumnsCount); return .handled }
         .onKeyPress(.space) { openSelection(); return .handled }
         .onKeyPress(.delete) { requestDeleteSelection(); return .handled }
         .onKeyPress(phases: .down) { press in
-            if press.modifiers.contains(.command), press.characters.lowercased() == "a" {
-                selectedIDs = Set(filteredImages.map(\.id))
-                return .handled
+            if press.modifiers.contains(.command) {
+                switch press.characters.lowercased() {
+                case "a":
+                    selectedIDs = Set(filteredImages.map(\.id))
+                    return .handled
+                case "c":
+                    if !selectedIDs.isEmpty {
+                        copySelectedImages()
+                        return .handled
+                    }
+                default:
+                    break
+                }
             }
             return .ignored
         }
@@ -386,14 +419,24 @@ struct LensoLibraryView: View {
         .onAppear { gridFocused = true }
         .onKeyPress(.leftArrow) { moveSelection(by: -1); return .handled }
         .onKeyPress(.rightArrow) { moveSelection(by: 1); return .handled }
-        .onKeyPress(.upArrow) { moveSelection(by: -3); return .handled }
-        .onKeyPress(.downArrow) { moveSelection(by: 3); return .handled }
+        .onKeyPress(.upArrow) { moveSelection(by: -1); return .handled }
+        .onKeyPress(.downArrow) { moveSelection(by: 1); return .handled }
         .onKeyPress(.space) { openSelection(); return .handled }
         .onKeyPress(.delete) { requestDeleteSelection(); return .handled }
         .onKeyPress(phases: .down) { press in
-            if press.modifiers.contains(.command), press.characters.lowercased() == "a" {
-                selectedIDs = Set(filteredImages.map(\.id))
-                return .handled
+            if press.modifiers.contains(.command) {
+                switch press.characters.lowercased() {
+                case "a":
+                    selectedIDs = Set(filteredImages.map(\.id))
+                    return .handled
+                case "c":
+                    if !selectedIDs.isEmpty {
+                        copySelectedImages()
+                        return .handled
+                    }
+                default:
+                    break
+                }
             }
             return .ignored
         }
@@ -402,7 +445,15 @@ struct LensoLibraryView: View {
     // MARK: - 空状态
 
     private var emptyStateView: some View {
-        LibraryEmptyStateView(searchText: searchText)
+        LibraryEmptyStateView(
+            searchText: searchText,
+            timeFilter: timeFilter,
+            onResetTimeFilter: {
+                LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                    timeFilter = .all
+                }
+            }
+        )
     }
 
     // MARK: - 底部栏与批量直接删除操作
@@ -441,6 +492,25 @@ struct LensoLibraryView: View {
             pasteboard.setData(tiff, forType: .tiff)
         }
         SaveToastController.shared.show(title: "已复制到剪贴板", subtitle: record.filename, thumbnail: image)
+    }
+
+    private func copySelectedImages() {
+        let selectedItems = filteredImages.filter { selectedIDs.contains($0.id) }
+        guard !selectedItems.isEmpty else { return }
+        if selectedItems.count == 1 {
+            copyImage(selectedItems[0])
+            return
+        }
+        let nsImages = selectedItems.compactMap { item -> NSImage? in
+            guard let record = recordsByID[item.id],
+                  let cg = ScreenshotStore.shared.loadImage(record) else { return nil }
+            return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+        }
+        guard !nsImages.isEmpty else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.writeObjects(nsImages)
+        SaveToastController.shared.show(title: "已复制 \(nsImages.count) 张截图", subtitle: "已写入剪贴板", thumbnail: nil)
     }
 
     /// 单项直接彻底删除（无回收站）
@@ -516,10 +586,6 @@ struct LensoLibraryView: View {
             Text(title).font(.system(size: 15, weight: .semibold))
             Text(subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
             Spacer()
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 14))
-                .foregroundStyle(.secondary)
-                .onTapGesture { SearchPanelController.shared.show() }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)

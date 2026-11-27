@@ -1,24 +1,37 @@
 import SwiftUI
 import AppKit
 
-/// 工具工作台窗口：单例复用，一次只保留一个工具视图。
-/// 关闭窗口即释放 contentView 与 SwiftUI 视图，内存回落到基线。
+/// 工具工作台窗口：按 toolID 独立管理，互不销毁未保存输入；
+/// 关闭窗口即释放对应 contentView 与 SwiftUI 视图，内存回落到基线。
 @MainActor
 final class ToolHostWindowController: NSObject, NSWindowDelegate {
     static let shared = ToolHostWindowController()
 
-    private var window: NSWindow?
-    private var hostingView: NSHostingView<AnyView>?
+    private var windows: [String: NSWindow] = [:]
+    private var hostingViews: [String: NSHostingView<AnyView>] = [:]
 
     private override init() {
         super.init()
     }
 
     func show(toolID: String, initialText: String? = nil) {
+        if let existing = windows[toolID], initialText == nil {
+            existing.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
         guard let tool = ToolRegistry.shared.descriptor(for: toolID),
               let root = LensoToolFactory.makeView(for: tool, initialText: initialText) else { return }
 
-        closeAndRelease()
+        if let existing = windows[toolID] {
+            let host = NSHostingView(rootView: root)
+            existing.contentView = host
+            hostingViews[toolID] = host
+            existing.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
 
         let size = LensoToolFactory.preferredSize(for: tool)
         let window = NSWindow(
@@ -36,32 +49,41 @@ final class ToolHostWindowController: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.collectionBehavior = [.fullScreenNone]
         window.delegate = self
-        window.setFrameAutosaveName("lenso.tool.\(tool.id)")
+
+        let autosaveName = "lenso.tool.\(tool.id)"
+        window.setFrameAutosaveName(autosaveName)
+        if !window.setFrameUsingName(autosaveName) {
+            window.center()
+        }
 
         let host = NSHostingView(rootView: root)
         window.contentView = host
-        window.center()
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
 
-        self.window = window
-        self.hostingView = host
+        windows[toolID] = window
+        hostingViews[toolID] = host
+
+        NSApp.activate(ignoringOtherApps: true)
+        LensoWindowMotion.present(window, slideY: 8, makeKey: true)
+    }
+
+    func close(toolID: String) {
+        guard let window = windows[toolID] else { return }
+        LensoWindowMotion.dismiss(window, slideY: 6) { [weak self] in
+            self?.release(toolID: toolID)
+        }
     }
 
     func windowWillClose(_ notification: Notification) {
-        // 关闭后立即释放工具视图，不把富文本编辑器留在内存里
-        hostingView = nil
-        window?.contentView = nil
-        window?.delegate = nil
-        window = nil
+        guard let closedWindow = notification.object as? NSWindow,
+              let toolID = windows.first(where: { $0.value === closedWindow })?.key else { return }
+        release(toolID: toolID)
     }
 
-    private func closeAndRelease() {
-        guard let window else { return }
-        window.delegate = nil
-        window.orderOut(nil)
-        window.contentView = nil
-        hostingView = nil
-        self.window = nil
+    private func release(toolID: String) {
+        hostingViews.removeValue(forKey: toolID)
+        if let window = windows.removeValue(forKey: toolID) {
+            window.contentView = nil
+            window.delegate = nil
+        }
     }
 }

@@ -31,6 +31,8 @@ struct LibrarySidebarView: View {
     @State private var liveWidth: CGFloat = 206
     @State private var dragStartWidth: CGFloat = 206
     @State private var isResizing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var activeNavNamespace
 
     private var sidebarWidth: CGFloat { liveWidth }
     /// 拖拽过程中实时切换到图标轨道形态
@@ -71,8 +73,17 @@ struct LibrarySidebarView: View {
         .padding(.bottom, 12)
         .frame(width: sidebarWidth)
         .overlay(alignment: .trailing) { resizeHandle }
+        .lensoAnimation(LensoAnimations.panel, value: isNarrow, reduceMotion: reduceMotion)
         .onAppear {
             liveWidth = isCollapsed ? 66 : 206
+        }
+    }
+
+    private func toggleCollapse() {
+        LensoAnimations.withMotion(LensoAnimations.panel, reduceMotion: reduceMotion) {
+            isCollapsed.toggle()
+            liveWidth = isCollapsed ? 66 : 206
+            dragStartWidth = liveWidth
         }
     }
 
@@ -102,7 +113,7 @@ struct LibrarySidebarView: View {
                     }
                     .onEnded { _ in
                         isResizing = false
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
+                        LensoAnimations.withMotion(LensoAnimations.panel, reduceMotion: reduceMotion) {
                             let collapse = liveWidth < 140
                             isCollapsed = collapse
                             liveWidth = collapse ? 66 : 206
@@ -119,14 +130,18 @@ struct LibrarySidebarView: View {
             Color.clear.frame(height: 34)
 
             if isNarrow {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(LensoColors.kleinBlueBright)
-                    .frame(width: 22, height: 22)
-                    .overlay(
-                        Text("L")
-                            .font(.system(size: 10.5, weight: .bold))
-                            .foregroundStyle(.white)
-                    )
+                VStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(LensoColors.kleinBlueBright)
+                        .frame(width: 22, height: 22)
+                        .overlay(
+                            Text("L")
+                                .font(.system(size: 10.5, weight: .bold))
+                                .foregroundStyle(.white)
+                        )
+
+                    collapseToggleButton
+                }
             } else {
                 HStack(spacing: 7) {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -144,11 +159,29 @@ struct LibrarySidebarView: View {
                         .foregroundStyle(ink)
 
                     Spacer(minLength: 0)
+
+                    collapseToggleButton
                 }
             }
         }
         .padding(.horizontal, isNarrow ? 0 : 12)
         .padding(.bottom, 12)
+    }
+
+    private var collapseToggleButton: some View {
+        Button(action: toggleCollapse) {
+            Image(systemName: "sidebar.left")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.secondary.opacity(0.75))
+                .frame(width: 24, height: 24)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.black.opacity(0.04))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(LensoPressButtonStyle())
+        .help(isNarrow ? "展开侧边栏" : "收起侧边栏")
     }
 
     private func groupLabel(_ text: String) -> some View {
@@ -175,7 +208,9 @@ struct LibrarySidebarView: View {
 
         if isNarrow {
             Button {
-                section = target
+                LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                    section = target
+                }
             } label: {
                 VStack(spacing: 3) {
                     Image(systemName: icon)
@@ -191,11 +226,12 @@ struct LibrarySidebarView: View {
                         RoundedRectangle(cornerRadius: 9, style: .continuous)
                             .fill(LensoColors.kleinBlueBright)
                             .shadow(color: LensoColors.kleinBlueBright.opacity(0.26), radius: 5, y: 2)
+                            .matchedGeometryEffect(id: "sidebarActivePill", in: activeNavNamespace)
                     }
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle())
             .padding(.horizontal, 0)
             .help(title)
         } else {
@@ -215,6 +251,7 @@ struct LibrarySidebarView: View {
                     Text("\(count)")
                         .font(.system(size: 10.5, weight: isActive ? .bold : .medium, design: .rounded))
                         .foregroundStyle(isActive ? LensoColors.kleinBlueBright : Color.secondary)
+                        .lensoNumericTransition()
                         .padding(.horizontal, 6)
                         .padding(.vertical, 1.5)
                         .background(
@@ -229,10 +266,15 @@ struct LibrarySidebarView: View {
                     RoundedRectangle(cornerRadius: 9, style: .continuous)
                         .fill(LensoColors.kleinBlueBright)
                         .shadow(color: LensoColors.kleinBlueBright.opacity(0.28), radius: 6, y: 2)
+                        .matchedGeometryEffect(id: "sidebarActivePill", in: activeNavNamespace)
                 }
             }
             .contentShape(Rectangle())
-            .onTapGesture { section = target }
+            .onTapGesture {
+                LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                    section = target
+                }
+            }
         }
     }
 
@@ -329,7 +371,7 @@ struct LibrarySidebarView: View {
                         .frame(width: 20, height: 20)
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                            LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
                                 isSettingsExpanded.toggle()
                             }
                         }
@@ -341,13 +383,16 @@ struct LibrarySidebarView: View {
                         RoundedRectangle(cornerRadius: 9, style: .continuous)
                             .fill(LensoColors.kleinBlueBright)
                             .shadow(color: LensoColors.kleinBlueBright.opacity(0.28), radius: 6, y: 2)
+                            .matchedGeometryEffect(id: "sidebarActivePill", in: activeNavNamespace)
                     }
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                        isSettingsExpanded = true
-                        if !section.isSettings {
+                    LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                        if section.isSettings {
+                            isSettingsExpanded.toggle()
+                        } else {
+                            isSettingsExpanded = true
                             section = .settings(.general)
                         }
                     }
@@ -377,16 +422,19 @@ struct LibrarySidebarView: View {
                                     RoundedRectangle(cornerRadius: 7, style: .continuous)
                                         .fill(LensoColors.kleinBlueBright)
                                         .shadow(color: LensoColors.kleinBlueBright.opacity(0.24), radius: 4, y: 1)
+                                        .matchedGeometryEffect(id: "sidebarActivePill", in: activeNavNamespace)
                                 }
                             }
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                section = .settings(cat)
+                                LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                                    section = .settings(cat)
+                                }
                             }
                         }
                     }
                     .padding(.top, 1)
-                    .transition(.opacity)
+                    .transition(LensoTransitions.inlineExpand(reduceMotion: reduceMotion))
                 }
             }
         }

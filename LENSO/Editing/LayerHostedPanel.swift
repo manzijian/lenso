@@ -57,6 +57,14 @@ final class PanelDragContainer: NSView {
         self.movable = movable
         self.hostingView = hostingView
         self.strip = strip
+
+        movable.alphaValue = 0
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = LensoWindowMotion.reduceMotion ? 0.08 : 0.16
+            ctx.timingFunction = LensoWindowMotion.easeOut
+            ctx.allowsImplicitAnimation = true
+            movable.animator().alphaValue = 1
+        }
     }
 
     /// 布局给的默认位置变化时同步（用户拖动过就不再回位）

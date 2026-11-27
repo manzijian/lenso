@@ -24,7 +24,7 @@ final class SearchPanelController {
     func show() {
         if let panel {
             NotificationCenter.default.post(name: .searchPanelShouldReload, object: nil)
-            panel.makeKeyAndOrderFront(nil)
+            LensoWindowMotion.present(panel, slideY: 8, makeKey: true)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
@@ -57,10 +57,9 @@ final class SearchPanelController {
         panel.contentView = hosting
         panel.setFrame(frame, display: true)
         panel.onCancel = { [weak self] in self?.hide() }
-        panel.orderFrontRegardless()
-        NSApp.activate(ignoringOtherApps: true)
-        panel.makeKeyAndOrderFront(nil)
         self.panel = panel
+        LensoWindowMotion.present(panel, slideY: 8, makeKey: true)
+        NSApp.activate(ignoringOtherApps: true)
 
         // Esc 兜底：通知 SearchPanelView 优先关闭详情弹层，无弹层时关闭浮层
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
@@ -114,9 +113,11 @@ final class SearchPanelController {
         keyMonitor = nil
         if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
         resignObserver = nil
-        if let panel { Self.saveOrigin(panel.frame) }
-        panel?.orderOut(nil)
-        panel?.close()
-        panel = nil
+        guard let panel = self.panel else { return }
+        self.panel = nil
+        Self.saveOrigin(panel.frame)
+        LensoWindowMotion.dismiss(panel, slideY: 6) {
+            panel.close()
+        }
     }
 }

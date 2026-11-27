@@ -165,7 +165,7 @@ struct MediumHoursView: View {
                 Text("今日时段分布")
                     .font(.system(size: 10.5, weight: .bold))
                 Spacer(minLength: 8)
-                Text("共 \(snapshot.todayCount) 次")
+                Text("共 \(snapshot.todayCount) 张")
                     .font(.system(size: 9))
                     .foregroundStyle(.secondary)
             }

@@ -9,10 +9,16 @@ struct PreviewWindowView: View {
     let screenshotID: UUID?
 
     @State private var zoom: CGFloat = 1
+    @State private var panOffset: CGSize = .zero
+    @State private var dragStartOffset: CGSize? = nil
     @State private var image: CGImage?
     @State private var record: ScreenshotRecord?
+    @State private var copied = false
+    @State private var hostWindow: NSWindow? = nil
     @State private var scrollMonitor: Any? = nil
+    @State private var keyMonitor: Any? = nil
     @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -36,8 +42,25 @@ struct PreviewWindowView: View {
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .scaleEffect(zoom)
+                            .offset(panOffset)
                             .frame(width: geo.size.width, height: geo.size.height)
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture()
+                                    .onChanged { value in
+                                        guard zoom > 1.0 else { return }
+                                        let base = dragStartOffset ?? panOffset
+                                        if dragStartOffset == nil { dragStartOffset = panOffset }
+                                        panOffset = CGSize(
+                                            width: base.width + value.translation.width,
+                                            height: base.height + value.translation.height
+                                        )
+                                    }
+                                    .onEnded { _ in
+                                        dragStartOffset = nil
+                                    }
+                            )
                     }
                 } else {
                     ContentUnavailableView("图片不存在", systemImage: "photo.badge.exclamationmark")
@@ -73,15 +96,44 @@ struct PreviewWindowView: View {
                 Spacer()
 
                 // 操作按钮组
-                HStack(spacing: 12) {
-                    ToolbarIcon(icon: "plus.magnifyingglass", label: "放大") {
-                        zoom = min(zoom + 0.25, 4.0)
+                HStack(spacing: 10) {
+                    ToolbarIcon(
+                        icon: "plus.magnifyingglass",
+                        label: "放大",
+                        disabled: zoom >= 4.0
+                    ) {
+                        LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                            zoom = min(zoom + 0.25, 4.0)
+                        }
                     }
-                    ToolbarIcon(icon: "minus.magnifyingglass", label: "缩小") {
-                        zoom = max(zoom - 0.25, 0.5)
+
+                    Text("\(Int(round(zoom * 100)))%")
+                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(Color(red: 0.22, green: 0.24, blue: 0.30))
+                        .monospacedDigit()
+                        .lensoNumericTransition()
+                        .lensoAnimation(LensoAnimations.snappy, value: Int(round(zoom * 100)), reduceMotion: reduceMotion)
+                        .frame(minWidth: 38)
+
+                    ToolbarIcon(
+                        icon: "minus.magnifyingglass",
+                        label: "缩小",
+                        disabled: zoom <= 0.5
+                    ) {
+                        LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                            zoom = max(zoom - 0.25, 0.5)
+                            if zoom <= 1.0 { panOffset = .zero }
+                        }
                     }
-                    ToolbarIcon(icon: "arrow.counterclockwise", label: "复位 100%") {
-                        zoom = 1.0
+                    ToolbarIcon(
+                        icon: "arrow.counterclockwise",
+                        label: "复位 100%",
+                        disabled: abs(zoom - 1.0) < 0.001 && panOffset == .zero
+                    ) {
+                        LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                            zoom = 1.0
+                            panOffset = .zero
+                        }
                     }
 
                     Divider().frame(height: 14).opacity(0.5)
@@ -94,7 +146,11 @@ struct PreviewWindowView: View {
                         }
                     }
 
-                    ToolbarIcon(icon: "doc.on.doc", label: "复制到剪贴板") {
+                    ToolbarIcon(
+                        icon: copied ? "checkmark" : "doc.on.doc",
+                        label: copied ? "已复制到剪贴板" : "复制到剪贴板",
+                        tint: copied ? .green : nil
+                    ) {
                         copyImage()
                     }
 
@@ -114,13 +170,31 @@ struct PreviewWindowView: View {
             .padding(.top, 10)
             .padding(.horizontal, 14)
         }
+        .background(PreviewWindowAccessor { window in
+            if hostWindow !== window {
+                hostWindow = window
+            }
+        })
         .lensoColorScheme()
         .task(id: screenshotID) { loadRecord() }
+        .onExitCommand { dismissWindow() }
         .onAppear {
             scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel]) { event in
+                let targetWindow = hostWindow ?? NSApp.keyWindow
+                guard let targetWindow, event.window === targetWindow else { return event }
                 let delta = event.scrollingDeltaY
                 if abs(delta) > 0.05 {
                     zoom = min(max(zoom + (delta > 0 ? 0.08 : -0.08), 0.25), 5.0)
+                    if zoom <= 1.0 { panOffset = .zero }
+                }
+                return event
+            }
+            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
+                let targetWindow = hostWindow ?? NSApp.keyWindow
+                guard let targetWindow, event.window === targetWindow else { return event }
+                if event.keyCode == 53 { // Esc
+                    dismissWindow()
+                    return nil
                 }
                 return event
             }
@@ -129,6 +203,10 @@ struct PreviewWindowView: View {
             if let monitor = scrollMonitor {
                 NSEvent.removeMonitor(monitor)
                 scrollMonitor = nil
+            }
+            if let monitor = keyMonitor {
+                NSEvent.removeMonitor(monitor)
+                keyMonitor = nil
             }
         }
     }
@@ -149,7 +227,19 @@ struct PreviewWindowView: View {
         if let tiff = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height)).tiffRepresentation {
             pasteboard.setData(tiff, forType: .tiff)
         }
+        ClipboardMonitor.shared.markSelfWrite()
         SaveToastController.shared.show(title: "已复制到剪贴板", subtitle: record.filename, thumbnail: image)
+        LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+            copied = true
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            await MainActor.run {
+                LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                    copied = false
+                }
+            }
+        }
     }
 
     private func exportImage() {
@@ -171,8 +261,11 @@ struct PreviewWindowView: View {
 private struct ToolbarIcon: View {
     let icon: String
     var label: String? = nil
+    var disabled: Bool = false
+    var tint: Color? = nil
     var action: (() -> Void)?
     @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button {
@@ -180,12 +273,40 @@ private struct ToolbarIcon: View {
         } label: {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(hovering ? LensoColors.kleinBlueBright : Color(red: 0.18, green: 0.18, blue: 0.22))
+                .foregroundStyle(
+                    tint ?? (hovering && !disabled ? LensoColors.kleinBlueBright : Color(red: 0.18, green: 0.18, blue: 0.22))
+                )
+                .opacity(disabled ? 0.35 : 1.0)
                 .frame(width: 22, height: 22)
                 .contentShape(Rectangle())
+                .lensoSymbolReplace()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LensoPressButtonStyle(scale: 0.90))
+        .disabled(disabled)
         .onHover { hovering = $0 }
+        .lensoAnimation(LensoAnimations.hover, value: hovering, reduceMotion: reduceMotion)
         .help(label ?? "")
+    }
+}
+
+private struct PreviewWindowAccessor: NSViewRepresentable {
+    let onResolve: (NSWindow) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            if let window = view.window {
+                onResolve(window)
+            }
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            if let window = nsView.window {
+                onResolve(window)
+            }
+        }
     }
 }

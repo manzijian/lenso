@@ -51,7 +51,7 @@ final class StatusBarController {
 
     func show() {
         if let panel {
-            panel.makeKeyAndOrderFront(nil)
+            LensoWindowMotion.present(panel, slideY: -6, makeKey: true)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
@@ -99,15 +99,16 @@ final class StatusBarController {
             }
         }
 
-        panel.makeKeyAndOrderFront(nil)
+        LensoWindowMotion.present(panel, slideY: -6, makeKey: true)
         NSApp.activate(ignoringOtherApps: true)
     }
 
     func hide() {
         if let eventMonitor { NSEvent.removeMonitor(eventMonitor) }
         eventMonitor = nil
-        panel?.orderOut(nil)
-        panel = nil
+        guard let panel = self.panel else { return }
+        self.panel = nil
+        LensoWindowMotion.dismiss(panel, slideY: -4)
     }
 
     private func positionPanel(_ panel: NSPanel) {

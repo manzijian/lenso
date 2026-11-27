@@ -42,6 +42,7 @@ struct ToolCatalogView: View {
                 Text("已安装 \(registry.installedCount) / \(ToolRegistry.catalog.filter(\.isAvailable).count)")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.primary.opacity(0.85))
+                    .lensoNumericTransition()
                 Text("安装后会在状态栏面板的「工具」分组中出现")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
@@ -61,6 +62,7 @@ private struct ToolCatalogRow: View {
     let tool: LensoToolDescriptor
     @State private var registry = ToolRegistry.shared
     @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var installed: Bool { registry.isInstalled(tool.id) }
     private var enabled: Bool { registry.isEnabled(tool.id) }
@@ -98,6 +100,8 @@ private struct ToolCatalogRow: View {
         .padding(.vertical, 10)
         .background(hovering ? Color.black.opacity(0.025) : Color.clear)
         .onHover { hovering = $0 }
+        .lensoAnimation(LensoAnimations.hover, value: hovering, reduceMotion: reduceMotion)
+        .lensoAnimation(LensoAnimations.snappy, value: installed, reduceMotion: reduceMotion)
     }
 
     @ViewBuilder
@@ -127,9 +131,11 @@ private struct ToolCatalogRow: View {
                 .help(enabled ? "从面板隐藏" : "在面板显示")
 
                 Button("卸载") {
-                    registry.uninstall(tool.id)
+                    LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                        registry.uninstall(tool.id)
+                    }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LensoPressButtonStyle())
                 .font(.system(size: 10.5, weight: .medium))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 9)
@@ -138,7 +144,9 @@ private struct ToolCatalogRow: View {
             }
         } else {
             Button {
-                registry.install(tool.id)
+                LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                    registry.install(tool.id)
+                }
             } label: {
                 Label("安装", systemImage: "plus")
                     .font(.system(size: 10.5, weight: .semibold))
@@ -149,7 +157,7 @@ private struct ToolCatalogRow: View {
                         Capsule().fill(LensoColors.kleinBlueBright)
                     )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle())
         }
     }
 

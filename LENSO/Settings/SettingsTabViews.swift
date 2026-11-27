@@ -80,6 +80,8 @@ struct SettingShortcutRow: View {
 struct MCPSettingsSectionView: View {
     @State private var settings = AppSettings.shared
     @State private var usageEntries: [MCPUsageLog.Entry] = []
+    @State private var confirmClearUsageLog = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var agentGuidePrompt: String {
         """
@@ -156,6 +158,7 @@ struct MCPSettingsSectionView: View {
                     }
                 }
                 .padding(16)
+                .lensoAnimation(LensoAnimations.panel, value: settings.enableMCPServer, reduceMotion: reduceMotion)
             }
 
             if settings.enableMCPServer {
@@ -182,7 +185,7 @@ struct MCPSettingsSectionView: View {
                             .padding(.vertical, 5)
                             .background(Capsule().fill(LensoColors.kleinBlueBright))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(LensoPressButtonStyle())
                     }
 
                     SettingCardContainer {
@@ -196,6 +199,7 @@ struct MCPSettingsSectionView: View {
                         .padding(14)
                     }
                 }
+                .transition(LensoTransitions.inlineExpand(reduceMotion: reduceMotion))
 
                 // JSON 配置文件
                 VStack(alignment: .leading, spacing: 8) {
@@ -220,7 +224,7 @@ struct MCPSettingsSectionView: View {
                             .padding(.vertical, 4)
                             .background(Capsule().fill(LensoColors.kleinBlueSoft))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(LensoPressButtonStyle())
                     }
 
                     SettingCardContainer {
@@ -233,6 +237,7 @@ struct MCPSettingsSectionView: View {
                         .padding(14)
                     }
                 }
+                .transition(LensoTransitions.inlineExpand(reduceMotion: reduceMotion))
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("已开放的 MCP 工具列表 (Tools)")
@@ -253,10 +258,12 @@ struct MCPSettingsSectionView: View {
                         }
                     }
                 }
+                .transition(LensoTransitions.inlineExpand(reduceMotion: reduceMotion))
             }
 
             usageLogSection
         }
+        .lensoAnimation(LensoAnimations.panel, value: settings.enableMCPServer, reduceMotion: reduceMotion)
         .onAppear { refreshUsageLog() }
         .onReceive(NotificationCenter.default.publisher(for: .mcpUsageLogDidChange)) { _ in
             usageEntries = MCPUsageLog.shared.snapshot()
@@ -278,6 +285,7 @@ struct MCPSettingsSectionView: View {
                     .padding(.horizontal, 6)
                     .padding(.vertical, 1.5)
                     .background(Capsule().fill(LensoColors.kleinBlueSoft))
+                    .lensoNumericTransition()
 
                 Spacer()
 
@@ -291,8 +299,20 @@ struct MCPSettingsSectionView: View {
                 }
 
                 UsageIconButton(symbol: "trash", help: "清空使用记录", enabled: !usageEntries.isEmpty) {
-                    MCPUsageLog.shared.clear()
-                    usageEntries = []
+                    confirmClearUsageLog = true
+                }
+                .confirmationDialog(
+                    "确认清空 MCP 使用记录？",
+                    isPresented: $confirmClearUsageLog,
+                    titleVisibility: .visible
+                ) {
+                    Button("清空记录", role: .destructive) {
+                        MCPUsageLog.shared.clear()
+                        usageEntries = []
+                    }
+                    Button("取消", role: .cancel) {}
+                } message: {
+                    Text("本地调用日志将被清空，此操作不可撤销。")
                 }
             }
 
@@ -366,6 +386,7 @@ struct MCPSettingsSectionView: View {
             Text(value)
                 .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
                 .foregroundStyle(LensoColors.kleinBlueBright)
+                .lensoNumericTransition()
             Text(unit)
                 .font(.system(size: 9.5))
                 .foregroundStyle(.tertiary)
@@ -380,6 +401,7 @@ struct MCPSettingsSectionView: View {
         var enabled: Bool = true
         let action: () -> Void
         @State private var hovering = false
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
         var body: some View {
             Button(action: action) {
@@ -394,9 +416,10 @@ struct MCPSettingsSectionView: View {
                     )
                     .contentShape(Circle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle(scale: 0.92))
             .disabled(!enabled)
             .onHover { hovering = $0 }
+            .lensoAnimation(LensoAnimations.hover, value: hovering, reduceMotion: reduceMotion)
             .help(help)
         }
     }
@@ -404,6 +427,7 @@ struct MCPSettingsSectionView: View {
     private struct MCPUsageLogRow: View {
         let entry: MCPUsageLog.Entry
         @State private var hovering = false
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
         private static let todayFormatter: DateFormatter = {
             let formatter = DateFormatter()
@@ -469,6 +493,7 @@ struct MCPSettingsSectionView: View {
             .padding(.vertical, 7)
             .background(hovering ? LensoColors.kleinBlueBright.opacity(0.045) : Color.clear)
             .onHover { hovering = $0 }
+            .lensoAnimation(LensoAnimations.hover, value: hovering, reduceMotion: reduceMotion)
             .help(entry.detail ?? "")
         }
 

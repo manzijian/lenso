@@ -184,7 +184,6 @@ final class CaptureCoordinator: NSObject {
         panel.onCancel = { [weak self] in
             self?.closeEditor()
         }
-        panel.orderFrontRegardless()
         // 选区阶段刻意不激活 App（否则会把自己的窗口顶到最前，盖住要截的应用）。
         // 但编辑器需要接管键盘、输入法和标注，所以进编辑器时再激活；
         // 这时画面已经冻结，激活不会影响截取内容。
@@ -194,7 +193,7 @@ final class CaptureCoordinator: NSObject {
             previousFrontApp = front
         }
         NSApp.activate(ignoringOtherApps: true)
-        panel.makeKeyAndOrderFront(nil)
+        LensoWindowMotion.present(panel, duration: 0.16, makeKey: true)
         // 激活是异步协作的：等一拍再确认一次 key 状态，
         // 否则面板可能没拿到键盘焦点，文字标注就完全打不进字。
         DispatchQueue.main.async { [weak panel] in
@@ -206,10 +205,15 @@ final class CaptureCoordinator: NSObject {
     }
 
     func closeEditor() {
-        editorPanel?.orderOut(nil)
-        editorPanel?.close()
-        editorPanel = nil
-        editorHost = nil
+        if let panel = editorPanel {
+            editorPanel = nil
+            editorHost = nil
+            LensoWindowMotion.dismiss(panel, duration: 0.12) {
+                panel.close()
+            }
+        } else {
+            editorHost = nil
+        }
         // 把焦点还给截图前的那个应用，lenso 不留在最前面
         if let app = previousFrontApp, !app.isTerminated {
             app.activate(options: [.activateIgnoringOtherApps])
@@ -237,18 +241,16 @@ final class CaptureCoordinator: NSObject {
             if AppSettings.shared.showPreviewAfterCapture {
                 NotificationCenter.default.post(name: .openPreviewForScreenshot, object: record.id)
             }
-            NSSound.beep()
             log.info("saved \(record.filename, privacy: .public)")
         } catch {
             // 即使保存到磁盘出现异常，剪贴板也 100% 确保复制成功
             copyToClipboard(image: image)
-            if AppSettings.shared.showFloatingPreview {
-                SaveToastController.shared.show(
-                    title: "已复制到剪贴板",
-                    subtitle: "未保存到磁盘",
-                    thumbnail: image
-                )
-            }
+            SaveToastController.shared.show(
+                title: "已复制到剪贴板",
+                subtitle: "未保存到磁盘",
+                thumbnail: image,
+                isError: true
+            )
             NSSound.beep()
             log.error("save failed: \(error.localizedDescription, privacy: .public)")
         }
@@ -257,11 +259,19 @@ final class CaptureCoordinator: NSObject {
     private var previewController: PinnedScreenshotController?
     private var keyMonitor: Any?
 
+    private func currentTopPinnedController() -> PinnedScreenshotController? {
+        previewController ?? pinnedControllers.last
+    }
+
     private func setupKeyMonitorIfNeeded() {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
             if event.keyCode == 53 { // Esc 键快速一键关闭当前浮动预览或贴图
+                // 若正在编辑或有文字输入框，交给 PinnedImageView.keyDown 逐级退出
+                if let top = self.currentTopPinnedController(), top.isCurrentlyEditing {
+                    return event
+                }
                 if self.closeLatestPinnedOrPreview() {
                     return nil
                 }

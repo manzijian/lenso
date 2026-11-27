@@ -46,9 +46,11 @@ extension CaptureEditorView {
             case .arrow:
                 drawArrow(ctx, from: p1, to: p2, headLen: 12 * imageScale)
             case .brush:
-                ctx.move(to: p1)
-                ctx.addLine(to: p2)
-                ctx.strokePath()
+                let pts = annotation.points.isEmpty
+                    ? [p1, p2]
+                    : annotation.points.map { CGPoint(x: $0.x * sw, y: (1 - $0.y) * sh) }
+                ctx.setLineJoin(.round)
+                AnnotationRenderer.drawSmoothPolyline(ctx, points: pts)
             case .highlight:
                 ctx.setFillColor(color.cgColor)
                 ctx.fill(rect)

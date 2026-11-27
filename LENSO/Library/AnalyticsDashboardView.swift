@@ -8,7 +8,9 @@ struct AnalyticsDashboardView: View {
     @State private var data: ScreenshotStore.AnalyticsData?
     @State var hoveredDailyIndex: Int?
     @State var hoveredHour: Int?
+    @State var showCleanupConfirm = false
 
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
     private let store = ScreenshotStore.shared
 
     var body: some View {
@@ -18,31 +20,60 @@ struct AnalyticsDashboardView: View {
                 headerView
 
                 if let data {
-                    // 核心 4 大指标卡片 (KPI Cards)
-                    metricsGrid(data)
+                    Group {
+                        // 核心 4 大指标卡片 (KPI Cards)
+                        metricsGrid(data)
 
-                    // 模块 1：每日数据变化趋势
-                    dailyTrendCard(data)
+                        // 模块 1：每日数据变化趋势
+                        dailyTrendCard(data)
 
-                    // 模块 2：具体每小时的数据量分布 (00:00 - 23:00)
-                    hourlyDistributionCard(data)
+                        // 模块 2：具体每小时的数据量分布 (00:00 - 23:00)
+                        hourlyDistributionCard(data)
 
-                    // 模块 3：来源应用排行榜与存储概览
-                    HStack(alignment: .top, spacing: 16) {
-                        topAppsCard(data)
-                        storageAndRetentionCard(data)
+                        // 模块 3：来源应用排行榜与存储概览
+                        HStack(alignment: .top, spacing: 16) {
+                            topAppsCard(data)
+                            storageAndRetentionCard(data)
+                        }
                     }
+                    .transition(.opacity)
                 } else {
                     loadingView
+                        .transition(.opacity)
                 }
             }
             .padding(24)
+            .lensoAnimation(LensoAnimations.fade, value: data != nil, reduceMotion: reduceMotion)
+            .lensoAnimation(LensoAnimations.snappy, value: scopeDays, reduceMotion: reduceMotion)
         }
         .background(Color(red: 0.98, green: 0.985, blue: 0.995))
         .onAppear { loadData() }
         .onChange(of: scopeDays) { _ in loadData() }
         .onReceive(NotificationCenter.default.publisher(for: .libraryChanged)) { _ in
             loadData()
+        }
+        .alert("确定立即清理过期数据？", isPresented: $showCleanupConfirm) {
+            Button("立即清理", role: .destructive) {
+                if let res = AppSettings.shared.runAutoCleanup() {
+                    if res.totalDeleted > 0 {
+                        SaveToastController.shared.show(
+                            title: "清理完成",
+                            subtitle: "已删除 \(res.totalDeleted) 项过期数据",
+                            thumbnail: nil
+                        )
+                    } else {
+                        SaveToastController.shared.show(
+                            title: "已是最新",
+                            subtitle: "暂无符合期限的过期记录",
+                            thumbnail: nil
+                        )
+                    }
+                    loadData()
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("将根据当前保存期限设置删除过期数据，此操作不可撤销。")
         }
     }
 
@@ -93,7 +124,7 @@ struct AnalyticsDashboardView: View {
                     .background(Circle().fill(Color.white))
                     .shadow(color: Color.black.opacity(0.06), radius: 3, y: 1)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle())
             .help("刷新看板统计")
         }
     }
@@ -176,6 +207,7 @@ struct AnalyticsDashboardView: View {
                     Text(value)
                         .font(.system(size: 26, weight: .bold, design: .rounded))
                         .foregroundStyle(Color.primary.opacity(0.9))
+                        .lensoNumericTransition()
 
                     Text(unit)
                         .font(.system(size: 12, weight: .medium))

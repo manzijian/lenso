@@ -12,8 +12,8 @@ final class ClipboardPanel: NSPanel {
 final class ClipboardPanelController {
     static let shared = ClipboardPanelController()
     private var panel: ClipboardPanel?
-    private var keyMonitor: Any?
     private var resignObserver: NSObjectProtocol?
+    private var previousApp: NSRunningApplication?
 
     func show() {
         // 再次点击菜单即关闭（开关式）
@@ -21,11 +21,19 @@ final class ClipboardPanelController {
             hide()
             return
         }
+
+        if let front = NSWorkspace.shared.frontmostApplication,
+           front.bundleIdentifier != Bundle.main.bundleIdentifier {
+            previousApp = front
+        } else {
+            previousApp = nil
+        }
+
         let view = ClipboardPanelView { [weak self] in self?.hide() }
         let hosting = NSHostingView(rootView: view)
         hosting.appearance = NSAppearance(named: .aqua)
         let size = NSSize(width: 760, height: 460)
-        guard let screen = NSScreen.main else { return }
+        let screen = Self.screenUnderMouse()
         let frame = NSRect(
             x: screen.frame.midX - size.width / 2,
             y: screen.frame.midY - size.height / 2,
@@ -45,29 +53,43 @@ final class ClipboardPanelController {
         panel.contentView = hosting
         panel.setFrame(frame, display: true)
         panel.onCancel = { [weak self] in self?.hide() }
-        NSApp.activate(ignoringOtherApps: true)
-        panel.orderFrontRegardless()
-        panel.makeKey()
         self.panel = panel
 
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 {
-                self?.hide()
-                return nil
+        NSApp.activate(ignoringOtherApps: true)
+        LensoWindowMotion.present(panel, slideY: 8, makeKey: true)
+
+        // 延迟一帧监听 resignKey，避免创建瞬间触发误关；点击外部或切窗时自动收起
+        DispatchQueue.main.async { [weak self, weak panel] in
+            guard let self, let panel, self.panel === panel else { return }
+            self.resignObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didResignKeyNotification, object: panel, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.hide() }
             }
-            return event
         }
-        // 不监听 resignKey：面板创建瞬间可能收到该通知导致“刚开就关”。
-        // 关闭方式：Esc / ✕ / 再次点击菜单。
+    }
+
+    private static func screenUnderMouse() -> NSScreen {
+        let mouse = NSEvent.mouseLocation
+        return NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) })
+            ?? NSScreen.main
+            ?? NSScreen.screens.first!
     }
 
     func hide() {
-        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
-        keyMonitor = nil
         if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
         resignObserver = nil
-        panel?.orderOut(nil)
-        panel?.close()
-        panel = nil
+        guard let panel = self.panel else { return }
+        self.panel = nil
+        let prev = previousApp
+        previousApp = nil
+        LensoWindowMotion.dismiss(panel, slideY: 6) { [weak self] in
+            panel.close()
+            // 若用户已重新打开剪贴板或打开了其他 LENSO 窗口（如 JSON 工具），不再切回旧应用
+            let hasOtherVisibleWindow = NSApp.windows.contains { $0.isVisible && $0 !== panel }
+            if self?.panel == nil && !hasOtherVisibleWindow && NSApp.isActive {
+                prev?.activate()
+            }
+        }
     }
 }

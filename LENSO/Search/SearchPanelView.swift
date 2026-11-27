@@ -87,6 +87,8 @@ struct SearchPanelView: View {
     @State private var keyMonitor: Any?
     @ObservedObject private var webStore = WebMetadataStore.shared
     @FocusState private var focused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var categoryNamespace
 
     private let gap: CGFloat = 11
     private let sidePadding: CGFloat = 22
@@ -132,25 +134,30 @@ struct SearchPanelView: View {
             installKeyMonitor()
         }
         .onDisappear { removeKeyMonitor() }
-        .onReceive(NotificationCenter.default.publisher(for: .searchPanelShouldReload)) { _ in reloadFeed() }
+        .onReceive(NotificationCenter.default.publisher(for: .searchPanelShouldReload)) { _ in
+            focused = true
+            reloadFeed()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .textNotesChanged)) { _ in reloadFeed() }
         .onReceive(NotificationCenter.default.publisher(for: .libraryChanged)) { _ in reloadFeed() }
         .onReceive(NotificationCenter.default.publisher(for: .screenshotSaved)) { _ in reloadFeed() }
-        .onReceive(NotificationCenter.default.publisher(for: .libraryChanged)) { _ in reloadFeed() }
-        .onReceive(NotificationCenter.default.publisher(for: .textNotesChanged)) { _ in reloadFeed() }
         .onChange(of: items.map(\.id)) { _, _ in
             if selection == nil { selection = filteredItems.first?.id }
         }
         .onExitCommand {
             if inspectingItem != nil {
-                withAnimation(.easeInOut(duration: 0.18)) { inspectingItem = nil }
+                LensoAnimations.withMotion(LensoAnimations.panel, reduceMotion: reduceMotion) {
+                    inspectingItem = nil
+                }
             } else {
                 onDismiss()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .searchPanelEscapePressed)) { _ in
             if inspectingItem != nil {
-                withAnimation(.easeInOut(duration: 0.18)) { inspectingItem = nil }
+                LensoAnimations.withMotion(LensoAnimations.panel, reduceMotion: reduceMotion) {
+                    inspectingItem = nil
+                }
             } else {
                 onDismiss()
             }
@@ -206,29 +213,34 @@ struct SearchPanelView: View {
                                 .fill(Color.black.opacity(0.05))
                         )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LensoPressButtonStyle())
                 .help("JSON 格式化工具")
 
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color.black.opacity(0.28))
+                Group {
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 14))
+                                .foregroundStyle(Color.black.opacity(0.28))
+                        }
+                        .buttonStyle(LensoPressButtonStyle())
+                        .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
+                    } else {
+                        Text("esc")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(Color.black.opacity(0.42))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(
+                                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                    .strokeBorder(Color.black.opacity(0.12), lineWidth: 1)
+                            )
+                            .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
                     }
-                    .buttonStyle(.plain)
-                } else {
-                    Text("esc")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(Color.black.opacity(0.42))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .strokeBorder(Color.black.opacity(0.12), lineWidth: 1)
-                        )
                 }
+                .lensoAnimation(LensoAnimations.snappy, value: searchText.isEmpty, reduceMotion: reduceMotion)
             }
             .padding(.horizontal, 16)
             .frame(height: 46)
@@ -243,6 +255,7 @@ struct SearchPanelView: View {
                         focused ? LensoColors.kleinBlueBright.opacity(0.55) : Color.black.opacity(0.08),
                         lineWidth: 1
                     )
+                    .lensoAnimation(LensoAnimations.hover, value: focused, reduceMotion: reduceMotion)
             )
             .shadow(color: .black.opacity(0.05), radius: 10, y: 4)
 
@@ -250,7 +263,9 @@ struct SearchPanelView: View {
                 ForEach(FilterCategory.allCases) { cat in
                     let active = selectedCategory == cat
                     Button {
-                        selectedCategory = cat
+                        LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                            selectedCategory = cat
+                        }
                     } label: {
                         HStack(spacing: 5) {
                             Text(cat.rawValue)
@@ -258,15 +273,23 @@ struct SearchPanelView: View {
                             Text("\(count(for: cat))")
                                 .font(.system(size: 10, weight: .medium, design: .rounded))
                                 .opacity(active ? 0.7 : 0.55)
+                                .lensoNumericTransition()
                         }
                         .foregroundStyle(active ? Color.white : Color.black.opacity(0.62))
                         .padding(.horizontal, 11)
                         .padding(.vertical, 6)
-                        .background(
-                            Capsule().fill(active ? LensoColors.kleinBlue : Color.black.opacity(0.045))
-                        )
+                        .background {
+                            if active {
+                                Capsule()
+                                    .fill(LensoColors.kleinBlue)
+                                    .matchedGeometryEffect(id: "activeCategoryPill", in: categoryNamespace)
+                            } else {
+                                Capsule()
+                                    .fill(Color.black.opacity(0.045))
+                            }
+                        }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(LensoPressButtonStyle())
                 }
             }
 
@@ -280,7 +303,7 @@ struct SearchPanelView: View {
                     .background(Circle().fill(Color.black.opacity(0.045)))
                     .overlay(Circle().strokeBorder(Color.black.opacity(0.08), lineWidth: 1))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle())
             .help("关闭搜索 (Esc)")
         }
         .padding(.horizontal, sidePadding)
@@ -336,14 +359,28 @@ struct SearchPanelView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: searchText.isEmpty ? "photo.stack" : "magnifyingglass")
+        let state: (symbol: String, title: String, subtitle: String) = {
+            if !searchText.isEmpty {
+                return ("magnifyingglass", "未找到匹配的内容", "试试更换关键词")
+            }
+            switch selectedCategory {
+            case .all:
+                return ("photo.stack", "暂无最近复制记录", "截取图片或复制任意文字，都会在这里形成画廊")
+            case .images:
+                return ("photo", "暂无图片记录", "截取屏幕或复制图片后，会显示在这里")
+            case .text:
+                return ("text.quote", "暂无文本记录", "复制文字或收纳便签后，会显示在这里")
+            }
+        }()
+
+        return VStack(spacing: 12) {
+            Image(systemName: state.symbol)
                 .font(.system(size: 40, weight: .light))
                 .foregroundStyle(Color.black.opacity(0.18))
-            Text(searchText.isEmpty ? "暂无最近复制记录" : "未找到匹配的内容")
+            Text(state.title)
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(Color.black.opacity(0.62))
-            Text(searchText.isEmpty ? "截取图片或复制任意文字，都会在这里形成画廊" : "试试更换关键词")
+            Text(state.subtitle)
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
         }
@@ -367,6 +404,11 @@ struct SearchPanelView: View {
 
     @ViewBuilder
     private func tile(_ item: FeedItem) -> some View {
+        let openAction = {
+            LensoAnimations.withMotion(LensoAnimations.panel, reduceMotion: reduceMotion) {
+                inspectingItem = item
+            }
+        }
         switch item.kind {
         case .image(let cgImage, _):
             ImmersiveImageTile(
@@ -376,7 +418,7 @@ struct SearchPanelView: View {
                 isSelected: selection == item.id,
                 isCopied: copiedID == item.id,
                 onSelect: { selection = item.id },
-                onOpen: { inspectingItem = item },
+                onOpen: openAction,
                 onCopy: { copyItem(item) }
             )
         case .text(let content):
@@ -387,7 +429,7 @@ struct SearchPanelView: View {
                 isSelected: selection == item.id,
                 isCopied: copiedID == item.id,
                 onSelect: { selection = item.id },
-                onOpen: { inspectingItem = item },
+                onOpen: openAction,
                 onCopy: { copyItem(item) }
             )
         }
@@ -511,11 +553,25 @@ struct SearchPanelView: View {
                 return event
             }
 
+            if inspectingItem != nil {
+                switch event.keyCode {
+                case 49, 53: // Space / Esc：关闭详情弹层
+                    LensoAnimations.withMotion(LensoAnimations.panel, reduceMotion: reduceMotion) {
+                        inspectingItem = nil
+                    }
+                    return nil
+                case 123, 124, 125, 126, 36, 76: // 阻止方向键与回车修改后台选中态
+                    return nil
+                default:
+                    return event
+                }
+            }
+
             switch event.keyCode {
-            case 123: moveSelection(-1); return nil
-            case 124: moveSelection(1); return nil
-            case 125: moveSelection(currentColumnCount); return nil
-            case 126: moveSelection(-currentColumnCount); return nil
+            case 123: moveSelectionHorizontal(-1); return nil
+            case 124: moveSelectionHorizontal(1); return nil
+            case 125: moveSelectionVertical(down: true); return nil
+            case 126: moveSelectionVertical(down: false); return nil
             case 36, 76: // Return / 小键盘 Enter
                 if event.modifierFlags.contains(.command) {
                     openSelected()
@@ -543,7 +599,7 @@ struct SearchPanelView: View {
         keyMonitor = nil
     }
 
-    private func moveSelection(_ delta: Int) {
+    private func moveSelectionHorizontal(_ delta: Int) {
         let list = filteredItems
         guard !list.isEmpty else { return }
         guard let current = selection,
@@ -553,6 +609,45 @@ struct SearchPanelView: View {
         }
         let next = min(max(0, index + delta), list.count - 1)
         selection = list[next].id
+    }
+
+    private func moveSelectionVertical(down: Bool) {
+        let sections = daySections
+        guard !sections.isEmpty else { return }
+        let cols = max(1, currentColumnCount)
+
+        guard let current = selection,
+              let secIdx = sections.firstIndex(where: { $0.items.contains(where: { $0.id == current }) }),
+              let itemIdx = sections[secIdx].items.firstIndex(where: { $0.id == current }) else {
+            selection = sections.first?.items.first?.id
+            return
+        }
+
+        let currentRow = itemIdx / cols
+        let col = itemIdx % cols
+        let secItems = sections[secIdx].items
+        let lastRow = (secItems.count - 1) / cols
+
+        if down {
+            if currentRow < lastRow {
+                let targetIdx = min(secItems.count - 1, (currentRow + 1) * cols + col)
+                selection = secItems[targetIdx].id
+            } else if secIdx + 1 < sections.count {
+                let nextItems = sections[secIdx + 1].items
+                let targetIdx = min(nextItems.count - 1, col)
+                selection = nextItems[targetIdx].id
+            }
+        } else {
+            if currentRow > 0 {
+                let targetIdx = (currentRow - 1) * cols + col
+                selection = secItems[targetIdx].id
+            } else if secIdx > 0 {
+                let prevItems = sections[secIdx - 1].items
+                let prevLastRow = (prevItems.count - 1) / cols
+                let targetIdx = min(prevItems.count - 1, prevLastRow * cols + col)
+                selection = prevItems[targetIdx].id
+            }
+        }
     }
 
     private func copySelectedOrFirst() {
@@ -566,9 +661,13 @@ struct SearchPanelView: View {
 
     private func openSelected() {
         if let current = selection, let item = filteredItems.first(where: { $0.id == current }) {
-            inspectingItem = item
+            LensoAnimations.withMotion(LensoAnimations.panel, reduceMotion: reduceMotion) {
+                inspectingItem = item
+            }
         } else if let first = filteredItems.first {
-            inspectingItem = first
+            LensoAnimations.withMotion(LensoAnimations.panel, reduceMotion: reduceMotion) {
+                inspectingItem = first
+            }
         }
     }
 
@@ -745,11 +844,6 @@ struct SearchPanelView: View {
         onDismiss()
     }
 
-    private func clearHistory() {
-        try? ScreenshotStore.shared.clearClipboardHistory()
-        reloadFeed()
-    }
-
     nonisolated private static func byteString(_ bytes: Int) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
@@ -768,6 +862,7 @@ private struct ImmersiveImageTile: View {
     let onCopy: () -> Void
 
     @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
@@ -792,10 +887,12 @@ private struct ImmersiveImageTile: View {
 
                 if isCopied {
                     copiedOverlay
+                        .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
+            .lensoAnimation(LensoAnimations.snappy, value: isCopied, reduceMotion: reduceMotion)
 
             // 常驻信息行：来源应用 + 时间，放在图片下方，不遮挡画面
             HStack(spacing: 5) {
@@ -822,17 +919,18 @@ private struct ImmersiveImageTile: View {
                     isSelected ? LensoColors.kleinBlueBright : Color.black.opacity(hovering ? 0.14 : 0.07),
                     lineWidth: isSelected ? 2 : 1
                 )
+                .lensoAnimation(LensoAnimations.hover, value: isSelected, reduceMotion: reduceMotion)
         )
         .overlay(alignment: .topTrailing) {
             // 悬停时右上角浮出「复制 / 预览」快捷操作
             if hovering {
                 TileQuickActions(onCopy: onCopy, onOpen: onOpen)
                     .padding(6)
-                    .transition(.opacity)
+                    .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
             }
         }
         .shadow(color: .black.opacity(hovering ? 0.14 : 0.06), radius: hovering ? 12 : 5, y: hovering ? 5 : 2)
-        .animation(.easeOut(duration: 0.16), value: hovering)
+        .lensoAnimation(LensoAnimations.hover, value: hovering, reduceMotion: reduceMotion)
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onHover { hovering = $0 }
         .onTapGesture(count: 2) { onCopy() }
@@ -877,6 +975,7 @@ private struct ImmersiveTextTile: View {
     let onCopy: () -> Void
 
     @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -926,13 +1025,14 @@ private struct ImmersiveTextTile: View {
                     isSelected ? LensoColors.kleinBlueBright : Color.black.opacity(hovering ? 0.14 : 0.07),
                     lineWidth: isSelected ? 2 : 1
                 )
+                .lensoAnimation(LensoAnimations.hover, value: isSelected, reduceMotion: reduceMotion)
         )
         .overlay(alignment: .topTrailing) {
             // 悬停时右上角浮出「复制 / 预览」快捷操作
             if hovering {
                 TileQuickActions(onCopy: onCopy, onOpen: onOpen)
                     .padding(6)
-                    .transition(.opacity)
+                    .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
             }
         }
         .overlay {
@@ -949,10 +1049,12 @@ private struct ImmersiveTextTile: View {
                             .foregroundStyle(Color.black.opacity(0.65))
                     }
                 }
+                .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
             }
         }
+        .lensoAnimation(LensoAnimations.snappy, value: isCopied, reduceMotion: reduceMotion)
         .shadow(color: .black.opacity(hovering ? 0.14 : 0.06), radius: hovering ? 12 : 5, y: hovering ? 5 : 2)
-        .animation(.easeOut(duration: 0.16), value: hovering)
+        .lensoAnimation(LensoAnimations.hover, value: hovering, reduceMotion: reduceMotion)
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onHover { hovering = $0 }
         .onTapGesture(count: 2) { onCopy() }
@@ -994,7 +1096,7 @@ private struct TileQuickActions: View {
                     .frame(width: 27, height: 22)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle())
             .help("复制 (↵)")
 
             Rectangle()
@@ -1008,7 +1110,7 @@ private struct TileQuickActions: View {
                     .frame(width: 27, height: 22)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle())
             .help("预览 (space)")
         }
         .background(Capsule().fill(Color.white))

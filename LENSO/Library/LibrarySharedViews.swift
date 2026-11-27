@@ -30,6 +30,7 @@ struct LibraryDayHeader: View {
             Text("\(count)")
                 .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.secondary)
+                .lensoNumericTransition()
                 .padding(.horizontal, 5)
                 .padding(.vertical, 1.5)
                 .background(Capsule().fill(Color.black.opacity(0.05)))
@@ -47,6 +48,7 @@ struct LibraryDayHeader: View {
 struct LibrarySearchField: View {
     @Binding var text: String
     var prompt: String = "搜索当前栏目"
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 5) {
@@ -66,9 +68,11 @@ struct LibrarySearchField: View {
                         .font(.system(size: 10))
                         .foregroundStyle(Color.secondary.opacity(0.5))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LensoPressButtonStyle())
+                .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
             }
         }
+        .lensoAnimation(LensoAnimations.snappy, value: text.isEmpty, reduceMotion: reduceMotion)
         .padding(.horizontal, 8)
         .frame(height: 26)
         .background(

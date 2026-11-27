@@ -11,6 +11,9 @@ struct MenuBarPanelView: View {
     @State private var shortcutStore = ShortcutStore.shared
     @State private var registry = ToolRegistry.shared
     @State private var revealed = false
+    @State private var selectedIndex: Int? = 0
+    @State private var keyMonitor: Any?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let panelWidth: CGFloat = 356
 
@@ -36,9 +39,20 @@ struct MenuBarPanelView: View {
             }
             .environment(\.colorScheme, .light)
             .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+                if reduceMotion {
                     revealed = true
+                } else {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+                        revealed = true
+                    }
                 }
+                if UserDefaults.standard.bool(forKey: "pendingOpenLibrary") {
+                    openLibrary()
+                }
+                installKeyMonitor()
+            }
+            .onDisappear {
+                removeKeyMonitor()
             }
             .onReceive(NotificationCenter.default.publisher(for: .lensoShortcutsChanged)) { _ in
                 shortcutStore = ShortcutStore.shared
@@ -51,11 +65,6 @@ struct MenuBarPanelView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .openLibraryOnLaunch)) { _ in
                 openLibrary()
-            }
-            .onAppear {
-                if UserDefaults.standard.bool(forKey: "pendingOpenLibrary") {
-                    openLibrary()
-                }
             }
     }
 
@@ -91,8 +100,12 @@ struct MenuBarPanelView: View {
 
             VStack(spacing: 0) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { offset, item in
-                    PanelRow(item: item) { activate(item) }
-                        .modifier(RevealEffect(revealed: revealed, index: indexBase + offset))
+                    let globalIndex = indexBase + offset
+                    PanelRow(item: item, isSelected: selectedIndex == globalIndex) {
+                        selectedIndex = globalIndex
+                        activate(item)
+                    }
+                    .modifier(RevealEffect(revealed: revealed, index: globalIndex, reduceMotion: reduceMotion))
 
                     if offset < items.count - 1 {
                         Rectangle()
@@ -141,15 +154,7 @@ struct MenuBarPanelView: View {
     }
 
     private func footerButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 22, height: 20)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(help)
+        FooterIconButton(symbol: symbol, help: help, action: action)
     }
 
     private var panelBackground: some View {
@@ -237,6 +242,49 @@ struct MenuBarPanelView: View {
         NSApp.activate(ignoringOtherApps: true)
         UserDefaults.standard.set(false, forKey: "pendingOpenLibrary")
     }
+
+    // MARK: - 键盘导航
+
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let allItems = allActions + allTools
+            switch event.keyCode {
+            case 53: // Esc
+                StatusBarController.shared.hide()
+                return nil
+            case 125: // Down
+                guard !allItems.isEmpty else { return nil }
+                selectedIndex = ((selectedIndex ?? -1) + 1) % allItems.count
+                return nil
+            case 126: // Up
+                guard !allItems.isEmpty else { return nil }
+                selectedIndex = ((selectedIndex ?? 0) - 1 + allItems.count) % allItems.count
+                return nil
+            case 36, 76: // Return / Enter
+                let idx = selectedIndex ?? 0
+                if idx >= 0 && idx < allItems.count {
+                    activate(allItems[idx])
+                }
+                return nil
+            default:
+                if let chars = event.charactersIgnoringModifiers,
+                   let num = Int(chars), (1...4).contains(num) {
+                    let actions = allActions
+                    if num - 1 < actions.count {
+                        activate(actions[num - 1])
+                        return nil
+                    }
+                }
+                return event
+            }
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        keyMonitor = nil
+    }
 }
 
 // MARK: - 行模型
@@ -252,11 +300,42 @@ fileprivate struct PanelItem: Identifiable {
 
 // MARK: - 行视图
 
-private struct PanelRow: View {
-    let item: PanelItem
+private struct FooterIconButton: View {
+    let symbol: String
+    let help: String
     let action: () -> Void
 
     @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(hovering ? LensoColors.kleinBlueBright : .secondary)
+                .frame(width: 24, height: 22)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(hovering ? LensoColors.kleinBlueSoft : Color.clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(LensoPressButtonStyle(scale: 0.92))
+        .onHover { hovering = $0 }
+        .lensoAnimation(LensoAnimations.hover, value: hovering, reduceMotion: reduceMotion)
+        .help(help)
+    }
+}
+
+private struct PanelRow: View {
+    let item: PanelItem
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var highlighted: Bool { hovering || isSelected }
 
     var body: some View {
         Button(action: action) {
@@ -266,7 +345,7 @@ private struct PanelRow: View {
                 VStack(alignment: .leading, spacing: 1.5) {
                     Text(item.title)
                         .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(hovering ? LensoColors.kleinBlueBright : Color.primary.opacity(0.92))
+                        .foregroundStyle(highlighted ? LensoColors.kleinBlueBright : Color.primary.opacity(0.92))
                     Text(item.subtitle)
                         .font(.system(size: 9.5))
                         .foregroundStyle(.secondary)
@@ -282,22 +361,22 @@ private struct PanelRow: View {
                 if item.tool != nil {
                     Image(systemName: "arrow.up.forward")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(hovering ? LensoColors.kleinBlueBright : Color.secondary.opacity(0.6))
+                        .foregroundStyle(highlighted ? LensoColors.kleinBlueBright : Color.secondary.opacity(0.6))
                 }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
             .background {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(hovering ? LensoColors.kleinBlueSoft : Color.clear)
+                    .fill(highlighted ? LensoColors.kleinBlueSoft : Color.clear)
                     .padding(.horizontal, 4)
                     .padding(.vertical, 1)
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LensoPressButtonStyle(scale: 0.98))
         .onHover { hovering = $0 }
-        .animation(LensoAnimations.hover, value: hovering)
+        .lensoAnimation(LensoAnimations.hover, value: highlighted, reduceMotion: reduceMotion)
     }
 
     @ViewBuilder
@@ -306,7 +385,7 @@ private struct PanelRow: View {
             LensoToolIcon(tool: tool, size: 28)
         } else {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(hovering ? Color.white : LensoColors.kleinBlueSoft)
+                .fill(highlighted ? Color.white : LensoColors.kleinBlueSoft)
                 .overlay {
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
                         .strokeBorder(LensoColors.kleinBlueBright.opacity(0.12), lineWidth: 0.5)
@@ -346,15 +425,17 @@ private struct Keycap: View {
 private struct RevealEffect: ViewModifier {
     let revealed: Bool
     let index: Int
+    let reduceMotion: Bool
 
     func body(content: Content) -> some View {
         content
             .opacity(revealed ? 1 : 0)
-            .offset(y: revealed ? 0 : 10)
-            .blur(radius: revealed ? 0 : 4)
+            .offset(y: revealed || reduceMotion ? 0 : 10)
+            .blur(radius: revealed || reduceMotion ? 0 : 4)
             .animation(
-                .spring(response: 0.5, dampingFraction: 0.88)
-                    .delay(Double(index) * 0.034),
+                reduceMotion
+                    ? LensoAnimations.fade
+                    : .spring(response: 0.5, dampingFraction: 0.88).delay(Double(index) * 0.034),
                 value: revealed
             )
     }

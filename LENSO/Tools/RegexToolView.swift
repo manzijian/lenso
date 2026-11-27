@@ -12,7 +12,10 @@ struct RegexToolView: View {
     @State private var flags: RegexFlags = [.caseInsensitive]
     @State private var result: RegexEngine.Output = .empty
     @State private var pending: Task<Void, Never>?
+    @State private var copyResetTask: Task<Void, Never>?
     @State private var copied = false
+    @Namespace private var modeNamespace
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let maxInputBytes = 256 * 1024
 
@@ -34,7 +37,10 @@ struct RegexToolView: View {
         .onChange(of: replacement) { _, _ in schedule() }
         .onChange(of: mode) { _, _ in schedule() }
         .onChange(of: flags) { _, _ in schedule() }
-        .onDisappear { pending?.cancel() }
+        .onDisappear {
+            pending?.cancel()
+            copyResetTask?.cancel()
+        }
     }
 
     // MARK: - 顶部
@@ -43,7 +49,9 @@ struct RegexToolView: View {
         VStack(spacing: 10) {
             HStack(spacing: 12) {
                 HStack(spacing: 9) {
-                    LensoToolIcon(tool: ToolRegistry.shared.descriptor(for: "regex")!, size: 30)
+                    if let tool = ToolRegistry.shared.descriptor(for: "regex") {
+                        LensoToolIcon(tool: tool, size: 30)
+                    }
                     VStack(alignment: .leading, spacing: 1) {
                         Text("正则测试")
                             .font(.system(size: 14, weight: .semibold))
@@ -55,13 +63,37 @@ struct RegexToolView: View {
 
                 Spacer()
 
-                Picker("", selection: $mode) {
+                HStack(spacing: 2) {
                     ForEach(RegexMode.allCases) { m in
-                        Text(m.rawValue).tag(m)
+                        let selected = mode == m
+                        Button {
+                            LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                                mode = m
+                            }
+                        } label: {
+                            Text(m.rawValue)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(selected ? Color.white : Color.primary.opacity(0.65))
+                                .padding(.horizontal, 12)
+                                .frame(height: 24)
+                                .background {
+                                    if selected {
+                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                            .fill(LensoColors.accentGradient)
+                                            .shadow(color: LensoColors.kleinBlueBright.opacity(0.25), radius: 2, y: 1)
+                                            .matchedGeometryEffect(id: "regexMode", in: modeNamespace)
+                                    }
+                                }
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(LensoPressButtonStyle())
                     }
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 118)
+                .padding(3)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.black.opacity(0.05))
+                )
             }
 
             HStack(spacing: 8) {
@@ -103,7 +135,8 @@ struct RegexToolView: View {
                         .fill(on ? LensoColors.kleinBlueBright : Color.primary.opacity(0.05))
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LensoPressButtonStyle(scale: 0.92))
+        .lensoAnimation(LensoAnimations.snappy, value: on, reduceMotion: reduceMotion)
         .help(help)
     }
 
@@ -130,23 +163,41 @@ struct RegexToolView: View {
                 .padding(.vertical, 3)
 
             if mode == .replace {
-                Divider().opacity(0.5)
-                HStack(spacing: 6) {
-                    Text("替换为")
-                        .font(.system(size: 10.5, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    TextField("$1 或替换文本", text: $replacement)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 12, design: .monospaced))
+                VStack(spacing: 0) {
+                    Divider().opacity(0.5)
+                    HStack(spacing: 6) {
+                        Text("替换为")
+                            .font(.system(size: 10.5, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        TextField("$1 或替换文本", text: $replacement)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 12, design: .monospaced))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .transition(LensoTransitions.inlineExpand(reduceMotion: reduceMotion))
             }
         }
+        .lensoAnimation(LensoAnimations.panel, value: mode, reduceMotion: reduceMotion)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - 结果区
+
+    private var hasCopyableResult: Bool {
+        switch mode {
+        case .replace: result.replaced != nil
+        case .match: !result.matches.isEmpty
+        }
+    }
+
+    private var copyableText: String {
+        switch mode {
+        case .replace: result.replaced ?? ""
+        case .match: result.matches.map(\.text).joined(separator: "\n")
+        }
+    }
 
     private var resultPane: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -155,16 +206,17 @@ struct RegexToolView: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
-                if mode == .replace {
-                    Button {
-                        copy(result.replaced ?? "")
-                    } label: {
-                        Label(copied ? "已复制" : "复制", systemImage: copied ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 10.5, weight: .medium))
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(result.replaced == nil)
+                Button {
+                    copy(copyableText)
+                } label: {
+                    Label(copied ? "已复制" : "复制", systemImage: copied ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: 10.5, weight: .medium))
+                        .lensoSymbolReplace()
                 }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(!hasCopyableResult)
+                .lensoAnimation(LensoAnimations.snappy, value: copied, reduceMotion: reduceMotion)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
@@ -265,8 +317,10 @@ struct RegexToolView: View {
             } else {
                 Label("\(result.matches.count) 处匹配", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(result.matches.isEmpty ? Color.secondary : .green)
+                    .lensoNumericTransition()
                 Text("耗时 \(result.elapsedMilliseconds) ms")
                     .foregroundStyle(.tertiary)
+                    .lensoNumericTransition()
             }
             Spacer()
             Text("i 忽略大小写 · m 多行 · s 点匹配换行")
@@ -318,12 +372,19 @@ struct RegexToolView: View {
     }
 
     private func copy(_ text: String) {
+        guard !text.isEmpty else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
-        copied = true
-        Task {
+        LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+            copied = true
+        }
+        copyResetTask?.cancel()
+        copyResetTask = Task {
             try? await Task.sleep(for: .milliseconds(1200))
-            copied = false
+            guard !Task.isCancelled else { return }
+            LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                copied = false
+            }
         }
     }
 }

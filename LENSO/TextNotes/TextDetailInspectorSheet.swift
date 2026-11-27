@@ -8,9 +8,12 @@ struct TextDetailInspectorSheet: View {
     let rawContent: String
     let sourceApp: String?
     let createdAt: Date
+    var isSavedNote: Bool = false
     var onDismiss: () -> Void = {}
 
     @ObservedObject private var webStore = WebMetadataStore.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var modeNamespace
     @State private var contentType: TextIntelligence.ContentType = .plainText
     @State private var jsonMode: Int = 0 // 0: 美化, 1: 压缩, 2: 原始
     @State private var codeMode: Int = 0 // 0: 高亮排版, 1: 原始代码
@@ -93,7 +96,7 @@ struct TextDetailInspectorSheet: View {
                     .frame(width: 22, height: 22)
                     .background(Circle().fill(Color.black.opacity(0.05)))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle())
             .help("关闭 (Esc)")
         }
         .padding(.horizontal, 16)
@@ -118,9 +121,11 @@ struct TextDetailInspectorSheet: View {
                         .font(.system(size: 10))
                         .foregroundStyle(Color.primary.opacity(0.35))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LensoPressButtonStyle())
+                .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
             }
         }
+        .lensoAnimation(LensoAnimations.snappy, value: searchQuery.isEmpty, reduceMotion: reduceMotion)
         .padding(.horizontal, 9)
         .padding(.vertical, 5)
         .background(Capsule().fill(Color.black.opacity(0.045)))
@@ -178,7 +183,7 @@ struct TextDetailInspectorSheet: View {
                 .padding(.vertical, 5)
                 .background(Capsule().fill(LensoColors.kleinBlueBright))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle())
             .help("在系统默认浏览器中打开")
         }
         .padding(12)
@@ -274,47 +279,60 @@ struct TextDetailInspectorSheet: View {
         HStack(spacing: 12) {
             HStack(spacing: 8) {
                 Text("\(currentFormattedContent.count) 字符")
+                    .lensoNumericTransition()
                 Text("·").foregroundStyle(Color.secondary.opacity(0.4))
                 Text("\(displayedLinesCount) 行")
+                    .lensoNumericTransition()
             }
             .font(.system(size: 10.5, design: .monospaced))
             .foregroundStyle(Color.primary.opacity(0.45))
 
             Spacer()
 
-            Button {
-                _ = try? ScreenshotStore.shared.createTextNote(
-                    content: currentFormattedContent,
-                    sourceApp: sourceApp ?? "查看器"
-                )
-                SaveToastController.shared.show(title: "已保存为收纳便签", subtitle: "", thumbnail: nil)
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "bookmark")
-                    Text("存为便签")
+            if !isSavedNote {
+                Button {
+                    _ = try? ScreenshotStore.shared.createTextNote(
+                        content: currentFormattedContent,
+                        sourceApp: sourceApp ?? "查看器"
+                    )
+                    NotificationCenter.default.post(name: .textNotesChanged, object: nil)
+                    NotificationCenter.default.post(name: .libraryChanged, object: nil)
+                    SaveToastController.shared.show(title: "已保存为收纳便签", subtitle: "", thumbnail: nil)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "bookmark")
+                        Text("存为便签")
+                    }
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color.primary.opacity(0.72))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5.5)
+                    .background(Capsule().fill(Color.black.opacity(0.045)))
                 }
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Color.primary.opacity(0.72))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5.5)
-                .background(Capsule().fill(Color.black.opacity(0.045)))
+                .buttonStyle(LensoPressButtonStyle())
+                .help("保存至文字收纳库")
             }
-            .buttonStyle(.plain)
-            .help("保存至文字收纳库")
 
             Button {
                 let pb = NSPasteboard.general
                 pb.clearContents()
                 pb.setString(currentFormattedContent, forType: .string)
-                copied = true
+                LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                    copied = true
+                }
                 SaveToastController.shared.show(title: "已复制到剪贴板", subtitle: "", thumbnail: nil)
                 Task {
                     try? await Task.sleep(for: .seconds(1.5))
-                    await MainActor.run { copied = false }
+                    await MainActor.run {
+                        LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                            copied = false
+                        }
+                    }
                 }
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: copied ? "checkmark" : "doc.on.doc.fill")
+                        .lensoSymbolReplace()
                     Text(copied ? "已复制" : "复制全部")
                 }
                 .font(.system(size: 11, weight: .semibold))
@@ -323,7 +341,8 @@ struct TextDetailInspectorSheet: View {
                 .padding(.vertical, 6)
                 .background(Capsule().fill(copied ? Color(red: 0.11, green: 0.55, blue: 0.33) : LensoColors.kleinBlueBright))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LensoPressButtonStyle())
+            .lensoAnimation(LensoAnimations.snappy, value: copied, reduceMotion: reduceMotion)
         }
         .padding(.horizontal, 16)
         .frame(height: 58)
@@ -404,7 +423,9 @@ struct TextDetailInspectorSheet: View {
     private func modeRow(_ option: ModeOption) -> some View {
         let selected = selectedMode == option.id
         return Button {
-            selectMode(option.id)
+            LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                selectMode(option.id)
+            }
         } label: {
             HStack(spacing: 6) {
                 Text(option.title)
@@ -413,18 +434,22 @@ struct TextDetailInspectorSheet: View {
                 if selected {
                     Image(systemName: "checkmark")
                         .font(.system(size: 9, weight: .bold))
+                        .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
                 }
             }
             .foregroundStyle(selected ? LensoColors.kleinBlueBright : Color.primary.opacity(0.7))
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(selected ? LensoColors.kleinBlueSoft : Color.clear)
-            )
+            .background {
+                if selected {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(LensoColors.kleinBlueSoft)
+                        .matchedGeometryEffect(id: "inspectorModePill", in: modeNamespace)
+                }
+            }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LensoPressButtonStyle())
     }
 
     // MARK: - 显示模式

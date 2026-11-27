@@ -39,6 +39,20 @@ final class ShortcutStore {
         return true
     }
 
+    /// 强制设置快捷键并替换冲突动作（将其切回原快捷键或默认快捷键）。
+    func replaceConflict(_ combo: ShortcutCombo, for action: ShortcutAction, replacing other: ShortcutAction) {
+        guard combo.hasModifier else { return }
+        let previous = self.combo(for: action)
+        combos[action] = combo
+        if previous != combo {
+            combos[other] = previous
+        } else {
+            combos[other] = .defaultCombo(for: other)
+        }
+        persist()
+        notifyChanged()
+    }
+
     /// 返回已经占用该组合的其它动作。
     func conflict(for comboCandidate: ShortcutCombo, excluding action: ShortcutAction) -> ShortcutAction? {
         ShortcutAction.allCases.first { candidate in

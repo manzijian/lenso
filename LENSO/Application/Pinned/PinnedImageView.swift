@@ -4,15 +4,29 @@ import AppKit
 
 final class PinnedCloseButton: NSButton {
     var onClick: (() -> Void)?
+    private var isPressedInside = false
 
     override func resetCursorRects() {
         super.resetCursorRects()
         addCursorRect(bounds, cursor: .pointingHand)
     }
 
+    private func isInHotZone(_ event: NSEvent) -> Bool {
+        let pt = convert(event.locationInWindow, from: nil)
+        return bounds.insetBy(dx: -12, dy: -12).contains(pt)
+    }
+
     override func mouseDown(with event: NSEvent) {
-        // 瞬间响应：鼠标按下瞬间立即触发关闭，无需等待 mouseUp，0 延迟秒关
-        onClick?()
+        isPressedInside = isInHotZone(event)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        let inside = isInHotZone(event)
+        let shouldTrigger = isPressedInside && inside
+        isPressedInside = false
+        if shouldTrigger {
+            onClick?()
+        }
     }
 }
 
@@ -23,12 +37,17 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
     let state: AnnotationState
     var onClose: (() -> Void)?
     var onToggleEditing: (() -> Void)?
+    var onCopy: (() -> Void)?
+    var onSave: (() -> Void)?
     var onWindowMovedOrResized: (() -> Void)?
+    var isEditing = false
+    var hasActiveTextField: Bool { activeTextField != nil }
 
     private let closeButton = PinnedCloseButton()
     private var tracking: NSTrackingArea?
     private let baseSize: NSSize
     private var currentScale: CGFloat = max(0.4, min(AppSettings.shared.previewScale, 5.0))
+    private var pendingCloseClick = false
 
     // 文字标注临时输入框
     private var activeTextField: NSTextField?
@@ -140,16 +159,21 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
 
         let pt = convert(event.locationInWindow, from: nil)
 
-        // 双重保障：只要在右上角 44x44 区域按下，瞬间彻底关闭
+        // 右上角 44x44 关闭热区：记录按下，在 mouseUp 且仍在热区内时触发关闭
         if pt.x >= bounds.width - 44 && pt.y <= 44 {
-            onClose?()
+            pendingCloseClick = true
             return
         }
+        pendingCloseClick = false
 
-        // 选择 / 移动模式：双击或多次快速点击立即 100% 灵敏关闭
+        // 选择 / 移动模式：未在编辑且无标注时双击关闭；正在编辑或已有标注时切换编辑栏避免误关
         if state.activeKind == nil {
             if event.clickCount >= 2 {
-                onClose?()
+                if isEditing || !state.annotations.isEmpty {
+                    onToggleEditing?()
+                } else {
+                    onClose?()
+                }
                 return
             }
             initialMouseScreenLocation = NSEvent.mouseLocation
@@ -175,12 +199,14 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
             start: norm,
             end: norm,
             colorIndex: state.colorIndex,
-            strokeWidth: state.strokeWidth
+            strokeWidth: state.strokeWidth,
+            points: state.activeKind == .brush ? [norm] : []
         )
         needsDisplay = true
     }
 
     override func mouseDragged(with event: NSEvent) {
+        if pendingCloseClick { return }
         if state.activeKind == nil && isDraggingWindow {
             guard let window else { return }
             let currentMouse = NSEvent.mouseLocation
@@ -198,11 +224,23 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
             y: min(max(pt.y / max(1, bounds.height), 0), 1)
         )
         draft.end = norm
+        if draft.kind == .brush {
+            draft.points.append(norm)
+        }
         state.draft = draft
         needsDisplay = true
     }
 
     override func mouseUp(with event: NSEvent) {
+        if pendingCloseClick {
+            pendingCloseClick = false
+            let pt = convert(event.locationInWindow, from: nil)
+            if pt.x >= bounds.width - 44 && pt.y <= 44 {
+                onClose?()
+            }
+            return
+        }
+
         if state.activeKind == nil {
             isDraggingWindow = false
             onWindowMovedOrResized?()
@@ -212,7 +250,7 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
         guard let draft = state.draft else { return }
         let dx = abs(draft.end.x - draft.start.x) * bounds.width
         let dy = abs(draft.end.y - draft.start.y) * bounds.height
-        if dx > 4 || dy > 4 {
+        if dx > 4 || dy > 4 || (draft.kind == .brush && draft.points.count >= 2) {
             state.push(draft)
         }
         state.draft = nil
@@ -238,24 +276,71 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
         onToggleEditing?()
     }
 
-    override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 { // Esc
-            if activeTextField != nil {
-                cancelTextEditing()
-                return
-            }
-            if state.activeKind != nil {
-                state.activeKind = nil
-                window?.invalidateCursorRects(for: self)
-                return
-            }
+    @discardableResult
+    func stepBackOnEscape() -> Bool {
+        if activeTextField != nil {
+            cancelTextEditing()
+            return true
+        }
+        if state.activeKind != nil {
+            state.activeKind = nil
+            window?.invalidateCursorRects(for: self)
+            return true
+        }
+        if isEditing {
             onToggleEditing?()
-            return
+            return true
+        }
+        onClose?()
+        return true
+    }
+
+    @discardableResult
+    func handleKeyEvent(_ event: NSEvent) -> Bool {
+        if event.keyCode == 53 { // Esc
+            return stepBackOnEscape()
+        }
+        if activeTextField != nil {
+            return false
         }
         if event.keyCode == 49 { // Space
             onToggleEditing?()
-            return
+            return true
         }
+        let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
+        let chars = event.charactersIgnoringModifiers?.lowercased()
+        if flags == .command {
+            if chars == "z" {
+                state.undo()
+                needsDisplay = true
+                return true
+            }
+            if chars == "c" {
+                onCopy?()
+                return true
+            }
+            if chars == "s" {
+                onSave?()
+                return true
+            }
+            if chars == "w" {
+                onClose?()
+                return true
+            }
+        } else if flags == [.command, .shift], chars == "z" {
+            state.redo()
+            needsDisplay = true
+            return true
+        } else if flags.isEmpty, chars == "v" {
+            state.activeKind = nil
+            window?.invalidateCursorRects(for: self)
+            return true
+        }
+        return false
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if handleKeyEvent(event) { return }
         super.keyDown(with: event)
     }
 
@@ -381,10 +466,18 @@ final class PinnedImageView: NSView, NSTextFieldDelegate {
     }
 
     override func mouseEntered(with event: NSEvent) {
-        closeButton.alphaValue = 1.0
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = LensoWindowMotion.reduceMotion ? 0.06 : 0.12
+            ctx.timingFunction = LensoWindowMotion.easeOut
+            closeButton.animator().alphaValue = 1.0
+        }
     }
 
     override func mouseExited(with event: NSEvent) {
-        closeButton.alphaValue = 0.85
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = LensoWindowMotion.reduceMotion ? 0.06 : 0.12
+            ctx.timingFunction = LensoWindowMotion.easeIn
+            closeButton.animator().alphaValue = 0.85
+        }
     }
 }
