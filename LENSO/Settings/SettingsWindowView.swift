@@ -49,7 +49,7 @@ struct SettingsWindowView: View {
 
     private var mainBackground: some View {
         ZStack {
-            Color(red: 0.985, green: 0.988, blue: 0.995)
+            Color(nsColor: .windowBackgroundColor)
             RadialGradient(
                 colors: [LensoColors.kleinBlueBright.opacity(0.045), .clear],
                 center: UnitPoint(x: 0.95, y: 0.05),
@@ -61,9 +61,9 @@ struct SettingsWindowView: View {
     }
 
     private var sidebarBackground: some View {
-        Color.white
+        Color(nsColor: .controlBackgroundColor)
             .overlay(alignment: .trailing) {
-                Rectangle().fill(Color.black.opacity(0.07)).frame(width: 1)
+                Rectangle().fill(Color.primary.opacity(0.07)).frame(width: 1)
             }
             .ignoresSafeArea()
     }
@@ -87,11 +87,11 @@ struct SettingsWindowView: View {
                         Image(systemName: c.icon)
                             .font(.system(size: 13, weight: isActive ? .semibold : .medium))
                             .frame(width: 18)
-                            .foregroundStyle(isActive ? .white : Color(red: 0.18, green: 0.18, blue: 0.22))
+                            .foregroundStyle(isActive ? .white : Color.primary.opacity(0.88))
 
                         Text(c.rawValue)
                             .font(.system(size: 13, weight: isActive ? .semibold : .medium))
-                            .foregroundStyle(isActive ? .white : Color(red: 0.18, green: 0.18, blue: 0.22))
+                            .foregroundStyle(isActive ? .white : Color.primary.opacity(0.88))
 
                         Spacer()
                     }
@@ -105,7 +105,7 @@ struct SettingsWindowView: View {
                                 .matchedGeometryEffect(id: "activeSidebarPill", in: sidebarNamespace)
                         } else if isHovered {
                             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .fill(Color.black.opacity(0.045))
+                                .fill(Color.primary.opacity(0.05))
                         }
                     }
                     .contentShape(Rectangle())

@@ -26,6 +26,8 @@ struct CaptureEditorSidePanelView: View {
     @State private var translationDisplayMode = 0
     /// 结果字号，可手动放大查看
     @State private var textSize: CGFloat = 13
+    @State private var hoveringFontSmaller = false
+    @State private var hoveringFontLarger = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -115,18 +117,24 @@ struct CaptureEditorSidePanelView: View {
 
     /// 字号放大 / 缩小
     private var fontSizeControls: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 0) {
             Button {
                 textSize = max(11, textSize - 1)
             } label: {
                 Image(systemName: "textformat.size.smaller")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(textSize <= 11 ? .tertiary : .secondary)
-                    .frame(width: 22, height: 22)
+                    .foregroundStyle(textSize <= 11 ? .tertiary : (hoveringFontSmaller ? .primary : .secondary))
+                    .frame(width: 24, height: 24)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(hoveringFontSmaller && textSize > 11 ? Color.primary.opacity(0.06) : Color.clear)
+                    )
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(textSize <= 11)
+            .onHover { hoveringFontSmaller = $0 }
+            .lensoAnimation(LensoAnimations.hover, value: hoveringFontSmaller, reduceMotion: reduceMotion)
             .help("缩小字号")
 
             Button {
@@ -134,26 +142,37 @@ struct CaptureEditorSidePanelView: View {
             } label: {
                 Image(systemName: "textformat.size.larger")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(textSize >= 22 ? .tertiary : .secondary)
-                    .frame(width: 22, height: 22)
+                    .foregroundStyle(textSize >= 22 ? .tertiary : (hoveringFontLarger ? .primary : .secondary))
+                    .frame(width: 24, height: 24)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(hoveringFontLarger && textSize < 22 ? Color.primary.opacity(0.06) : Color.clear)
+                    )
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(textSize >= 22)
+            .onHover { hoveringFontLarger = $0 }
+            .lensoAnimation(LensoAnimations.hover, value: hoveringFontLarger, reduceMotion: reduceMotion)
             .help("放大字号")
         }
+        .frame(height: 24)
+        .background(RoundedRectangle(cornerRadius: 7).fill(.primary.opacity(0.05)))
     }
 
     /// OCR 结果页
     private var ocrResultsView: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("识别结果").font(.system(size: 13, weight: .semibold))
+                Text("识别结果")
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
                 if !ocrLines.isEmpty {
                     Picker("", selection: $ocrDisplayMode) {
                         Text("全文展开").tag(0)
                         Text("逐行对照").tag(1)
                     }
+                    .labelsHidden()
                     .pickerStyle(.segmented)
                     .frame(width: 140)
                     .controlSize(.mini)
@@ -165,6 +184,7 @@ struct CaptureEditorSidePanelView: View {
             case .idle:
                 Text("对当前选区做文字识别（本地 Vision，不联网）。")
                     .font(.system(size: 12)).foregroundStyle(.secondary)
+                    .padding(.vertical, 12)
             case .running:
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -173,9 +193,13 @@ struct CaptureEditorSidePanelView: View {
                 .padding(.vertical, 20)
                 .frame(maxWidth: .infinity)
             case .empty:
-                Text("当前选区里没识别到文字。").font(.system(size: 12)).foregroundStyle(.secondary)
+                Text("当前选区里没识别到文字。")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                    .padding(.vertical, 12)
             case .failed:
-                Text(ocrErrorMessage ?? "识别失败").font(.system(size: 12)).foregroundStyle(.red)
+                Text(ocrErrorMessage ?? "识别失败")
+                    .font(.system(size: 12)).foregroundStyle(.red)
+                    .padding(.vertical, 12)
             case .done:
                 if ocrDisplayMode == 0 {
                     ScrollView {
@@ -193,7 +217,7 @@ struct CaptureEditorSidePanelView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 8) {
                             ForEach(ocrLines) { line in
-                                OCRLineRow(line: line) { onCopyText(line.text) }
+                                OCRLineRow(line: line, textSize: textSize) { onCopyText(line.text) }
                             }
                         }
                     }
@@ -220,12 +244,15 @@ struct CaptureEditorSidePanelView: View {
     private var translationResultsView: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("翻译结果").font(.system(size: 13, weight: .semibold))
+                Text("翻译结果")
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
                 if !translations.isEmpty {
                     Picker("", selection: $translationDisplayMode) {
                         Text("译文全文").tag(0)
                         Text("逐行对照").tag(1)
                     }
+                    .labelsHidden()
                     .pickerStyle(.segmented)
                     .frame(width: 140)
                     .controlSize(.mini)
@@ -235,13 +262,16 @@ struct CaptureEditorSidePanelView: View {
             }
             switch translationPhase {
             case .idle:
-                if ocrPhase == .empty {
-                    Text("当前选区里没识别到可翻译的文字。")
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
-                } else {
-                    Text("把选区里的文字翻成目标语言（本地模型，不联网）。")
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                Group {
+                    if ocrPhase == .empty {
+                        Text("当前选区里没识别到可翻译的文字。")
+                            .font(.system(size: 12)).foregroundStyle(.secondary)
+                    } else {
+                        Text("把选区里的文字翻成目标语言（本地模型，不联网）。")
+                            .font(.system(size: 12)).foregroundStyle(.secondary)
+                    }
                 }
+                .padding(.vertical, 12)
             case .running:
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -250,7 +280,9 @@ struct CaptureEditorSidePanelView: View {
                 .padding(.vertical, 20)
                 .frame(maxWidth: .infinity)
             case .failed:
-                Text(translationErrorMessage ?? "翻译失败").font(.system(size: 12)).foregroundStyle(.red)
+                Text(translationErrorMessage ?? "翻译失败")
+                    .font(.system(size: 12)).foregroundStyle(.red)
+                    .padding(.vertical, 12)
             case .done:
                 if translationDisplayMode == 0 {
                     ScrollView {
@@ -271,7 +303,8 @@ struct CaptureEditorSidePanelView: View {
                             ForEach(ocrLines) { line in
                                 TranslationLineRow(
                                     original: line.text,
-                                    translated: translations[line.id] ?? ""
+                                    translated: translations[line.id] ?? "",
+                                    textSize: textSize
                                 ) {
                                     let translated = translations[line.id] ?? ""
                                     onCopyText(translated.isEmpty ? line.text : translated)

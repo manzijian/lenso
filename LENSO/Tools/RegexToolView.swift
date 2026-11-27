@@ -92,7 +92,7 @@ struct RegexToolView: View {
                 .padding(3)
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.black.opacity(0.05))
+                        .fill(Color.primary.opacity(0.05))
                 )
             }
 
@@ -152,9 +152,12 @@ struct RegexToolView: View {
                 Text(input.isEmpty ? "粘贴一段文本" : "\(input.count) 字符")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
+                    .monospacedDigit()
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 7)
+            .frame(height: 36)
+
+            Divider().opacity(0.35)
 
             TextEditor(text: $input)
                 .font(.system(size: 12, design: .monospaced))
@@ -219,31 +222,63 @@ struct RegexToolView: View {
                 .lensoAnimation(LensoAnimations.snappy, value: copied, reduceMotion: reduceMotion)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 7)
+            .frame(height: 36)
 
-            ScrollView {
-                if let error = result.errorText {
+            Divider().opacity(0.35)
+
+            if let error = result.errorText {
+                ScrollView {
                     notice(error, color: .orange, symbol: "exclamationmark.triangle.fill")
                         .padding(10)
-                } else if !pattern.isEmpty && result.matches.isEmpty {
-                    notice("没有匹配结果", color: .secondary, symbol: "circle.dashed")
-                        .padding(10)
-                } else if mode == .replace {
-                    Text(result.replaced ?? "")
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(.primary)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(10)
-                } else {
-                    LazyVStack(alignment: .leading, spacing: 6) {
-                        ForEach(Array(result.matches.enumerated()), id: \.offset) { index, match in
-                            matchRow(index: index, match: match)
+                }
+            } else if pattern.isEmpty {
+                resultEmptyState(
+                    symbol: "textformat.abc",
+                    title: "等待输入正则表达式",
+                    subtitle: "在上方输入正则表达式，实时查看匹配结果、捕获组或替换输出。"
+                )
+            } else if result.matches.isEmpty && mode == .match {
+                resultEmptyState(
+                    symbol: "circle.dashed",
+                    title: "没有匹配结果",
+                    subtitle: "尝试调整正则表达式或切换 i / m / s 匹配选项。"
+                )
+            } else {
+                ScrollView {
+                    if mode == .replace {
+                        Text(result.replaced ?? "")
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(.primary)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(10)
+                    } else {
+                        LazyVStack(alignment: .leading, spacing: 6) {
+                            ForEach(Array(result.matches.enumerated()), id: \.offset) { index, match in
+                                matchRow(index: index, match: match)
+                            }
                         }
+                        .padding(10)
                     }
-                    .padding(10)
                 }
             }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func resultEmptyState(symbol: String, title: String, subtitle: String) -> some View {
+        VStack(spacing: 10) {
+            Image(systemName: symbol)
+                .font(.system(size: 26, weight: .light))
+                .foregroundStyle(LensoColors.kleinBlueBright.opacity(0.55))
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.primary.opacity(0.85))
+            Text(subtitle)
+                .font(.system(size: 11.5))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 260)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -254,6 +289,7 @@ struct RegexToolView: View {
                 Text("#\(index + 1)")
                     .font(.system(size: 9.5, weight: .bold, design: .monospaced))
                     .foregroundStyle(.secondary)
+                    .monospacedDigit()
                 Text(match.text.isEmpty ? "（空匹配）" : match.text)
                     .font(.system(size: 11.5, design: .monospaced))
                     .lineLimit(2)
@@ -261,6 +297,7 @@ struct RegexToolView: View {
                 Text("位置 \(match.location)")
                     .font(.system(size: 9.5, design: .monospaced))
                     .foregroundStyle(.tertiary)
+                    .monospacedDigit()
             }
             if !match.groups.isEmpty {
                 HStack(spacing: 5) {
@@ -317,9 +354,11 @@ struct RegexToolView: View {
             } else {
                 Label("\(result.matches.count) 处匹配", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(result.matches.isEmpty ? Color.secondary : .green)
+                    .monospacedDigit()
                     .lensoNumericTransition()
                 Text("耗时 \(result.elapsedMilliseconds) ms")
                     .foregroundStyle(.tertiary)
+                    .monospacedDigit()
                     .lensoNumericTransition()
             }
             Spacer()

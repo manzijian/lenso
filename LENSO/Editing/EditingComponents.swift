@@ -1,6 +1,8 @@
 import AppKit
 import SwiftUI
 
+private let brandBlue = Color(red: 5 / 255, green: 56 / 255, blue: 224 / 255)
+
 /// 右侧面板页签：标注 / OCR / 翻译
 enum PanelTab { case annotation, ocr, translate }
 
@@ -19,20 +21,26 @@ struct SideTool: View {
     let action: () -> Void
 
     @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 5) {
             ZStack {
-                Circle().fill(active ? Color(nsColor: .controlAccentColor) : .primary.opacity(hovering ? 0.08 : 0.05))
+                Circle().fill(active ? brandBlue : .primary.opacity(hovering ? 0.08 : 0.05))
                     .frame(width: 38, height: 38)
                 Image(systemName: icon)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(active ? .white : .primary)
             }
-            Text(label).font(.system(size: 11)).foregroundStyle(.secondary)
+            Text(label)
+                .font(.system(size: 11, weight: active ? .medium : .regular))
+                .foregroundStyle(active ? .primary : .secondary)
+                .lineLimit(1)
         }
+        .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture { action() }
+        .lensoAnimation(LensoAnimations.hover, value: hovering, reduceMotion: reduceMotion)
     }
 }
 
@@ -44,18 +52,25 @@ struct ShapeQuick: View {
     let action: () -> Void
 
     @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isActive: Bool { state.activeKind == kind }
 
     var body: some View {
         Image(systemName: icon)
             .font(.system(size: 14, weight: .medium))
-            .foregroundStyle(isActive ? Color(nsColor: .controlAccentColor) : .primary.opacity(0.75))
+            .foregroundStyle(isActive ? brandBlue : .primary.opacity(0.75))
             .frame(width: 30, height: 30)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isActive ? brandBlue.opacity(0.12) : (hovering ? .primary.opacity(0.06) : .clear))
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8))
             .onHover { hovering = $0 }
-            .scaleEffect(hovering ? 1.1 : 1)
+            .scaleEffect(hovering ? 1.06 : 1)
             .onTapGesture { action() }
-            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: hovering)
+            .lensoAnimation(LensoAnimations.hover, value: hovering, reduceMotion: reduceMotion)
+            .lensoAnimation(LensoAnimations.snappy, value: isActive, reduceMotion: reduceMotion)
     }
 }
 
@@ -89,26 +104,29 @@ struct ToggleRow: View {
 /// OCR 结果行：文字 + 置信度，点按复制这行
 struct OCRLineRow: View {
     let line: RecognizedText
+    var textSize: CGFloat = 13
     let onCopy: () -> Void
 
     @State private var copied = false
+    @State private var hovering = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Text(line.text)
-                .font(.system(size: 13))
+                .font(.system(size: textSize))
                 .lineLimit(nil)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Spacer()
             Text("\(Int(line.confidence * 100))%")
                 .font(.system(size: 11)).foregroundStyle(.tertiary).monospacedDigit()
                 .padding(.top, 2)
+                .opacity(copied ? 0 : 1)
         }
         .padding(10)
-        .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.04)))
+        .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(hovering ? 0.07 : 0.04)))
         .contentShape(Rectangle())
+        .onHover { hovering = $0 }
         .onTapGesture {
             onCopy()
             LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
@@ -130,7 +148,7 @@ struct OCRLineRow: View {
                     Text("已复制")
                         .font(.system(size: 10, weight: .semibold))
                 }
-                .foregroundStyle(Color(nsColor: .controlAccentColor))
+                .foregroundStyle(brandBlue)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
                 .background(Capsule().fill(Color(nsColor: .windowBackgroundColor)))
@@ -139,6 +157,7 @@ struct OCRLineRow: View {
                 .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
             }
         }
+        .lensoAnimation(LensoAnimations.hover, value: hovering, reduceMotion: reduceMotion)
         .lensoAnimation(LensoAnimations.snappy, value: copied, reduceMotion: reduceMotion)
         .help("点按复制这行")
     }
@@ -148,31 +167,52 @@ struct OCRLineRow: View {
 struct TranslationLineRow: View {
     let original: String
     let translated: String
+    var textSize: CGFloat = 13
     let onCopy: () -> Void
 
     @State private var copied = false
+    @State private var hovering = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(original)
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .lineLimit(nil)
-                .textSelection(.enabled)
+            HStack(alignment: .top, spacing: 8) {
+                Text(original)
+                    .font(.system(size: max(11, textSize - 1)))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(nil)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if copied {
+                    HStack(spacing: 3) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .lensoSymbolReplace()
+                        Text("已复制")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .foregroundStyle(brandBlue)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color(nsColor: .windowBackgroundColor)))
+                    .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+                    .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
+                }
+            }
             if translated.isEmpty {
-                Text("这行翻译失败").font(.system(size: 13)).foregroundStyle(.red)
+                Text("这行翻译失败").font(.system(size: textSize)).foregroundStyle(.red)
             } else {
                 Text(translated)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: textSize, weight: .medium))
                     .lineLimit(nil)
                     .textSelection(.enabled)
             }
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.04)))
+        .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(hovering ? 0.07 : 0.04)))
         .contentShape(Rectangle())
+        .onHover { hovering = $0 }
         .onTapGesture {
             onCopy()
             LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
@@ -185,24 +225,7 @@ struct TranslationLineRow: View {
                 }
             }
         }
-        .overlay(alignment: .topTrailing) {
-            if copied {
-                HStack(spacing: 3) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 9, weight: .bold))
-                        .lensoSymbolReplace()
-                    Text("已复制")
-                        .font(.system(size: 10, weight: .semibold))
-                }
-                .foregroundStyle(Color(nsColor: .controlAccentColor))
-                .padding(.horizontal, 7)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(Color(nsColor: .windowBackgroundColor)))
-                .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
-                .padding(6)
-                .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
-            }
-        }
+        .lensoAnimation(LensoAnimations.hover, value: hovering, reduceMotion: reduceMotion)
         .lensoAnimation(LensoAnimations.snappy, value: copied, reduceMotion: reduceMotion)
         .help("点按复制译文")
     }
@@ -229,6 +252,7 @@ struct MiniButton: View {
                 }
                 Text(label)
                     .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)

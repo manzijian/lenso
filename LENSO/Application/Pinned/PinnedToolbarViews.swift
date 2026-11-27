@@ -1,6 +1,8 @@
 import SwiftUI
 import AppKit
 
+private let brandBlue = Color(red: 5 / 255, green: 56 / 255, blue: 224 / 255)
+
 // MARK: - 贴图右侧属性/OCR/翻译面板视图
 
 struct PinnedSidePanelView: View {
@@ -101,17 +103,19 @@ struct PinnedSidePanelView: View {
     private var annotationControls: some View {
         Group {
             // 颜色盘（7 色）
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 ForEach(0..<AnnotationPalette.count, id: \.self) { i in
                     Circle()
                         .fill(AnnotationPalette[i])
-                        .frame(width: 22, height: 22)
+                        .frame(width: 20, height: 20)
+                        .overlay(Circle().strokeBorder(Color.black.opacity(0.14), lineWidth: 0.75))
+                        .frame(width: 28, height: 28)
                         .overlay {
                             if state.colorIndex == i {
-                                Circle().strokeBorder(Color(nsColor: .controlAccentColor), lineWidth: 2.5)
-                                    .frame(width: 30, height: 30)
+                                Circle().strokeBorder(brandBlue, lineWidth: 2)
                             }
                         }
+                        .contentShape(Circle())
                         .onTapGesture { state.colorIndex = i }
                 }
             }
@@ -119,7 +123,7 @@ struct PinnedSidePanelView: View {
             // 粗细滑杆 + Npx
             HStack(spacing: 10) {
                 Slider(value: $state.strokeWidth, in: 1...10, step: 1)
-                    .tint(Color(nsColor: .controlAccentColor))
+                    .tint(brandBlue)
                 Text("\(Int(state.strokeWidth))px")
                     .font(.system(size: 13))
                     .monospacedDigit()
@@ -138,6 +142,7 @@ struct PinnedSidePanelView: View {
                     .help(kind.label)
                 }
             }
+            .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
             .padding(.horizontal, 12)
             .background(RoundedRectangle(cornerRadius: 12).fill(.primary.opacity(0.04)))
@@ -156,9 +161,14 @@ struct PinnedSidePanelView: View {
             } label: {
                 HStack {
                     Image(systemName: "doc.on.doc")
+                        .font(.system(size: 14))
+                        .frame(width: 22)
                     Text("复制到剪贴板").font(.system(size: 13, weight: .medium))
                     Spacer()
-                    Text("⌘C").font(.system(size: 11)).foregroundStyle(.tertiary)
+                    Text("⌘C")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                        .monospacedDigit()
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
@@ -172,12 +182,15 @@ struct PinnedSidePanelView: View {
     private var ocrResultsView: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("识别结果").font(.system(size: 13, weight: .semibold))
+                Text("识别结果")
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
                 if !pinnedState.ocrLines.isEmpty {
                     Picker("", selection: $ocrDisplayMode) {
                         Text("全文展开").tag(0)
                         Text("逐行对照").tag(1)
                     }
+                    .labelsHidden()
                     .pickerStyle(.segmented)
                     .frame(width: 140)
                     .controlSize(.mini)
@@ -239,12 +252,15 @@ struct PinnedSidePanelView: View {
     private var translationResultsView: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("翻译结果").font(.system(size: 13, weight: .semibold))
+                Text("翻译结果")
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
                 if !pinnedState.translations.isEmpty {
                     Picker("", selection: $translationDisplayMode) {
                         Text("译文全文").tag(0)
                         Text("逐行对照").tag(1)
                     }
+                    .labelsHidden()
                     .pickerStyle(.segmented)
                     .frame(width: 140)
                     .controlSize(.mini)
@@ -322,7 +338,26 @@ struct PinnedToolbarView: View {
     let onCopy: () -> Void
     let onSave: () -> Void
     let onClose: () -> Void
+    @State private var hoveredID: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private let iconColor = Color(red: 0.18, green: 0.18, blue: 0.22)
+
+    private var separator: some View {
+        Rectangle()
+            .fill(Color.black.opacity(0.08))
+            .frame(width: 1, height: 16)
+            .padding(.horizontal, 3)
+    }
+
+    private func toolbarButtonBackground(id: String, isActive: Bool = false, disabled: Bool = false) -> some View {
+        RoundedRectangle(cornerRadius: 6)
+            .fill(
+                isActive
+                    ? brandBlue.opacity(0.15)
+                    : (hoveredID == id && !disabled ? Color.black.opacity(0.06) : .clear)
+            )
+    }
 
     var body: some View {
         HStack(spacing: 4) {
@@ -330,135 +365,151 @@ struct PinnedToolbarView: View {
             Button {
                 state.activeKind = nil
             } label: {
-                Image(systemName: "arrow.up.left")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(state.activeKind == nil ? .white : Color(red: 0.18, green: 0.18, blue: 0.22))
+                Image(systemName: "cursorarrow")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(state.activeKind == nil ? brandBlue : iconColor)
                     .frame(width: 28, height: 28)
-                    .background(
-                        Circle().fill(state.activeKind == nil ? Color(nsColor: .controlAccentColor) : .clear)
-                    )
+                    .background(toolbarButtonBackground(id: "select", isActive: state.activeKind == nil))
+                    .contentShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(LensoPressButtonStyle(scale: 0.92))
+            .onHover { hoveredID = $0 ? "select" : (hoveredID == "select" ? nil : hoveredID) }
             .help("选择与移动 (V)")
 
             ForEach([AnnotationKind.rect, .ellipse, .arrow, .brush, .text, .mosaic, .highlight], id: \.self) { kind in
+                let isActive = state.activeKind == kind
+                let id = "kind-\(kind)"
                 Button {
                     state.activeKind = state.activeKind == kind ? nil : kind
                 } label: {
                     Image(systemName: kind.icon)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(state.activeKind == kind ? Color(nsColor: .controlAccentColor) : Color(red: 0.18, green: 0.18, blue: 0.22))
+                        .foregroundStyle(isActive ? brandBlue : iconColor)
                         .frame(width: 28, height: 28)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(state.activeKind == kind ? Color(nsColor: .controlAccentColor).opacity(0.15) : .clear)
-                        )
+                        .background(toolbarButtonBackground(id: id, isActive: isActive))
+                        .contentShape(RoundedRectangle(cornerRadius: 6))
                 }
                 .buttonStyle(LensoPressButtonStyle(scale: 0.92))
+                .onHover { hoveredID = $0 ? id : (hoveredID == id ? nil : hoveredID) }
                 .help(kind.label)
             }
 
-            Divider().frame(height: 18)
+            separator
 
             // 标注属性面板快捷入口（点击打开标注设置卡片）
+            let isAnnotationActive = pinnedState.isSidePanelVisible && pinnedState.panelTab == .annotation
             Button(action: onToggleAnnotation) {
                 Circle()
                     .fill(AnnotationPalette[state.colorIndex])
                     .frame(width: 14, height: 14)
                     .overlay(Circle().stroke(Color.black.opacity(0.18), lineWidth: 1))
-                    .frame(width: 26, height: 26)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(pinnedState.isSidePanelVisible && pinnedState.panelTab == .annotation ? Color(nsColor: .controlAccentColor).opacity(0.15) : .clear)
-                    )
+                    .frame(width: 28, height: 28)
+                    .background(toolbarButtonBackground(id: "palette", isActive: isAnnotationActive))
+                    .contentShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(LensoPressButtonStyle(scale: 0.92))
+            .onHover { hoveredID = $0 ? "palette" : (hoveredID == "palette" ? nil : hoveredID) }
             .help("标注调色盘与粗细设置")
 
-            Divider().frame(height: 18)
+            separator
 
             // 撤销 / 重做
             Button(action: onUndo) {
                 Image(systemName: "arrow.uturn.backward")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color(red: 0.18, green: 0.18, blue: 0.22).opacity(state.canUndo ? 1.0 : 0.35))
-                    .frame(width: 26, height: 26)
+                    .foregroundStyle(iconColor.opacity(state.canUndo ? 1.0 : 0.35))
+                    .frame(width: 28, height: 28)
+                    .background(toolbarButtonBackground(id: "undo", disabled: !state.canUndo))
+                    .contentShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(LensoPressButtonStyle(scale: 0.92))
             .disabled(!state.canUndo)
+            .onHover { hoveredID = $0 ? "undo" : (hoveredID == "undo" ? nil : hoveredID) }
             .help("撤销 (⌘Z)")
 
             Button(action: onRedo) {
                 Image(systemName: "arrow.uturn.forward")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color(red: 0.18, green: 0.18, blue: 0.22).opacity(state.canRedo ? 1.0 : 0.35))
-                    .frame(width: 26, height: 26)
+                    .foregroundStyle(iconColor.opacity(state.canRedo ? 1.0 : 0.35))
+                    .frame(width: 28, height: 28)
+                    .background(toolbarButtonBackground(id: "redo", disabled: !state.canRedo))
+                    .contentShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(LensoPressButtonStyle(scale: 0.92))
             .disabled(!state.canRedo)
+            .onHover { hoveredID = $0 ? "redo" : (hoveredID == "redo" ? nil : hoveredID) }
             .help("重做 (⇧⌘Z)")
 
-            Divider().frame(height: 18)
+            separator
 
             // 翻译
+            let isTranslateActive = pinnedState.isSidePanelVisible && pinnedState.panelTab == .translate
             Button(action: onToggleTranslate) {
                 Image(systemName: "character.bubble")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(pinnedState.isSidePanelVisible && pinnedState.panelTab == .translate ? Color(nsColor: .controlAccentColor) : Color(red: 0.18, green: 0.18, blue: 0.22))
+                    .foregroundStyle(isTranslateActive ? brandBlue : iconColor)
                     .frame(width: 28, height: 28)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(pinnedState.isSidePanelVisible && pinnedState.panelTab == .translate ? Color(nsColor: .controlAccentColor).opacity(0.15) : .clear)
-                    )
+                    .background(toolbarButtonBackground(id: "translate", isActive: isTranslateActive))
+                    .contentShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(LensoPressButtonStyle(scale: 0.92))
+            .onHover { hoveredID = $0 ? "translate" : (hoveredID == "translate" ? nil : hoveredID) }
             .help("智能翻译卡片")
 
             // OCR
+            let isOCRActive = pinnedState.isSidePanelVisible && pinnedState.panelTab == .ocr
             Button(action: onToggleOCR) {
                 Image(systemName: "doc.text.viewfinder")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(pinnedState.isSidePanelVisible && pinnedState.panelTab == .ocr ? Color(nsColor: .controlAccentColor) : Color(red: 0.18, green: 0.18, blue: 0.22))
+                    .foregroundStyle(isOCRActive ? brandBlue : iconColor)
                     .frame(width: 28, height: 28)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(pinnedState.isSidePanelVisible && pinnedState.panelTab == .ocr ? Color(nsColor: .controlAccentColor).opacity(0.15) : .clear)
-                    )
+                    .background(toolbarButtonBackground(id: "ocr", isActive: isOCRActive))
+                    .contentShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(LensoPressButtonStyle(scale: 0.92))
+            .onHover { hoveredID = $0 ? "ocr" : (hoveredID == "ocr" ? nil : hoveredID) }
             .help("文字识别 (OCR) 卡片")
 
             // 复制
             Button(action: onCopy) {
                 Image(systemName: "doc.on.doc")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color(red: 0.18, green: 0.18, blue: 0.22))
+                    .foregroundStyle(iconColor)
                     .frame(width: 28, height: 28)
+                    .background(toolbarButtonBackground(id: "copy"))
+                    .contentShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(LensoPressButtonStyle(scale: 0.92))
+            .onHover { hoveredID = $0 ? "copy" : (hoveredID == "copy" ? nil : hoveredID) }
             .help("复制到剪贴板 (⌘C)")
 
             // 保存
             Button(action: onSave) {
                 Image(systemName: "square.and.arrow.down")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color(red: 0.18, green: 0.18, blue: 0.22))
+                    .foregroundStyle(iconColor)
                     .frame(width: 28, height: 28)
+                    .background(toolbarButtonBackground(id: "save"))
+                    .contentShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(LensoPressButtonStyle(scale: 0.92))
+            .onHover { hoveredID = $0 ? "save" : (hoveredID == "save" ? nil : hoveredID) }
             .help("保存到历史记录 (⌘S)")
 
             // 关闭
             Button(action: onClose) {
                 Image(systemName: "xmark")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color(red: 0.18, green: 0.18, blue: 0.22))
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(Color.black.opacity(0.06)))
+                    .foregroundStyle(iconColor)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(Color.black.opacity(hoveredID == "close" ? 0.11 : 0.06)))
+                    .contentShape(Circle())
             }
             .buttonStyle(LensoPressButtonStyle(scale: 0.92))
+            .onHover { hoveredID = $0 ? "close" : (hoveredID == "close" ? nil : hoveredID) }
             .help("关闭贴图")
         }
+        .lensoAnimation(LensoAnimations.hover, value: hoveredID, reduceMotion: reduceMotion)
         .lensoAnimation(LensoAnimations.snappy, value: state.activeKind, reduceMotion: reduceMotion)
         .lensoAnimation(LensoAnimations.snappy, value: pinnedState.panelTab, reduceMotion: reduceMotion)
         .lensoAnimation(LensoAnimations.snappy, value: pinnedState.isSidePanelVisible, reduceMotion: reduceMotion)

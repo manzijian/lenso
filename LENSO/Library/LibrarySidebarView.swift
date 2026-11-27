@@ -37,14 +37,14 @@ struct LibrarySidebarView: View {
     private var sidebarWidth: CGFloat { liveWidth }
     /// 拖拽过程中实时切换到图标轨道形态
     private var isNarrow: Bool { liveWidth < 140 }
-    private let ink = Color(red: 0.16, green: 0.17, blue: 0.20)
+    private let ink = Color.primary.opacity(0.88)
 
     var body: some View {
         VStack(spacing: 0) {
             header
 
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: isNarrow ? .center : .leading, spacing: 2) {
                     if !isNarrow {
                         groupLabel("内容")
                     }
@@ -62,7 +62,8 @@ struct LibrarySidebarView: View {
 
                     settingsSection
                 }
-                .padding(.horizontal, isCollapsed ? 10 : 10)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 10)
                 .padding(.top, 2)
             }
 
@@ -91,7 +92,7 @@ struct LibrarySidebarView: View {
 
     private var resizeHandle: some View {
         Rectangle()
-            .fill(isResizing ? Color.black.opacity(0.10) : Color.black.opacity(0.001))
+            .fill(isResizing ? Color.primary.opacity(0.10) : Color.primary.opacity(0.001))
             .frame(width: 3)
             .frame(maxHeight: .infinity)
             .contentShape(Rectangle().inset(by: -3))
@@ -127,7 +128,7 @@ struct LibrarySidebarView: View {
 
     private var header: some View {
         VStack(spacing: 8) {
-            Color.clear.frame(height: 34)
+            Color.clear.frame(height: 38)
 
             if isNarrow {
                 VStack(spacing: 8) {
@@ -176,7 +177,7 @@ struct LibrarySidebarView: View {
                 .frame(width: 24, height: 24)
                 .background(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.black.opacity(0.04))
+                        .fill(Color.primary.opacity(0.05))
                 )
                 .contentShape(Rectangle())
         }
@@ -251,11 +252,12 @@ struct LibrarySidebarView: View {
                     Text("\(count)")
                         .font(.system(size: 10.5, weight: isActive ? .bold : .medium, design: .rounded))
                         .foregroundStyle(isActive ? LensoColors.kleinBlueBright : Color.secondary)
+                        .monospacedDigit()
                         .lensoNumericTransition()
                         .padding(.horizontal, 6)
                         .padding(.vertical, 1.5)
                         .background(
-                            Capsule().fill(isActive ? Color.white : Color.black.opacity(0.04))
+                            Capsule().fill(isActive ? Color.white : Color.primary.opacity(0.05))
                         )
                 }
             }
@@ -347,7 +349,7 @@ struct LibrarySidebarView: View {
         } else {
             VStack(alignment: .leading, spacing: 2) {
                 Rectangle()
-                    .fill(Color.black.opacity(0.06))
+                    .fill(Color.primary.opacity(0.07))
                     .frame(height: 1)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 8)
@@ -410,7 +412,7 @@ struct LibrarySidebarView: View {
 
                                 Text(cat.rawValue)
                                     .font(.system(size: 11.5, weight: isActive ? .semibold : .regular))
-                                    .foregroundStyle(isActive ? .white : Color(red: 0.22, green: 0.22, blue: 0.26))
+                                    .foregroundStyle(isActive ? .white : Color.primary.opacity(0.85))
 
                                 Spacer()
                             }
@@ -458,6 +460,7 @@ struct LibrarySidebarView: View {
                 Text("\(screenshotsCount) 张截图")
                     .font(.system(size: 9))
                     .foregroundStyle(Color.secondary.opacity(0.6))
+                    .monospacedDigit()
                 Spacer()
             }
         }
@@ -465,7 +468,7 @@ struct LibrarySidebarView: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.black.opacity(0.025))
+                .fill(Color.primary.opacity(0.04))
         )
         .padding(.horizontal, 10)
         .padding(.top, 6)

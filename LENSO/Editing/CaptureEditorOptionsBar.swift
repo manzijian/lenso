@@ -19,24 +19,36 @@ struct CaptureEditorOptionsBar: View {
         return kind != .text && kind != .mosaic && kind != .highlight
     }
 
+    @State private var hoveringColor: Int?
+    @State private var hoveringWidth: CGFloat?
+
     var body: some View {
         HStack(spacing: 10) {
             if showsColors {
-                HStack(spacing: 6) {
+                HStack(spacing: 4) {
                     ForEach(0..<AnnotationPalette.count, id: \.self) { index in
+                        let isSelected = state.colorIndex == index
+                        let isHovering = hoveringColor == index
                         Circle()
                             .fill(AnnotationPalette[index])
-                            .frame(width: 16, height: 16)
+                            .frame(width: 14, height: 14)
                             .overlay(Circle().strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5))
+                            .scaleEffect(isHovering && !isSelected ? 1.12 : 1)
+                            .frame(width: 22, height: 22)
                             .overlay {
-                                if state.colorIndex == index {
+                                if isSelected {
                                     Circle()
                                         .strokeBorder(brandBlue, lineWidth: 2)
-                                        .frame(width: 22, height: 22)
                                         .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
+                                } else if isHovering {
+                                    Circle()
+                                        .strokeBorder(Color.black.opacity(0.18), lineWidth: 1)
                                 }
                             }
                             .contentShape(Circle())
+                            .onHover { hovering in
+                                hoveringColor = hovering ? index : (hoveringColor == index ? nil : hoveringColor)
+                            }
                             .onTapGesture {
                                 LensoAnimations.withMotion(LensoAnimations.hover, reduceMotion: reduceMotion) {
                                     state.colorIndex = index
@@ -45,6 +57,7 @@ struct CaptureEditorOptionsBar: View {
                             .help("颜色")
                     }
                 }
+                .lensoAnimation(LensoAnimations.hover, value: hoveringColor, reduceMotion: reduceMotion)
                 .lensoAnimation(LensoAnimations.hover, value: state.colorIndex, reduceMotion: reduceMotion)
                 .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
             }
@@ -59,18 +72,26 @@ struct CaptureEditorOptionsBar: View {
             if showsWidths {
                 HStack(spacing: 2) {
                     ForEach(widths, id: \.self) { width in
+                        let isSelected = state.strokeWidth == width
+                        let isHovering = hoveringWidth == width
                         Circle()
-                            .fill(state.strokeWidth == width ? brandBlue : iconIdle)
+                            .fill(isSelected ? brandBlue : iconIdle)
                             .frame(width: width + 2, height: width + 2)
                             .frame(width: 24, height: 24)
                             .background {
-                                if state.strokeWidth == width {
+                                if isSelected {
                                     Circle()
-                                        .fill(Color.black.opacity(0.05))
+                                        .fill(Color.black.opacity(0.06))
                                         .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
+                                } else if isHovering {
+                                    Circle()
+                                        .fill(Color.black.opacity(0.04))
                                 }
                             }
                             .contentShape(Circle())
+                            .onHover { hovering in
+                                hoveringWidth = hovering ? width : (hoveringWidth == width ? nil : hoveringWidth)
+                            }
                             .onTapGesture {
                                 LensoAnimations.withMotion(LensoAnimations.hover, reduceMotion: reduceMotion) {
                                     state.strokeWidth = width
@@ -79,6 +100,7 @@ struct CaptureEditorOptionsBar: View {
                             .help("粗细 \(Int(width))px")
                     }
                 }
+                .lensoAnimation(LensoAnimations.hover, value: hoveringWidth, reduceMotion: reduceMotion)
                 .lensoAnimation(LensoAnimations.hover, value: state.strokeWidth, reduceMotion: reduceMotion)
                 .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
             }
@@ -87,6 +109,8 @@ struct CaptureEditorOptionsBar: View {
                 Text(state.activeKind == .mosaic ? "框选要打码的区域" : "框选要高亮的区域")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .padding(.horizontal, 4)
                     .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
             }
         }

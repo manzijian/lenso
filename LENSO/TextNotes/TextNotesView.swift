@@ -17,7 +17,7 @@ struct TextNotesView: View {
     @ObservedObject private var webStore = WebMetadataStore.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let hairline = Color.black.opacity(0.06)
+    private let hairline = Color.primary.opacity(0.07)
 
     var body: some View {
         GeometryReader { proxy in
@@ -85,6 +85,7 @@ struct TextNotesView: View {
                 Text("\(visibleNotes.count) 条")
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(.secondary)
+                    .monospacedDigit()
                     .lensoNumericTransition()
             }
 
@@ -126,11 +127,11 @@ struct TextNotesView: View {
                 previewPane
             }
         }
-        .background(Color.white)
+        .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.07), lineWidth: 0.8)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.8)
         )
     }
 
@@ -151,7 +152,7 @@ struct TextNotesView: View {
             }
             .padding(.vertical, 4)
         }
-        .background(Color(red: 0.984, green: 0.988, blue: 0.996))
+        .background(Color(nsColor: .underPageBackgroundColor))
     }
 
     private func noteRow(_ note: TextNote, opensOnTap: Bool) -> some View {
@@ -164,7 +165,7 @@ struct TextNotesView: View {
 
         return HStack(alignment: .top, spacing: 9) {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(selected ? Color.white : LensoColors.kleinBlueSoft)
+                .fill(selected ? Color(nsColor: .controlBackgroundColor) : LensoColors.kleinBlueSoft)
                 .frame(width: 26, height: 26)
                 .overlay(
                     Image(systemName: info.icon)
@@ -195,7 +196,7 @@ struct TextNotesView: View {
         .padding(.vertical, 9)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(selected ? LensoColors.kleinBlueSoft : (hovered ? Color.black.opacity(0.03) : Color.clear))
+                .fill(selected ? LensoColors.kleinBlueSoft : (hovered ? Color.primary.opacity(0.04) : Color.clear))
         )
         .overlay(alignment: .leading) {
             if selected {
@@ -260,9 +261,9 @@ struct TextNotesView: View {
                 previewFooter(note)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.white)
+            .background(Color(nsColor: .controlBackgroundColor))
         } else {
-            Color.white
+            Color(nsColor: .controlBackgroundColor)
         }
     }
 
@@ -287,7 +288,7 @@ struct TextNotesView: View {
                     .foregroundStyle(Color.primary.opacity(0.55))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2.5)
-                    .background(Capsule().fill(Color.black.opacity(0.045)))
+                    .background(Capsule().fill(Color.primary.opacity(0.05)))
             }
 
             Spacer()
@@ -342,7 +343,7 @@ struct TextNotesView: View {
             case .json(let pretty, _):
                 Text(pretty)
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(Color(red: 0.15, green: 0.18, blue: 0.24))
+                    .foregroundStyle(Color.primary.opacity(0.88))
                     .lineSpacing(4)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
@@ -352,7 +353,7 @@ struct TextNotesView: View {
             case .code(_, let formatted):
                 Text(formatted)
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(Color(red: 0.15, green: 0.18, blue: 0.24))
+                    .foregroundStyle(Color.primary.opacity(0.88))
                     .lineSpacing(4)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
@@ -424,6 +425,7 @@ struct TextNotesView: View {
             Text("\(note.content.count) 字符 · \(lines) 行")
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(Color.primary.opacity(0.38))
+                .monospacedDigit()
 
             Spacer()
 

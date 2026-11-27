@@ -22,8 +22,8 @@ struct PreviewWindowView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            // Apple 原生极简白质感背景
-            Color(red: 0.985, green: 0.988, blue: 0.995)
+            // 自适应窗口背景 + 克莱因蓝微光
+            Color(nsColor: .windowBackgroundColor)
                 .overlay {
                     RadialGradient(
                         colors: [LensoColors.kleinBlueBright.opacity(0.04), .clear],
@@ -44,7 +44,7 @@ struct PreviewWindowView: View {
                             .scaleEffect(zoom)
                             .offset(panOffset)
                             .frame(width: geo.size.width, height: geo.size.height)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: LensoRadius.thumbnail, style: .continuous))
                             .contentShape(Rectangle())
                             .gesture(
                                 DragGesture()
@@ -66,11 +66,11 @@ struct PreviewWindowView: View {
                     ContentUnavailableView("图片不存在", systemImage: "photo.badge.exclamationmark")
                 }
             }
-            .padding(.top, 38)
+            .padding(.top, 48)
             .padding(.horizontal, 10)
             .padding(.bottom, 10)
 
-            // 顶部悬浮工具栏（纯白 Apple 悬浮胶囊 + 克莱因蓝高亮）
+            // 顶部悬浮工具栏（自适应悬浮胶囊 + 克莱因蓝高亮）
             HStack {
                 // 尺寸与文件名徽标
                 if let record {
@@ -81,15 +81,17 @@ struct PreviewWindowView: View {
                         Text("·")
                         Text("\(record.width) × \(record.height)")
                             .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .lineLimit(1)
+                            .monospacedDigit()
                             .foregroundStyle(.secondary)
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
                     .background(
                         Capsule()
-                            .fill(Color.white.opacity(0.92))
-                            .overlay(Capsule().stroke(Color.black.opacity(0.08), lineWidth: 1))
-                            .shadow(color: Color.black.opacity(0.04), radius: 3, y: 1)
+                            .fill(Color(nsColor: .controlBackgroundColor).opacity(0.92))
+                            .overlay(Capsule().stroke(Color.primary.opacity(0.08), lineWidth: 1))
+                            .shadow(color: Color.primary.opacity(0.06), radius: 3, y: 1)
                     )
                 }
 
@@ -97,24 +99,6 @@ struct PreviewWindowView: View {
 
                 // 操作按钮组
                 HStack(spacing: 10) {
-                    ToolbarIcon(
-                        icon: "plus.magnifyingglass",
-                        label: "放大",
-                        disabled: zoom >= 4.0
-                    ) {
-                        LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
-                            zoom = min(zoom + 0.25, 4.0)
-                        }
-                    }
-
-                    Text("\(Int(round(zoom * 100)))%")
-                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(Color(red: 0.22, green: 0.24, blue: 0.30))
-                        .monospacedDigit()
-                        .lensoNumericTransition()
-                        .lensoAnimation(LensoAnimations.snappy, value: Int(round(zoom * 100)), reduceMotion: reduceMotion)
-                        .frame(minWidth: 38)
-
                     ToolbarIcon(
                         icon: "minus.magnifyingglass",
                         label: "缩小",
@@ -125,6 +109,25 @@ struct PreviewWindowView: View {
                             if zoom <= 1.0 { panOffset = .zero }
                         }
                     }
+
+                    Text("\(Int(round(zoom * 100)))%")
+                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(Color.primary.opacity(0.82))
+                        .monospacedDigit()
+                        .lensoNumericTransition()
+                        .lensoAnimation(LensoAnimations.snappy, value: Int(round(zoom * 100)), reduceMotion: reduceMotion)
+                        .frame(minWidth: 38)
+
+                    ToolbarIcon(
+                        icon: "plus.magnifyingglass",
+                        label: "放大",
+                        disabled: zoom >= 4.0
+                    ) {
+                        LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                            zoom = min(zoom + 0.25, 4.0)
+                        }
+                    }
+
                     ToolbarIcon(
                         icon: "arrow.counterclockwise",
                         label: "复位 100%",
@@ -136,7 +139,9 @@ struct PreviewWindowView: View {
                         }
                     }
 
-                    Divider().frame(height: 14).opacity(0.5)
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.12))
+                        .frame(width: 1, height: 14)
 
                     // 直接钉在屏幕上
                     ToolbarIcon(icon: "pin.fill", label: "钉在屏幕上 (回到刚截图的状态)") {
@@ -162,9 +167,9 @@ struct PreviewWindowView: View {
                 .padding(.vertical, 5)
                 .background(
                     Capsule()
-                        .fill(Color.white.opacity(0.92))
-                        .overlay(Capsule().stroke(Color.black.opacity(0.08), lineWidth: 1))
-                        .shadow(color: Color.black.opacity(0.04), radius: 4, y: 1)
+                        .fill(Color(nsColor: .controlBackgroundColor).opacity(0.92))
+                        .overlay(Capsule().stroke(Color.primary.opacity(0.08), lineWidth: 1))
+                        .shadow(color: Color.primary.opacity(0.06), radius: 4, y: 1)
                 )
             }
             .padding(.top, 10)
@@ -274,7 +279,7 @@ private struct ToolbarIcon: View {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(
-                    tint ?? (hovering && !disabled ? LensoColors.kleinBlueBright : Color(red: 0.18, green: 0.18, blue: 0.22))
+                    tint ?? (hovering && !disabled ? LensoColors.kleinBlueBright : Color.primary.opacity(0.85))
                 )
                 .opacity(disabled ? 0.35 : 1.0)
                 .frame(width: 22, height: 22)

@@ -41,8 +41,11 @@ struct SearchPanelInspectionOverlay: View {
                             }
                         )
                         .frame(width: 800, height: 540)
-                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .shadow(color: Color.black.opacity(0.35), radius: 24, y: 10)
+                        .clipShape(RoundedRectangle(cornerRadius: LensoRadius.window, style: .continuous))
+                        .background(
+                            LensoShadows.panel(RoundedRectangle(cornerRadius: LensoRadius.window, style: .continuous))
+                                .foregroundStyle(Color.white)
+                        )
 
                     case .image(let cgImage, _):
                         imageLightboxView(item: currentItem, cgImage: fullImage ?? cgImage)
@@ -72,6 +75,7 @@ struct SearchPanelInspectionOverlay: View {
                 }
                 .transition(LensoTransitions.overlayCard(reduceMotion: reduceMotion))
             }
+            .environment(\.colorScheme, .light)
             .transition(.opacity)
         }
     }
@@ -86,20 +90,22 @@ struct SearchPanelInspectionOverlay: View {
 
                 Text("截图详情")
                     .font(.system(size: 13, weight: .bold))
+                    .lineLimit(1)
 
                 if let app = item.sourceApp, !app.isEmpty {
                     Text(app)
                         .font(.system(size: 10.5, weight: .medium))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(Capsule().fill(Color.black.opacity(0.05)))
                 }
 
-                Spacer()
-
                 Text(item.createdAt.lensoRelativeDayTime)
                     .font(.system(size: 11, design: .monospaced))
+                    .monospacedDigit()
+                    .lineLimit(1)
                     .foregroundStyle(.secondary)
 
                 Spacer()
@@ -113,6 +119,7 @@ struct SearchPanelInspectionOverlay: View {
                                 .font(.system(size: 10))
                             Text("置顶预览")
                                 .font(.system(size: 11, weight: .medium))
+                                .lineLimit(1)
                         }
                         .foregroundStyle(LensoColors.kleinBlueBright)
                         .padding(.horizontal, 8)
@@ -142,6 +149,7 @@ struct SearchPanelInspectionOverlay: View {
                                 .lensoSymbolReplace()
                             Text(copied ? "已复制" : "复制图片")
                                 .font(.system(size: 11, weight: .medium))
+                                .lineLimit(1)
                         }
                         .foregroundStyle(copied ? Color.green : Color.primary.opacity(0.85))
                         .padding(.horizontal, 8)
@@ -164,6 +172,7 @@ struct SearchPanelInspectionOverlay: View {
                     Text("关闭")
                         .font(.system(size: 10.5))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
 
                 Button {
@@ -174,6 +183,8 @@ struct SearchPanelInspectionOverlay: View {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 17))
                         .foregroundStyle(Color.secondary.opacity(0.7))
+                        .frame(width: 28, height: 28)
+                        .contentShape(Circle())
                 }
                 .buttonStyle(LensoPressButtonStyle())
             }
@@ -191,6 +202,7 @@ struct SearchPanelInspectionOverlay: View {
                     Image(decorative: cgImage, scale: 1)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: LensoRadius.thumbnail, style: .continuous))
                         .padding(20)
                         .shadow(color: Color.black.opacity(0.12), radius: 10, y: 4)
                         .transition(.opacity)
@@ -222,9 +234,12 @@ struct SearchPanelInspectionOverlay: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 780, height: 530)
+        .frame(width: 800, height: 540)
         .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .shadow(color: Color.black.opacity(0.35), radius: 24, y: 10)
+        .clipShape(RoundedRectangle(cornerRadius: LensoRadius.window, style: .continuous))
+        .background(
+            LensoShadows.panel(RoundedRectangle(cornerRadius: LensoRadius.window, style: .continuous))
+                .foregroundStyle(Color.white)
+        )
     }
 }

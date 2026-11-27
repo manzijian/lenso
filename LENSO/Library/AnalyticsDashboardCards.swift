@@ -21,10 +21,12 @@ extension AnalyticsDashboardView {
                         Text("(近 \(scopeDays) 天)")
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
+                            .monospacedDigit()
                     }
                     Text("共产生 \(totalPeriod) 次操作 · 日均产生 \(String(format: "%.1f", avgDaily)) 条记录")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
+                        .monospacedDigit()
                 }
 
                 Spacer()
@@ -55,7 +57,7 @@ extension AnalyticsDashboardView {
                         // 柱子主体（堆叠：上层复制文字，下层截图）
                         ZStack(alignment: .bottom) {
                             RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .fill(Color.black.opacity(0.04))
+                                .fill(Color.primary.opacity(0.05))
                                 .frame(height: 140)
 
                             VStack(spacing: 1) {
@@ -102,15 +104,19 @@ extension AnalyticsDashboardView {
                         Text(cur.fullDateString)
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(LensoColors.kleinBlueBright)
+                            .monospacedDigit()
                         Text("截图: \(cur.screenshotsCount) 张")
                             .font(.system(size: 11))
                             .foregroundStyle(Color.primary.opacity(0.85))
+                            .monospacedDigit()
                         Text("复制文字: \(cur.textCount) 条")
                             .font(.system(size: 11))
                             .foregroundStyle(Color.primary.opacity(0.85))
+                            .monospacedDigit()
                         Text("当日合计: \(cur.totalCount) 次")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(Color.primary)
+                            .monospacedDigit()
                         Spacer()
                     }
                     .padding(.horizontal, 12)
@@ -129,10 +135,10 @@ extension AnalyticsDashboardView {
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white)
+                .fill(Color(nsColor: .controlBackgroundColor))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(Color.black.opacity(0.06), lineWidth: 1)
+                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
                 )
                 .shadow(color: Color.black.opacity(0.03), radius: 6, y: 2)
         )
@@ -169,16 +175,29 @@ extension AnalyticsDashboardView {
                     Text("统计全天 00:00 至 23:00 的操作频次，最高峰时段为 \(peakHourText)")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
+                        .monospacedDigit()
                 }
 
-                Spacer()
+                Spacer(minLength: 8)
 
                 // 时段轻胶囊
-                HStack(spacing: 6) {
-                    periodTag("早晨 06-12", count: morningSum, isHighlight: maxPeriodSum > 0 && morningSum == maxPeriodSum)
-                    periodTag("下午 12-18", count: afternoonSum, isHighlight: maxPeriodSum > 0 && afternoonSum == maxPeriodSum)
-                    periodTag("晚上 18-24", count: eveningSum, isHighlight: maxPeriodSum > 0 && eveningSum == maxPeriodSum)
-                    periodTag("深夜 00-06", count: nightSum, isHighlight: maxPeriodSum > 0 && nightSum == maxPeriodSum)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 6) {
+                        periodTag("早晨 06-12", count: morningSum, isHighlight: maxPeriodSum > 0 && morningSum == maxPeriodSum)
+                        periodTag("下午 12-18", count: afternoonSum, isHighlight: maxPeriodSum > 0 && afternoonSum == maxPeriodSum)
+                        periodTag("晚上 18-24", count: eveningSum, isHighlight: maxPeriodSum > 0 && eveningSum == maxPeriodSum)
+                        periodTag("深夜 00-06", count: nightSum, isHighlight: maxPeriodSum > 0 && nightSum == maxPeriodSum)
+                    }
+                    VStack(alignment: .trailing, spacing: 4) {
+                        HStack(spacing: 6) {
+                            periodTag("早晨 06-12", count: morningSum, isHighlight: maxPeriodSum > 0 && morningSum == maxPeriodSum)
+                            periodTag("下午 12-18", count: afternoonSum, isHighlight: maxPeriodSum > 0 && afternoonSum == maxPeriodSum)
+                        }
+                        HStack(spacing: 6) {
+                            periodTag("晚上 18-24", count: eveningSum, isHighlight: maxPeriodSum > 0 && eveningSum == maxPeriodSum)
+                            periodTag("深夜 00-06", count: nightSum, isHighlight: maxPeriodSum > 0 && nightSum == maxPeriodSum)
+                        }
+                    }
                 }
             }
 
@@ -196,7 +215,7 @@ extension AnalyticsDashboardView {
                         // 柱体
                         ZStack(alignment: .bottom) {
                             RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                .fill(Color.black.opacity(0.04))
+                                .fill(Color.primary.opacity(0.05))
                                 .frame(height: 120)
 
                             RoundedRectangle(cornerRadius: 4, style: .continuous)
@@ -231,15 +250,19 @@ extension AnalyticsDashboardView {
                         Text(String(format: "时段 %02d:00 - %02d:59", cur.hour, cur.hour))
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(LensoColors.kleinBlueBright)
+                            .monospacedDigit()
                         Text("截图: \(cur.screenshotsCount) 张")
                             .font(.system(size: 11))
                             .foregroundStyle(Color.primary.opacity(0.85))
+                            .monospacedDigit()
                         Text("复制文字: \(cur.textCount) 条")
                             .font(.system(size: 11))
                             .foregroundStyle(Color.primary.opacity(0.85))
+                            .monospacedDigit()
                         Text("总计: \(cur.totalCount) 次")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(Color.primary)
+                            .monospacedDigit()
                         Spacer()
                     }
                     .padding(.horizontal, 12)
@@ -258,10 +281,10 @@ extension AnalyticsDashboardView {
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white)
+                .fill(Color(nsColor: .controlBackgroundColor))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(Color.black.opacity(0.06), lineWidth: 1)
+                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
                 )
                 .shadow(color: Color.black.opacity(0.03), radius: 6, y: 2)
         )
@@ -273,10 +296,13 @@ extension AnalyticsDashboardView {
                 .font(.system(size: 10))
             Text("\(count)")
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .monospacedDigit()
         }
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
-        .background(Capsule().fill(isHighlight ? LensoColors.kleinBlueSoft : Color.black.opacity(0.04)))
+        .background(Capsule().fill(isHighlight ? LensoColors.kleinBlueSoft : Color.primary.opacity(0.05)))
         .foregroundStyle(isHighlight ? LensoColors.kleinBlueBright : Color.secondary)
     }
 
@@ -301,10 +327,16 @@ extension AnalyticsDashboardView {
 
             VStack(spacing: 10) {
                 if apps.isEmpty {
-                    Text("暂无应用数据")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 20)
+                    VStack(spacing: 8) {
+                        Image(systemName: "app.dashed")
+                            .font(.system(size: 24, weight: .light))
+                            .foregroundStyle(Color.secondary.opacity(0.55))
+                        Text("暂无应用数据")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 110)
+                    .padding(.vertical, 12)
                 } else {
                     ForEach(apps) { app in
                         VStack(spacing: 4) {
@@ -315,9 +347,11 @@ extension AnalyticsDashboardView {
                                 Spacer()
                                 Text("\(app.count) 次")
                                     .font(.system(size: 11, design: .monospaced))
+                                    .monospacedDigit()
                                     .foregroundStyle(.secondary)
                                 Text(String(format: "%.1f%%", app.percentage))
                                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                    .monospacedDigit()
                                     .foregroundStyle(LensoColors.kleinBlueBright)
                                     .frame(width: 48, alignment: .trailing)
                             }
@@ -326,7 +360,7 @@ extension AnalyticsDashboardView {
                             GeometryReader { geo in
                                 ZStack(alignment: .leading) {
                                     Capsule()
-                                        .fill(Color.black.opacity(0.05))
+                                        .fill(Color.primary.opacity(0.06))
                                         .frame(height: 6)
                                     Capsule()
                                         .fill(LensoColors.kleinBlueBright)
@@ -344,13 +378,13 @@ extension AnalyticsDashboardView {
             }
         }
         .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white)
+                .fill(Color(nsColor: .controlBackgroundColor))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(Color.black.opacity(0.06), lineWidth: 1)
+                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
                 )
                 .shadow(color: Color.black.opacity(0.03), radius: 6, y: 2)
         )
@@ -390,6 +424,7 @@ extension AnalyticsDashboardView {
                     if let hours = settings.effectiveRetentionHours {
                         Text("(\(hours) 小时到期)")
                             .font(.system(size: 11, design: .monospaced))
+                            .monospacedDigit()
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -414,6 +449,7 @@ extension AnalyticsDashboardView {
                     if let cutoff = settings.retentionCutoffDate {
                         Text("截止时间: \(DateFormatter.lensoFullDateTime.string(from: cutoff))")
                             .font(.system(size: 10, design: .monospaced))
+                            .monospacedDigit()
                             .foregroundStyle(.secondary)
                     } else {
                         Text("所有记录将永久保留")
@@ -441,13 +477,13 @@ extension AnalyticsDashboardView {
             }
         }
         .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white)
+                .fill(Color(nsColor: .controlBackgroundColor))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(Color.black.opacity(0.06), lineWidth: 1)
+                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
                 )
                 .shadow(color: Color.black.opacity(0.03), radius: 6, y: 2)
         )

@@ -24,8 +24,8 @@ struct LibraryFeedView: View {
     @ObservedObject private var webStore = WebMetadataStore.shared
 
     private let mediaSize = CGSize(width: 88, height: 56)
-    private let hairline = Color.black.opacity(0.06)
-    private let paneBackground = Color(red: 0.985, green: 0.988, blue: 0.995)
+    private let hairline = Color.primary.opacity(0.07)
+    private let paneBackground = Color(nsColor: .windowBackgroundColor)
 
     var body: some View {
         VStack(spacing: 8) {
@@ -141,11 +141,13 @@ struct LibraryFeedView: View {
                 Text("截图 · \(record.width) × \(record.height)")
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(Color.primary.opacity(0.92))
+                    .monospacedDigit()
                     .lineLimit(1)
 
                 Text(screenshotSubtitle(record))
                     .font(.system(size: 10.5))
                     .foregroundStyle(Color.primary.opacity(0.5))
+                    .monospacedDigit()
                     .lineLimit(1)
             }
 
@@ -169,7 +171,7 @@ struct LibraryFeedView: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(hoveredID == entry.id ? Color.black.opacity(0.03) : Color.clear)
+                .fill(hoveredID == entry.id ? Color.primary.opacity(0.04) : Color.clear)
         )
         .lensoAnimation(LensoAnimations.hover, value: hoveredID == entry.id, reduceMotion: reduceMotion)
         .contentShape(Rectangle())
@@ -253,7 +255,7 @@ struct LibraryFeedView: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(hoveredID == entry.id ? Color.black.opacity(0.03) : Color.clear)
+                .fill(hoveredID == entry.id ? Color.primary.opacity(0.04) : Color.clear)
         )
         .lensoAnimation(LensoAnimations.hover, value: hoveredID == entry.id, reduceMotion: reduceMotion)
         .contentShape(Rectangle())
@@ -288,7 +290,7 @@ struct LibraryFeedView: View {
     private func mediaSlot<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(Color(red: 0.93, green: 0.94, blue: 0.96))
+                .fill(Color.primary.opacity(0.05))
             content()
         }
         .frame(width: mediaSize.width, height: mediaSize.height)
@@ -319,7 +321,7 @@ struct LibraryFeedView: View {
                     .foregroundStyle(Color.primary.opacity(0.42))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Capsule().fill(Color.black.opacity(0.045)))
+                    .background(Capsule().fill(Color.primary.opacity(0.05)))
                     .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
             }
 

@@ -80,9 +80,15 @@ struct SaveToastView: View {
             Image(systemName: isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
                 .font(.system(size: 20))
                 .foregroundStyle(isError ? Color.orange : Color.green)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.system(size: 13, weight: .semibold))
-                Text(subtitle).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                .frame(width: 24, height: 24)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                Text(subtitle)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
             Spacer(minLength: 0)
             if let thumbnail {
@@ -91,6 +97,10 @@ struct SaveToastView: View {
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 40, height: 30)
                     .clipShape(RoundedRectangle(cornerRadius: 5))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 5)
+                            .strokeBorder(Color.black.opacity(0.10), lineWidth: 0.5)
+                    )
             }
         }
         .padding(.horizontal, 16)
@@ -104,6 +114,5 @@ struct SaveToastView: View {
                         .strokeBorder(isError ? Color.orange.opacity(0.35) : Color.black.opacity(0.08), lineWidth: 1)
                 )
         }
-        .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
     }
 }

@@ -22,9 +22,9 @@ struct MenuBarPanelView: View {
         content
             .frame(width: panelWidth)
             .background(panelBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: LensoRadius.window, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: LensoRadius.window, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
                     .allowsHitTesting(false)
             }
@@ -95,7 +95,7 @@ struct MenuBarPanelView: View {
             Text(title)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(Color.secondary.opacity(0.85))
-                .padding(.leading, 6)
+                .padding(.horizontal, 8)
 
             VStack(spacing: 0) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { offset, item in
@@ -110,17 +110,17 @@ struct MenuBarPanelView: View {
                         Rectangle()
                             .fill(Color.black.opacity(0.05))
                             .frame(height: 0.5)
-                            .padding(.leading, 50)
+                            .padding(.leading, 46)
                             .padding(.trailing, 12)
                     }
                 }
             }
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: LensoRadius.panel, style: .continuous)
                     .fill(Color.white.opacity(0.96))
             )
             .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: LensoRadius.panel, style: .continuous)
                     .strokeBorder(Color.black.opacity(0.055), lineWidth: 0.5)
             }
         }
@@ -158,7 +158,7 @@ struct MenuBarPanelView: View {
                 StatusBarController.shared.hide()
             }
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, 8)
         .padding(.top, 2)
     }
 
@@ -168,9 +168,9 @@ struct MenuBarPanelView: View {
 
     private var panelBackground: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: LensoRadius.window, style: .continuous)
                 .fill(Color(red: 0.953, green: 0.961, blue: 0.98))
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: LensoRadius.window, style: .continuous)
                 .fill(
                     RadialGradient(
                         colors: [LensoColors.kleinBlueBright.opacity(0.07), .clear],
@@ -316,7 +316,7 @@ private struct FooterIconButton: View {
                 .foregroundStyle(hovering ? LensoColors.kleinBlueBright : .secondary)
                 .frame(width: 24, height: 22)
                 .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    RoundedRectangle(cornerRadius: LensoRadius.control, style: .continuous)
                         .fill(hovering ? LensoColors.kleinBlueSoft : Color.clear)
                 )
                 .contentShape(Rectangle())
@@ -347,6 +347,7 @@ private struct PanelRow: View {
                     Text(item.title)
                         .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(highlighted ? LensoColors.kleinBlueBright : Color.primary.opacity(0.92))
+                        .lineLimit(1)
                     Text(item.subtitle)
                         .font(.system(size: 9.5))
                         .foregroundStyle(.secondary)
@@ -368,7 +369,7 @@ private struct PanelRow: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
             .background {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                RoundedRectangle(cornerRadius: LensoRadius.control, style: .continuous)
                     .fill(highlighted ? LensoColors.kleinBlueSoft : Color.clear)
                     .padding(.horizontal, 4)
                     .padding(.vertical, 1)
@@ -385,10 +386,10 @@ private struct PanelRow: View {
         if let tool = item.tool {
             LensoToolIcon(tool: tool, size: 28)
         } else {
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
+            RoundedRectangle(cornerRadius: LensoRadius.control, style: .continuous)
                 .fill(highlighted ? Color.white : LensoColors.kleinBlueSoft)
                 .overlay {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    RoundedRectangle(cornerRadius: LensoRadius.control, style: .continuous)
                         .strokeBorder(LensoColors.kleinBlueBright.opacity(0.12), lineWidth: 0.5)
                 }
                 .overlay {
@@ -410,7 +411,9 @@ private struct Keycap: View {
         Text(text)
             .font(.system(size: 9, weight: .medium, design: .monospaced))
             .foregroundStyle(.secondary)
-            .padding(.horizontal, 4)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, 5)
             .frame(minWidth: 17, minHeight: 17)
             .background(
                 RoundedRectangle(cornerRadius: 5, style: .continuous)

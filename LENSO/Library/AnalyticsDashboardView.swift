@@ -33,8 +33,11 @@ struct AnalyticsDashboardView: View {
                         // 模块 3：来源应用排行榜与存储概览
                         HStack(alignment: .top, spacing: 16) {
                             topAppsCard(data)
+                                .frame(maxHeight: .infinity, alignment: .top)
                             storageAndRetentionCard(data)
+                                .frame(maxHeight: .infinity, alignment: .top)
                         }
+                        .fixedSize(horizontal: false, vertical: true)
                     }
                     .transition(.opacity)
                 } else {
@@ -46,7 +49,7 @@ struct AnalyticsDashboardView: View {
             .lensoAnimation(LensoAnimations.fade, value: data != nil, reduceMotion: reduceMotion)
             .lensoAnimation(LensoAnimations.snappy, value: scopeDays, reduceMotion: reduceMotion)
         }
-        .background(Color(red: 0.98, green: 0.985, blue: 0.995))
+        .background(Color(nsColor: .windowBackgroundColor))
         .onAppear { loadData() }
         .onChange(of: scopeDays) { _ in loadData() }
         .onReceive(NotificationCenter.default.publisher(for: .libraryChanged)) { _ in
@@ -84,7 +87,7 @@ struct AnalyticsDashboardView: View {
     // MARK: - 顶部标题与周期选择
 
     private var headerView: some View {
-        HStack(alignment: .center) {
+        HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
                     Text("数据看板与统计分析")
@@ -121,7 +124,11 @@ struct AnalyticsDashboardView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(LensoColors.kleinBlueBright)
                     .frame(width: 30, height: 30)
-                    .background(Circle().fill(Color.white))
+                    .background(
+                        Circle()
+                            .fill(Color(nsColor: .controlBackgroundColor))
+                            .overlay(Circle().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
+                    )
                     .shadow(color: Color.black.opacity(0.06), radius: 3, y: 1)
             }
             .buttonStyle(LensoPressButtonStyle())
@@ -132,7 +139,7 @@ struct AnalyticsDashboardView: View {
     // MARK: - 核心 KPI 指标卡
 
     private func metricsGrid(_ data: ScreenshotStore.AnalyticsData) -> some View {
-        HStack(spacing: 14) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 155), spacing: 14)], spacing: 14) {
             metricCard(
                 title: "截图归集总数",
                 value: "\(data.totalScreenshots)",
@@ -197,6 +204,9 @@ struct AnalyticsDashboardView: View {
                 Text(badge)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(badgeColor)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 2.5)
                     .background(Capsule().fill(badgeColor.opacity(0.1)))
@@ -207,6 +217,9 @@ struct AnalyticsDashboardView: View {
                     Text(value)
                         .font(.system(size: 26, weight: .bold, design: .rounded))
                         .foregroundStyle(Color.primary.opacity(0.9))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                         .lensoNumericTransition()
 
                     Text(unit)
@@ -223,10 +236,10 @@ struct AnalyticsDashboardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white)
+                .fill(Color(nsColor: .controlBackgroundColor))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(Color.black.opacity(0.06), lineWidth: 1)
+                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
                 )
                 .shadow(color: Color.black.opacity(0.03), radius: 6, y: 2)
         )

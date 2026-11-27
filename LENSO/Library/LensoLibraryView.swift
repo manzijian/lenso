@@ -180,7 +180,7 @@ struct LensoLibraryView: View {
 
     private var mainBackground: some View {
         ZStack {
-            Color(red: 0.985, green: 0.988, blue: 0.995)
+            Color(nsColor: .windowBackgroundColor)
             // 右上角微弱克莱因蓝光斑（仅 3% 透明度，烘托科技感与艺术感）
             RadialGradient(
                 colors: [LensoColors.kleinBlueBright.opacity(0.045), .clear],
@@ -193,9 +193,9 @@ struct LensoLibraryView: View {
     }
 
     private var sidebarBackground: some View {
-        Color.white
+        Color(nsColor: .controlBackgroundColor)
             .overlay(alignment: .trailing) {
-                Rectangle().fill(Color.black.opacity(0.07)).frame(width: 1)
+                Rectangle().fill(Color.primary.opacity(0.07)).frame(width: 1)
             }
             .ignoresSafeArea()
     }
@@ -589,9 +589,9 @@ struct LensoLibraryView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(Color.white.opacity(0.8))
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.85))
         .overlay(alignment: .bottom) {
-            Rectangle().fill(Color.black.opacity(0.06)).frame(height: 1)
+            Rectangle().fill(Color.primary.opacity(0.06)).frame(height: 1)
         }
     }
 
@@ -600,6 +600,7 @@ struct LensoLibraryView: View {
             Text(summary)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
+                .monospacedDigit()
             Spacer()
         }
         .padding(.horizontal, 16)

@@ -14,14 +14,14 @@ struct ToolIcon: View {
     let state: AnnotationState
     var disabled = false
     var tooltip: String? = nil
+    var isActiveOverride: Bool? = nil
     let action: () -> Void
 
     @State private var hovering = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isActive: Bool {
-        guard let kind else { return false }
-        return state.activeKind == kind
+        isActiveOverride ?? (kind.map { state.activeKind == $0 } ?? false)
     }
 
     var body: some View {
@@ -76,25 +76,10 @@ struct CaptureEditorToolbarView: View {
                 icon: "cursorarrow",
                 kind: nil,
                 state: state,
-                tooltip: "选择 / 移动"
+                tooltip: "选择 / 移动",
+                isActiveOverride: state.activeKind == nil
             ) {
                 state.activeKind = nil
-            }
-            .overlay {
-                if state.activeKind == nil {
-                    Image(systemName: "cursorarrow")
-                        .font(.system(size: 13.5, weight: .medium))
-                        .foregroundStyle(brandBlue)
-                        .frame(width: 30, height: 30)
-                        .background {
-                            Circle()
-                                .fill(Color.white)
-                                .shadow(color: .black.opacity(0.10), radius: 2, y: 1)
-                                .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
-                                .overlay(Circle().strokeBorder(Color.black.opacity(0.05), lineWidth: 0.5))
-                        }
-                        .allowsHitTesting(false)
-                }
             }
 
             ForEach([AnnotationKind.rect, .ellipse, .arrow, .brush, .text, .mosaic, .highlight], id: \.self) { kind in
@@ -117,7 +102,13 @@ struct CaptureEditorToolbarView: View {
             separator
 
             // OCR 快捷入口
-            ToolIcon(icon: "doc.text.viewfinder", kind: nil, state: state, tooltip: "文字识别（OCR）") {
+            ToolIcon(
+                icon: "doc.text.viewfinder",
+                kind: nil,
+                state: state,
+                tooltip: "文字识别（OCR）",
+                isActiveOverride: isSidePanelVisible && panelTab == .ocr
+            ) {
                 if isSidePanelVisible && panelTab == .ocr {
                     isSidePanelVisible = false
                 } else {
@@ -152,10 +143,17 @@ struct CaptureEditorToolbarView: View {
                 )
             }
             .overlay(
-                Capsule().strokeBorder(Color.white.opacity(0.75), lineWidth: 0.5)
+                Capsule().strokeBorder(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.85), Color.white.opacity(0.25)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 0.5
+                )
             )
             .overlay(
-                Capsule().strokeBorder(Color.black.opacity(0.10), lineWidth: 0.5)
+                Capsule().stroke(Color.black.opacity(0.10), lineWidth: 0.5)
             )
         }
         .shadow(color: .black.opacity(0.20), radius: 26, y: 8)
@@ -173,12 +171,13 @@ struct CaptureEditorToolbarView: View {
         Button(action: onFinish) {
             HStack(spacing: 4) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 9.5, weight: .bold))
+                    .font(.system(size: 10.5, weight: .bold))
                 Text("完成")
-                    .font(.system(size: 10.5, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
             }
             .foregroundStyle(.white)
-            .padding(.horizontal, 11)
+            .padding(.horizontal, 12)
             .frame(height: 28)
             .background(
                 Capsule()

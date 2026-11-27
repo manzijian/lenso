@@ -26,7 +26,7 @@ struct LibraryTopToolbarView: View {
                         .background {
                             if viewMode == .grid {
                                 RoundedRectangle(cornerRadius: 6)
-                                    .fill(Color.white)
+                                    .fill(Color(nsColor: .controlBackgroundColor))
                                     .shadow(color: Color.black.opacity(0.08), radius: 2, y: 1)
                                     .matchedGeometryEffect(id: "viewModePill", in: viewModeNamespace)
                             }
@@ -46,7 +46,7 @@ struct LibraryTopToolbarView: View {
                         .background {
                             if viewMode == .list {
                                 RoundedRectangle(cornerRadius: 6)
-                                    .fill(Color.white)
+                                    .fill(Color(nsColor: .controlBackgroundColor))
                                     .shadow(color: Color.black.opacity(0.08), radius: 2, y: 1)
                                     .matchedGeometryEffect(id: "viewModePill", in: viewModeNamespace)
                             }
@@ -55,7 +55,7 @@ struct LibraryTopToolbarView: View {
                 .buttonStyle(LensoPressButtonStyle())
             }
             .padding(2)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.black.opacity(0.04)))
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
 
             // 时间范围筛选
             Menu {
@@ -84,8 +84,8 @@ struct LibraryTopToolbarView: View {
                 .padding(.vertical, 5)
                 .background(
                     Capsule()
-                        .fill(Color.white)
-                        .overlay(Capsule().stroke(Color.black.opacity(0.08), lineWidth: 1))
+                        .fill(Color(nsColor: .controlBackgroundColor))
+                        .overlay(Capsule().stroke(Color.primary.opacity(0.08), lineWidth: 1))
                         .shadow(color: Color.black.opacity(0.03), radius: 2, y: 1)
                 )
             }
@@ -121,10 +121,10 @@ struct LibraryTopToolbarView: View {
             .padding(.vertical, 5)
             .background(
                 Capsule()
-                    .fill(Color.white)
+                    .fill(Color(nsColor: .textBackgroundColor))
                     .overlay(
                         Capsule()
-                            .stroke(searchText.isEmpty ? Color.black.opacity(0.08) : LensoColors.kleinBlueBright, lineWidth: 1)
+                            .stroke(searchText.isEmpty ? Color.primary.opacity(0.08) : LensoColors.kleinBlueBright, lineWidth: 1)
                     )
                     .shadow(color: Color.black.opacity(0.03), radius: 2, y: 1)
             )
@@ -137,7 +137,7 @@ struct LibraryTopToolbarView: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Color.secondary)
                     .frame(width: 26, height: 26)
-                    .background(Circle().fill(Color.white).overlay(Circle().stroke(Color.black.opacity(0.08), lineWidth: 1)))
+                    .background(Circle().fill(Color(nsColor: .controlBackgroundColor)).overlay(Circle().stroke(Color.primary.opacity(0.08), lineWidth: 1)))
             }
             .buttonStyle(LensoPressButtonStyle())
             .help("呼出全局搜索 (⇧⌘F)")
@@ -160,12 +160,14 @@ struct LibraryFooterView: View {
                 Text("\(totalCount) 张截图 · 全部保存在本地磁盘")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+                    .monospacedDigit()
                     .lensoNumericTransition()
             } else {
                 HStack(spacing: 8) {
                     Text("已选择 \(selectedIDs.count) 张")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(LensoColors.kleinBlueBright)
+                        .monospacedDigit()
                         .lensoNumericTransition()
 
                     Text("·")
@@ -195,6 +197,7 @@ struct LibraryFooterView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "trash")
                         Text("直接删除 (\(selectedIDs.count))")
+                            .monospacedDigit()
                             .lensoNumericTransition()
                     }
                     .font(.system(size: 11, weight: .semibold))
@@ -213,10 +216,10 @@ struct LibraryFooterView: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.white.opacity(0.75))
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.85))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                        .stroke(Color.primary.opacity(0.07), lineWidth: 1)
                 )
         )
     }
@@ -253,6 +256,7 @@ struct LibraryScreenshotListRow: View {
                     Text("\(record.sourceApp ?? "截图") · \(record.capturedAt.lensoRelativeDayTime) · \(record.width) × \(record.height)")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
+                        .monospacedDigit()
                         .lineLimit(1)
                 }
             }
@@ -298,10 +302,10 @@ struct LibraryScreenshotListRow: View {
         .padding(8)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.white)
+                .fill(Color(nsColor: .controlBackgroundColor))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(isSelected ? LensoColors.kleinBlueBright : Color.black.opacity(0.06), lineWidth: isSelected ? 2 : 1)
+                        .stroke(isSelected ? LensoColors.kleinBlueBright : Color.primary.opacity(0.08), lineWidth: isSelected ? 2 : 1)
                 )
                 .shadow(color: Color.black.opacity(0.03), radius: 3, y: 1)
         )
@@ -395,6 +399,7 @@ struct LibraryFeedSectionFooter: View {
             Text(summary)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
+                .monospacedDigit()
             Spacer()
         }
         .padding(.horizontal, 16)
@@ -445,7 +450,7 @@ struct LibraryImageCell: View {
                         )
                 } else {
                     RoundedRectangle(cornerRadius: 11, style: .continuous)
-                        .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
+                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -473,6 +478,7 @@ struct LibraryImageCell: View {
                 if let record {
                     Text("\(Self.clockFormatter.string(from: record.capturedAt)) · \(record.sourceApp ?? "截图")")
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .monospacedDigit()
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .padding(.horizontal, 6)
@@ -488,9 +494,13 @@ struct LibraryImageCell: View {
                         Button(action: onOpen) {
                             Image(systemName: "eye.fill")
                                 .font(.system(size: 10))
-                                .foregroundStyle(Color.primary.opacity(0.8))
+                                .foregroundStyle(Color.primary.opacity(0.88))
                                 .frame(width: 22, height: 22)
-                                .background(Circle().fill(Color.white))
+                                .background(
+                                    Circle()
+                                        .fill(Color(nsColor: .controlBackgroundColor))
+                                        .overlay(Circle().strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
+                                )
                         }
                         .buttonStyle(LensoPressButtonStyle())
                         .help("双击打开预览")
@@ -511,10 +521,14 @@ struct LibraryImageCell: View {
                         } label: {
                             Image(systemName: isCopied ? "checkmark" : "doc.on.doc.fill")
                                 .font(.system(size: 10, weight: isCopied ? .bold : .regular))
-                                .foregroundStyle(isCopied ? Color(red: 0.11, green: 0.55, blue: 0.33) : Color.primary.opacity(0.8))
+                                .foregroundStyle(isCopied ? Color(red: 0.11, green: 0.55, blue: 0.33) : Color.primary.opacity(0.88))
                                 .lensoSymbolReplace()
                                 .frame(width: 22, height: 22)
-                                .background(Circle().fill(Color.white))
+                                .background(
+                                    Circle()
+                                        .fill(Color(nsColor: .controlBackgroundColor))
+                                        .overlay(Circle().strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
+                                )
                         }
                         .buttonStyle(LensoPressButtonStyle())
                         .help("复制到剪贴板")
@@ -524,13 +538,17 @@ struct LibraryImageCell: View {
                                 .font(.system(size: 10))
                                 .foregroundStyle(Color.red)
                                 .frame(width: 22, height: 22)
-                                .background(Circle().fill(Color.white))
+                                .background(
+                                    Circle()
+                                        .fill(Color(nsColor: .controlBackgroundColor))
+                                        .overlay(Circle().strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
+                                )
                         }
                         .buttonStyle(LensoPressButtonStyle())
                         .help("直接彻底删除")
                     }
                     .padding(4)
-                    .background(Capsule().fill(Color.black.opacity(0.25)))
+                    .background(Capsule().fill(Color.black.opacity(0.28)))
                     .padding(6)
                     .transition(.opacity)
                 }

@@ -21,10 +21,10 @@ struct TextDetailInspectorSheet: View {
     @State private var copied: Bool = false
     @State private var searchQuery: String = ""
 
-    private let pageBackground = Color(red: 0.973, green: 0.976, blue: 0.986)
-    private let sidebarBackground = Color(red: 0.966, green: 0.970, blue: 0.982)
-    private let hairline = Color.black.opacity(0.06)
-    private let cardShape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+    private let pageBackground = Color(nsColor: .windowBackgroundColor)
+    private let sidebarBackground = Color(nsColor: .underPageBackgroundColor)
+    private let hairline = Color.primary.opacity(0.08)
+    private let cardShape = RoundedRectangle(cornerRadius: 12, style: .continuous)
 
     var body: some View {
         VStack(spacing: 0) {
@@ -66,6 +66,7 @@ struct TextDetailInspectorSheet: View {
                     .font(.system(size: 12, weight: .semibold))
                 Text(typeTitle)
                     .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
             }
             .foregroundStyle(LensoColors.kleinBlueBright)
             .padding(.horizontal, 8)
@@ -76,9 +77,10 @@ struct TextDetailInspectorSheet: View {
                 Text(app)
                     .font(.system(size: 10.5, weight: .medium))
                     .foregroundStyle(Color.primary.opacity(0.62))
+                    .lineLimit(1)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
-                    .background(Capsule().fill(Color.black.opacity(0.045)))
+                    .background(Capsule().fill(Color.primary.opacity(0.05)))
             }
 
             Spacer()
@@ -86,6 +88,8 @@ struct TextDetailInspectorSheet: View {
             Text(createdAt.lensoRelativeDayTime)
                 .font(.system(size: 10.5, design: .monospaced))
                 .foregroundStyle(Color.primary.opacity(0.42))
+                .lineLimit(1)
+                .monospacedDigit()
 
             searchField
 
@@ -94,14 +98,14 @@ struct TextDetailInspectorSheet: View {
                     .font(.system(size: 10.5, weight: .bold))
                     .foregroundStyle(Color.primary.opacity(0.55))
                     .frame(width: 22, height: 22)
-                    .background(Circle().fill(Color.black.opacity(0.05)))
+                    .background(Circle().fill(Color.primary.opacity(0.06)))
             }
             .buttonStyle(LensoPressButtonStyle())
             .help("关闭 (Esc)")
         }
         .padding(.horizontal, 16)
         .frame(height: 52)
-        .background(Color.white)
+        .background(Color(nsColor: .controlBackgroundColor))
     }
 
     private var searchField: some View {
@@ -128,7 +132,7 @@ struct TextDetailInspectorSheet: View {
         .lensoAnimation(LensoAnimations.snappy, value: searchQuery.isEmpty, reduceMotion: reduceMotion)
         .padding(.horizontal, 9)
         .padding(.vertical, 5)
-        .background(Capsule().fill(Color.black.opacity(0.045)))
+        .background(Capsule().fill(Color.primary.opacity(0.05)))
     }
 
     // MARK: - 网页卡片
@@ -187,7 +191,7 @@ struct TextDetailInspectorSheet: View {
             .help("在系统默认浏览器中打开")
         }
         .padding(12)
-        .background(cardShape.fill(Color.white))
+        .background(cardShape.fill(Color(nsColor: .controlBackgroundColor)))
         .overlay(cardShape.strokeBorder(hairline, lineWidth: 0.8))
         .padding(.horizontal, 18)
         .padding(.top, 14)
@@ -201,7 +205,7 @@ struct TextDetailInspectorSheet: View {
                 // 代码 / JSON：长行保留行号对齐，允许横向滚动，不压缩排版
                 ScrollView([.horizontal, .vertical]) {
                     structuredContent
-                        .background(cardShape.fill(Color.white))
+                        .background(cardShape.fill(Color(nsColor: .controlBackgroundColor)))
                         .overlay(cardShape.strokeBorder(hairline, lineWidth: 0.8))
                         .padding(18)
                 }
@@ -212,7 +216,7 @@ struct TextDetailInspectorSheet: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 24)
                         .padding(.horizontal, 24)
-                        .background(cardShape.fill(Color.white))
+                        .background(cardShape.fill(Color(nsColor: .controlBackgroundColor)))
                         .overlay(cardShape.strokeBorder(hairline, lineWidth: 0.8))
                         .padding(18)
                         .frame(maxWidth: .infinity)
@@ -279,9 +283,11 @@ struct TextDetailInspectorSheet: View {
         HStack(spacing: 12) {
             HStack(spacing: 8) {
                 Text("\(currentFormattedContent.count) 字符")
+                    .monospacedDigit()
                     .lensoNumericTransition()
                 Text("·").foregroundStyle(Color.secondary.opacity(0.4))
                 Text("\(displayedLinesCount) 行")
+                    .monospacedDigit()
                     .lensoNumericTransition()
             }
             .font(.system(size: 10.5, design: .monospaced))
@@ -307,7 +313,7 @@ struct TextDetailInspectorSheet: View {
                     .foregroundStyle(Color.primary.opacity(0.72))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5.5)
-                    .background(Capsule().fill(Color.black.opacity(0.045)))
+                    .background(Capsule().fill(Color.primary.opacity(0.05)))
                 }
                 .buttonStyle(LensoPressButtonStyle())
                 .help("保存至文字收纳库")
@@ -346,7 +352,7 @@ struct TextDetailInspectorSheet: View {
         }
         .padding(.horizontal, 16)
         .frame(height: 58)
-        .background(Color.white)
+        .background(Color(nsColor: .controlBackgroundColor))
     }
 
     // MARK: - 右侧检查器
@@ -377,7 +383,7 @@ struct TextDetailInspectorSheet: View {
                     .font(.system(size: 9.5, design: .monospaced))
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
-                    .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color.black.opacity(0.055)))
+                    .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color.primary.opacity(0.06)))
                     .foregroundStyle(Color.primary.opacity(0.55))
                 Text("关闭")
                     .font(.system(size: 10))
@@ -411,6 +417,7 @@ struct TextDetailInspectorSheet: View {
             Text(value)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Color.primary.opacity(0.85))
+                .monospacedDigit()
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
@@ -561,7 +568,7 @@ struct TextDetailInspectorSheet: View {
     private func monospacedText(_ string: String) -> AttributedString {
         var attributed = AttributedString(string)
         attributed.font = .system(size: 12.5, design: .monospaced)
-        attributed.foregroundColor = Color(red: 0.15, green: 0.15, blue: 0.2)
+        attributed.foregroundColor = Color.primary.opacity(0.88)
         return attributed
     }
 

@@ -125,12 +125,13 @@ struct SearchPanelView: View {
             SearchPanelDragStrip()
                 .frame(height: 18)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: LensoRadius.window, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: LensoRadius.window, style: .continuous)
                 .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.22), radius: 30, y: 14)
+        .environment(\.colorScheme, .light)
         .onAppear {
             selectedCategory = initialCategory
             confirmingClearClipboard = false
@@ -247,7 +248,7 @@ struct SearchPanelView: View {
                         .buttonStyle(LensoPressButtonStyle())
                         .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
                     } else {
-                        Text("esc")
+                        Text("Esc")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(Color.black.opacity(0.42))
                             .padding(.horizontal, 6)
@@ -265,18 +266,17 @@ struct SearchPanelView: View {
             .frame(height: 46)
             .frame(maxWidth: 620)
             .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.white)
+                LensoShadows.panel(RoundedRectangle(cornerRadius: LensoRadius.panel, style: .continuous))
+                    .foregroundStyle(Color.white)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: LensoRadius.panel, style: .continuous)
                     .strokeBorder(
                         focused ? LensoColors.kleinBlueBright.opacity(0.55) : Color.black.opacity(0.08),
                         lineWidth: 1
                     )
                     .lensoAnimation(LensoAnimations.hover, value: focused, reduceMotion: reduceMotion)
             )
-            .shadow(color: .black.opacity(0.05), radius: 10, y: 4)
 
             HStack(spacing: 7) {
                 ForEach(FilterCategory.allCases) { cat in
@@ -292,9 +292,12 @@ struct SearchPanelView: View {
                                 .font(.system(size: 11.5, weight: active ? .semibold : .regular))
                             Text("\(count(for: cat))")
                                 .font(.system(size: 10, weight: .medium, design: .rounded))
+                                .monospacedDigit()
                                 .opacity(active ? 0.7 : 0.55)
                                 .lensoNumericTransition()
                         }
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                         .foregroundStyle(active ? Color.white : Color.black.opacity(0.62))
                         .padding(.horizontal, 11)
                         .padding(.vertical, 6)
@@ -417,6 +420,7 @@ struct SearchPanelView: View {
                 .foregroundStyle(Color.black.opacity(0.82))
             Text("\(section.items.count) 项")
                 .font(.system(size: 11.5))
+                .monospacedDigit()
                 .foregroundStyle(.secondary)
             Spacer()
         }
@@ -463,8 +467,8 @@ struct SearchPanelView: View {
         HStack(spacing: 16) {
             hint("↑↓←→", "选择")
             hint("↵", "复制")
-            hint("space", "预览")
-            hint("esc", "关闭")
+            hint("Space", "预览")
+            hint("Esc", "关闭")
             Spacer()
             if selectedCategory == .clipboard, count(for: .clipboard) > 0 {
                 if confirmingClearClipboard {
@@ -489,7 +493,7 @@ struct SearchPanelView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(Capsule().fill(Color.red.opacity(0.85)))
+                        .background(Capsule().fill(LensoColors.danger))
                         .buttonStyle(LensoPressButtonStyle())
                     }
                     .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
@@ -509,6 +513,7 @@ struct SearchPanelView: View {
             }
             Text("共 \(filteredItems.count) 项")
                 .font(.system(size: 10.5))
+                .monospacedDigit()
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal, sidePadding)
@@ -939,6 +944,7 @@ private struct ImmersiveImageTile: View {
                     Image(decorative: image, scale: 2)
                         .resizable()
                         .scaledToFit()
+                        .padding(2)
                 } else {
                     VStack(spacing: 6) {
                         Image(systemName: "photo")
@@ -963,23 +969,28 @@ private struct ImmersiveImageTile: View {
             HStack(spacing: 5) {
                 SourceAppIcon(name: item.sourceApp, size: 12)
                 Text(displayApp)
-                    .font(.system(size: 9.5, weight: .medium))
+                    .font(.system(size: 10.5, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 Text(timeText)
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .font(.system(size: 10.5, weight: .medium))
+                    .monospacedDigit()
+                    .lineLimit(1)
                     .foregroundStyle(.secondary.opacity(0.85))
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 10)
             .frame(height: 22)
             .background(Color.white)
         }
         .frame(height: height)
-        .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(
+            LensoShadows.card(RoundedRectangle(cornerRadius: LensoRadius.panel, style: .continuous))
+                .foregroundStyle(Color.white)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: LensoRadius.panel, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: LensoRadius.panel, style: .continuous)
                 .strokeBorder(
                     isSelected ? LensoColors.kleinBlueBright : Color.black.opacity(hovering ? 0.14 : 0.07),
                     lineWidth: isSelected ? 2 : 1
@@ -996,7 +1007,7 @@ private struct ImmersiveImageTile: View {
         }
         .shadow(color: .black.opacity(hovering ? 0.14 : 0.06), radius: hovering ? 12 : 5, y: hovering ? 5 : 2)
         .lensoAnimation(LensoAnimations.hover, value: hovering, reduceMotion: reduceMotion)
-        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: LensoRadius.panel, style: .continuous))
         .onHover { hovering = $0 }
         .onTapGesture(count: 2) { onCopy() }
         .onTapGesture { onSelect() }
@@ -1064,28 +1075,30 @@ private struct ImmersiveTextTile: View {
                         RoundedRectangle(cornerRadius: 4, style: .continuous)
                             .fill(LensoColors.kleinBlueSoft)
                     )
-                SourceAppIcon(name: item.sourceApp, size: 13)
+                SourceAppIcon(name: item.sourceApp, size: 12)
                 Text(displayApp)
-                    .font(.system(size: 9.5))
+                    .font(.system(size: 10.5, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 Text(timeText)
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(.system(size: 10.5, weight: .medium))
+                    .monospacedDigit()
+                    .lineLimit(1)
                     .foregroundStyle(.secondary.opacity(0.85))
             }
         }
-        .padding(.horizontal, 11)
+        .padding(.horizontal, 10)
         .padding(.top, 11)
         .padding(.bottom, 10)
         .frame(height: height, alignment: .top)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white)
+            LensoShadows.card(RoundedRectangle(cornerRadius: LensoRadius.panel, style: .continuous))
+                .foregroundStyle(Color.white)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: LensoRadius.panel, style: .continuous)
                 .strokeBorder(
                     isSelected ? LensoColors.kleinBlueBright : Color.black.opacity(hovering ? 0.14 : 0.07),
                     lineWidth: isSelected ? 2 : 1
@@ -1103,7 +1116,7 @@ private struct ImmersiveTextTile: View {
         .overlay {
             if isCopied {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: LensoRadius.panel, style: .continuous)
                         .fill(Color.white.opacity(0.88))
                     VStack(spacing: 5) {
                         Image(systemName: "checkmark.circle.fill")
@@ -1120,7 +1133,7 @@ private struct ImmersiveTextTile: View {
         .lensoAnimation(LensoAnimations.snappy, value: isCopied, reduceMotion: reduceMotion)
         .shadow(color: .black.opacity(hovering ? 0.14 : 0.06), radius: hovering ? 12 : 5, y: hovering ? 5 : 2)
         .lensoAnimation(LensoAnimations.hover, value: hovering, reduceMotion: reduceMotion)
-        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: LensoRadius.panel, style: .continuous))
         .onHover { hovering = $0 }
         .onTapGesture(count: 2) { onCopy() }
         .onTapGesture { onSelect() }
@@ -1176,7 +1189,7 @@ private struct TileQuickActions: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(LensoPressButtonStyle())
-            .help("预览 (space)")
+            .help("预览 (Space)")
         }
         .background(Capsule().fill(Color.white))
         .overlay(Capsule().strokeBorder(Color.black.opacity(0.10), lineWidth: 1))

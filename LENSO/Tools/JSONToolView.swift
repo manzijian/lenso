@@ -25,7 +25,7 @@ struct JSONToolView: View {
                 inputCard
                 resultCard
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 16)
             .padding(.top, 11)
             .padding(.bottom, 10)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -182,7 +182,7 @@ struct JSONToolView: View {
         .padding(3)
         .background(
             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(Color.black.opacity(0.045))
+                .fill(Color.primary.opacity(0.05))
         )
     }
 
@@ -220,7 +220,7 @@ struct JSONToolView: View {
         .padding(2)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.black.opacity(0.035))
+                .fill(Color.primary.opacity(0.04))
         )
     }
 
@@ -260,7 +260,7 @@ struct JSONToolView: View {
             .frame(height: 26)
             .background(
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color.black.opacity(0.035))
+                    .fill(Color.primary.opacity(0.04))
             )
         }
         .menuStyle(.borderlessButton)
@@ -534,7 +534,7 @@ struct JSONToolView: View {
             .fill(Color(nsColor: .textBackgroundColor).opacity(0.62))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(Color.black.opacity(0.055), lineWidth: 0.5)
+                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
             )
     }
 
@@ -578,12 +578,13 @@ struct JSONToolView: View {
             }
         }
         .font(.system(size: 10.5))
+        .monospacedDigit()
         .foregroundStyle(.secondary)
         .padding(.horizontal, 16)
         .padding(.vertical, 7)
-        .background(Color.black.opacity(0.015))
+        .background(Color.primary.opacity(0.02))
         .overlay(alignment: .top) {
-            Rectangle().fill(Color.black.opacity(0.05)).frame(height: 0.5)
+            Rectangle().fill(Color.primary.opacity(0.07)).frame(height: 0.5)
         }
     }
 

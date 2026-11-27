@@ -80,16 +80,19 @@ struct SettingsSectionContentView: View {
 
                             if settings.retentionPreset == .custom {
                                 rowDivider
-                                HStack(spacing: 8) {
+                                HStack(spacing: 10) {
                                     Text("自定义保留时长")
                                         .font(.system(size: 13, weight: .medium))
                                         .foregroundStyle(Color.primary.opacity(0.9))
                                     Spacer()
-                                    TextField("数值", value: $settings.customRetentionValue, format: .number)
-                                        .textFieldStyle(.roundedBorder)
-                                        .frame(width: 56)
-                                    Stepper("", value: $settings.customRetentionValue, in: 1...3650)
-                                        .labelsHidden()
+                                    HStack(spacing: 6) {
+                                        TextField("数值", value: $settings.customRetentionValue, format: .number)
+                                            .textFieldStyle(.roundedBorder)
+                                            .monospacedDigit()
+                                            .frame(width: 56)
+                                        Stepper("", value: $settings.customRetentionValue, in: 1...3650)
+                                            .labelsHidden()
+                                    }
                                     Picker("", selection: $settings.customRetentionUnit) {
                                         ForEach(RetentionUnit.allCases) { u in
                                             Text(u.rawValue).tag(u)
@@ -122,6 +125,7 @@ struct SettingsSectionContentView: View {
                                             Text("早于 \(DateFormatter.lensoFullDateTime.string(from: cutoff)) 的记录将被清除")
                                                 .font(.system(size: 10))
                                                 .foregroundStyle(.secondary)
+                                                .monospacedDigit()
                                         }
                                     }
                                     Spacer()
@@ -213,8 +217,8 @@ struct SettingsSectionContentView: View {
                     .padding(.vertical, 6)
                     .background(
                         Capsule()
-                            .fill(Color.white)
-                            .overlay(Capsule().stroke(Color.black.opacity(0.08), lineWidth: 1))
+                            .fill(Color(nsColor: .controlBackgroundColor))
+                            .overlay(Capsule().stroke(Color.primary.opacity(0.08), lineWidth: 1))
                             .shadow(color: Color.black.opacity(0.03), radius: 2, y: 1)
                     )
                 }
@@ -261,7 +265,7 @@ struct SettingsSectionContentView: View {
                                             .frame(width: 28, height: 28)
                                             .background(
                                                 RoundedRectangle(cornerRadius: 6)
-                                                    .fill(settings.menuBarIconStyle == style ? LensoColors.kleinBlueSoft : Color.black.opacity(0.04))
+                                                    .fill(settings.menuBarIconStyle == style ? LensoColors.kleinBlueSoft : Color.primary.opacity(0.05))
                                             )
 
                                         Text(style.rawValue)
@@ -318,6 +322,7 @@ struct SettingsSectionContentView: View {
                                     Text(aboutVersion)
                                         .font(.system(size: 11, weight: .semibold))
                                         .foregroundStyle(LensoColors.kleinBlueBright)
+                                        .monospacedDigit()
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 1.5)
                                         .background(Capsule().fill(LensoColors.kleinBlueSoft))

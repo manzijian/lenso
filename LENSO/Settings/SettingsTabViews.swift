@@ -11,10 +11,10 @@ struct SettingCardContainer<Content: View>: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white)
+                .fill(Color(nsColor: .controlBackgroundColor))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Color.black.opacity(0.06), lineWidth: 1)
+                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
                 )
                 .shadow(color: Color.black.opacity(0.03), radius: 4, y: 1)
         )
@@ -130,7 +130,7 @@ struct MCPSettingsSectionView: View {
                             .foregroundStyle(settings.enableMCPServer ? LensoColors.kleinBlueBright : Color.secondary)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Capsule().fill(settings.enableMCPServer ? LensoColors.kleinBlueSoft : Color.black.opacity(0.04)))
+                            .background(Capsule().fill(settings.enableMCPServer ? LensoColors.kleinBlueSoft : Color.primary.opacity(0.05)))
                     }
 
                     if settings.enableMCPServer {
@@ -282,6 +282,7 @@ struct MCPSettingsSectionView: View {
                 Text("\(usageEntries.count)")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(LensoColors.kleinBlueBright)
+                    .monospacedDigit()
                     .padding(.horizontal, 6)
                     .padding(.vertical, 1.5)
                     .background(Capsule().fill(LensoColors.kleinBlueSoft))
@@ -367,9 +368,9 @@ struct MCPSettingsSectionView: View {
 
         return HStack(spacing: 16) {
             summaryItem(label: "今日调用", value: "\(today.count)", unit: "次")
-            Rectangle().fill(Color.black.opacity(0.06)).frame(width: 0.5, height: 12)
+            Rectangle().fill(Color.primary.opacity(0.08)).frame(width: 0.5, height: 12)
             summaryItem(label: "成功率", value: "\(rate)", unit: "%")
-            Rectangle().fill(Color.black.opacity(0.06)).frame(width: 0.5, height: 12)
+            Rectangle().fill(Color.primary.opacity(0.08)).frame(width: 0.5, height: 12)
             summaryItem(label: "平均耗时", value: "\(average)", unit: "ms")
             Spacer()
         }
@@ -386,6 +387,7 @@ struct MCPSettingsSectionView: View {
             Text(value)
                 .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
                 .foregroundStyle(LensoColors.kleinBlueBright)
+                .monospacedDigit()
                 .lensoNumericTransition()
             Text(unit)
                 .font(.system(size: 9.5))
@@ -412,7 +414,7 @@ struct MCPSettingsSectionView: View {
                     .background(
                         Circle().fill(hovering && enabled
                                       ? LensoColors.kleinBlueSoft
-                                      : Color.black.opacity(0.035))
+                                      : Color.primary.opacity(0.05))
                     )
                     .contentShape(Circle())
             }
@@ -484,9 +486,11 @@ struct MCPSettingsSectionView: View {
                     Text(timeText)
                         .font(.system(size: 10.5, design: .monospaced))
                         .foregroundStyle(.secondary)
+                        .monospacedDigit()
                     Text("\(entry.durationMS) ms")
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(.tertiary)
+                        .monospacedDigit()
                 }
             }
             .padding(.horizontal, 12)
