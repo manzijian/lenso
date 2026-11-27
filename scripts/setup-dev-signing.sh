@@ -70,6 +70,16 @@ else
   echo "已导入钥匙串。"
 fi
 
+# 确保证书在登录钥匙串中被信任用于代码签名，否则 macOS TCC (屏幕录制等) 仍会按 cdhash 判定并在每次重建后重新弹窗
+if ! security find-identity -v -p codesigning | grep -q "$CERT_NAME"; then
+  echo "正在将 $CERT_NAME 设为代码签名受信任证书..."
+  security find-certificate -c "$CERT_NAME" -p > "$TMPDIR_SIGN/trust.pem"
+  openssl x509 -in "$TMPDIR_SIGN/trust.pem" -outform der -out "$TMPDIR_SIGN/trust.cer"
+  security add-trusted-cert -r trustRoot -p codeSign \
+    -k "$HOME/Library/Keychains/login.keychain-db" \
+    "$TMPDIR_SIGN/trust.cer"
+fi
+
 echo
 echo "本机可用的代码签名身份："
 security find-identity -v -p codesigning | sed 's/^/  /'
@@ -81,6 +91,10 @@ APP_PATH="${1:-$(ls -dt "$HOME"/Library/Developer/Xcode/DerivedData/LENSO-*/Buil
 if [ -n "$APP_PATH" ]; then
   echo
   echo "使用固定身份重新签名：$APP_PATH"
+  for dir in "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Frameworks"; do
+    [ -d "$dir" ] || continue
+    find "$dir" -maxdepth 2 -name "*.dylib" -exec codesign --force --sign "$CERT_NAME" {} +
+  done
   codesign --force --sign "$CERT_NAME" "$APP_PATH"
   codesign -dv "$APP_PATH" 2>&1 | grep -E "Identifier|Authority" || true
   echo "签名要求（重建后应保持不变）："

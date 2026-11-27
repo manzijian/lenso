@@ -32,6 +32,10 @@ fi
 
 echo
 echo "==> 用固定身份重新签名"
+for dir in "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Frameworks"; do
+  [ -d "$dir" ] || continue
+  find "$dir" -maxdepth 2 -name "*.dylib" -exec codesign --force --sign "LENSO Dev Signing" {} +
+done
 bash scripts/setup-dev-signing.sh "$APP_PATH" | tail -12
 
 # ── 小组件扩展签名 ────────────────────────────────────────────────

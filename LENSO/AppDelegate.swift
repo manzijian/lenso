@@ -28,9 +28,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ClipboardMonitor.shared.start()
         // 写入桌面小组件快照（截图/图库变化时刷新，另每 5 分钟兜底）
         WidgetSnapshotCoordinator.shared.start()
-        // 预热截图框架，第一次按热键时冻结画面更快
-        Task.detached(priority: .utility) {
-            await ScreenCaptureService.prewarm()
+        // 预热截图框架：仅在已授权时预热，避免启动阶段弹出系统录屏授权框
+        if CGPreflightScreenCaptureAccess() {
+            Task.detached(priority: .utility) {
+                await ScreenCaptureService.prewarm()
+            }
         }
         // 启动本地 HTTP / SSE / MCP 服务 (端口 52888，按设置开启或关闭)
         AppSettings.shared.applyMCPServerState()
