@@ -52,7 +52,6 @@ final class StatusBarController {
     func show() {
         if let panel {
             LensoWindowMotion.present(panel, slideY: -6, makeKey: true)
-            NSApp.activate(ignoringOtherApps: true)
             return
         }
 
@@ -100,7 +99,6 @@ final class StatusBarController {
         }
 
         LensoWindowMotion.present(panel, slideY: -6, makeKey: true)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     func hide() {

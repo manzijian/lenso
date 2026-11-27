@@ -45,6 +45,7 @@ final class CaptureCoordinator: NSObject {
         if let front = NSWorkspace.shared.frontmostApplication,
            front.bundleIdentifier != Bundle.main.bundleIdentifier {
             lastSourceApp = front.localizedName
+            previousFrontApp = front
         } else {
             lastSourceApp = nil
         }
@@ -169,9 +170,9 @@ final class CaptureCoordinator: NSObject {
 
         let panel = EditorPanel(
             contentRect: screenFrame,
-            // 这里刻意不用 .nonactivatingPanel：非激活面板拿不到输入法上下文，
-            // 中文候选框挂不上来。编辑器需要文字标注，所以必须是普通可激活面板。
-            styleMask: [.borderless],
+            // 默认使用 .nonactivatingPanel：不激活 App 就不会把图库等后台窗口顶到最前；
+            // 仅当用户实际点击「文字标注」需要输入法时，再按需激活 App。
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
@@ -184,15 +185,12 @@ final class CaptureCoordinator: NSObject {
         panel.onCancel = { [weak self] in
             self?.closeEditor()
         }
-        // 选区阶段刻意不激活 App（否则会把自己的窗口顶到最前，盖住要截的应用）。
-        // 但编辑器需要接管键盘、输入法和标注，所以进编辑器时再激活；
-        // 这时画面已经冻结，激活不会影响截取内容。
-        // 记录截图前的前台应用，结束时把焦点还回去
-        if let front = NSWorkspace.shared.frontmostApplication,
+        // 记录截图前的前台应用，若文字标注阶段激活了 App，结束时把焦点还回去
+        if previousFrontApp == nil,
+           let front = NSWorkspace.shared.frontmostApplication,
            front.bundleIdentifier != Bundle.main.bundleIdentifier {
             previousFrontApp = front
         }
-        NSApp.activate(ignoringOtherApps: true)
         LensoWindowMotion.present(panel, duration: 0.16, makeKey: true)
         // 激活是异步协作的：等一拍再确认一次 key 状态，
         // 否则面板可能没拿到键盘焦点，文字标注就完全打不进字。
@@ -214,9 +212,9 @@ final class CaptureCoordinator: NSObject {
         } else {
             editorHost = nil
         }
-        // 把焦点还给截图前的那个应用，lenso 不留在最前面
-        if let app = previousFrontApp, !app.isTerminated {
-            app.activate(options: [.activateIgnoringOtherApps])
+        // 若标注期间（如文字输入）曾激活过 lenso，结束时把焦点还给截图前的应用
+        if NSApp.isActive, let app = previousFrontApp, !app.isTerminated {
+            app.activate()
         }
         previousFrontApp = nil
     }
