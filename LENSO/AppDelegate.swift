@@ -75,14 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // 启动后自动打开图库主窗口（菜单栏应用默认不弹出任何窗口）
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            UserDefaults.standard.set(true, forKey: "pendingOpenLibrary")
-            NotificationCenter.default.post(name: .openLibraryOnLaunch, object: nil)
-            if NSApp.isActive {
-                NSApp.activate(ignoringOtherApps: true)
-            }
-        }
+        // 菜单栏常驻应用默认不主动弹出图库窗口，避免打断用户当前工作。
 
         // 从 GitHub Releases 静默检查更新（每天最多一次，失败不打扰）
         Task { @MainActor in

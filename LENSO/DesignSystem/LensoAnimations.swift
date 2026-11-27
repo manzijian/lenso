@@ -115,7 +115,12 @@ enum LensoWindowMotion {
             window.setFrame(startFrame, display: false)
         }
         window.alphaValue = 0
-        if makeKey {
+        if window.styleMask.contains(.nonactivatingPanel) {
+            window.orderFrontRegardless()
+            if makeKey {
+                window.makeKey()
+            }
+        } else if makeKey {
             window.makeKeyAndOrderFront(nil)
         } else {
             window.orderFrontRegardless()

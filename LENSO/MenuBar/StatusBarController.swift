@@ -64,6 +64,7 @@ final class StatusBarController {
         )
         panel.isFloatingPanel = true
         panel.level = .popUpMenu
+        panel.hidesOnDeactivate = false
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true

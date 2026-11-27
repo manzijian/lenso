@@ -47,9 +47,6 @@ struct MenuBarPanelView: View {
                         revealed = true
                     }
                 }
-                if UserDefaults.standard.bool(forKey: "pendingOpenLibrary") {
-                    openLibrary()
-                }
                 installKeyMonitor()
             }
             .onDisappear {
