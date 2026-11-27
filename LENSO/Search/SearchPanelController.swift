@@ -21,15 +21,15 @@ final class SearchPanelController {
     private var keyMonitor: Any?
     private var resignObserver: NSObjectProtocol?
 
-    func show() {
+    func show(initialCategory: SearchPanelView.FilterCategory = .all) {
         if let panel {
-            NotificationCenter.default.post(name: .searchPanelShouldReload, object: nil)
+            NotificationCenter.default.post(name: .searchPanelShouldReload, object: initialCategory)
             LensoWindowMotion.present(panel, slideY: 8, makeKey: true)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
 
-        let view = SearchPanelView { [weak self] in
+        let view = SearchPanelView(initialCategory: initialCategory) { [weak self] in
             self?.hide()
         }
         let hosting = NSHostingView(rootView: view)

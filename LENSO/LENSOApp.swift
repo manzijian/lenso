@@ -69,7 +69,7 @@ struct LENSOApp: App {
                 .keyboardShortcut(shortcut(for: .globalSearch))
 
                 Button("剪贴板历史") {
-                    ClipboardPanelController.shared.show()
+                    SearchPanelController.shared.show(initialCategory: .clipboard)
                 }
                 .keyboardShortcut(shortcut(for: .clipboardHistory))
 

@@ -49,10 +49,12 @@ struct BehindWindowBlur: NSViewRepresentable {
 
 /// 全屏沉浸式搜索：模糊桌面 + 瀑布流画廊（参考 Apple 照片搜索）
 struct SearchPanelView: View {
+    var initialCategory: FilterCategory = .all
     var onDismiss: () -> Void = {}
 
     enum FilterCategory: String, CaseIterable, Identifiable {
         case all = "全部"
+        case clipboard = "剪贴板"
         case text = "文字"
         case images = "图片"
         var id: String { rawValue }
@@ -79,6 +81,7 @@ struct SearchPanelView: View {
 
     @State private var searchText = ""
     @State private var selectedCategory: FilterCategory = .all
+    @State private var confirmingClearClipboard = false
     @State private var items: [FeedItem] = []
     @State private var copiedID: UUID?
     @State private var inspectingItem: FeedItem?
@@ -129,12 +132,20 @@ struct SearchPanelView: View {
         )
         .shadow(color: .black.opacity(0.22), radius: 30, y: 14)
         .onAppear {
+            selectedCategory = initialCategory
+            confirmingClearClipboard = false
             focused = true
             reloadFeed()
             installKeyMonitor()
         }
         .onDisappear { removeKeyMonitor() }
-        .onReceive(NotificationCenter.default.publisher(for: .searchPanelShouldReload)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .searchPanelShouldReload)) { note in
+            if let cat = note.object as? FilterCategory {
+                LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                    selectedCategory = cat
+                    confirmingClearClipboard = false
+                }
+            }
             focused = true
             reloadFeed()
         }
@@ -149,6 +160,10 @@ struct SearchPanelView: View {
                 LensoAnimations.withMotion(LensoAnimations.panel, reduceMotion: reduceMotion) {
                     inspectingItem = nil
                 }
+            } else if confirmingClearClipboard {
+                LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                    confirmingClearClipboard = false
+                }
             } else {
                 onDismiss()
             }
@@ -157,6 +172,10 @@ struct SearchPanelView: View {
             if inspectingItem != nil {
                 LensoAnimations.withMotion(LensoAnimations.panel, reduceMotion: reduceMotion) {
                     inspectingItem = nil
+                }
+            } else if confirmingClearClipboard {
+                LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                    confirmingClearClipboard = false
                 }
             } else {
                 onDismiss()
@@ -265,6 +284,7 @@ struct SearchPanelView: View {
                     Button {
                         LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
                             selectedCategory = cat
+                            confirmingClearClipboard = false
                         }
                     } label: {
                         HStack(spacing: 5) {
@@ -366,6 +386,8 @@ struct SearchPanelView: View {
             switch selectedCategory {
             case .all:
                 return ("photo.stack", "暂无最近复制记录", "截取图片或复制任意文字，都会在这里形成画廊")
+            case .clipboard:
+                return ("doc.on.clipboard", "暂无剪贴板历史", "复制任意文字或图片后，会显示在这里")
             case .images:
                 return ("photo", "暂无图片记录", "截取屏幕或复制图片后，会显示在这里")
             case .text:
@@ -444,6 +466,47 @@ struct SearchPanelView: View {
             hint("space", "预览")
             hint("esc", "关闭")
             Spacer()
+            if selectedCategory == .clipboard, count(for: .clipboard) > 0 {
+                if confirmingClearClipboard {
+                    HStack(spacing: 6) {
+                        Button("取消") {
+                            LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                                confirmingClearClipboard = false
+                            }
+                        }
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                        .buttonStyle(LensoPressButtonStyle())
+
+                        Button("确认清空剪贴板?") {
+                            try? ScreenshotStore.shared.clearClipboardHistory()
+                            LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                                confirmingClearClipboard = false
+                            }
+                            reloadFeed()
+                        }
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.red.opacity(0.85)))
+                        .buttonStyle(LensoPressButtonStyle())
+                    }
+                    .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
+                } else {
+                    Button {
+                        LensoAnimations.withMotion(LensoAnimations.snappy, reduceMotion: reduceMotion) {
+                            confirmingClearClipboard = true
+                        }
+                    } label: {
+                        Label("清空剪贴板", systemImage: "trash")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(LensoPressButtonStyle())
+                    .transition(LensoTransitions.badge(reduceMotion: reduceMotion))
+                }
+            }
             Text("共 \(filteredItems.count) 项")
                 .font(.system(size: 10.5))
                 .foregroundStyle(.secondary)
@@ -520,6 +583,8 @@ struct SearchPanelView: View {
     private func matches(_ item: FeedItem, category: FilterCategory) -> Bool {
         switch category {
         case .all: break
+        case .clipboard:
+            if item.clipboardID == nil { return false }
         case .text:
             if case .image = item.kind { return false }
         case .images:

@@ -11,6 +11,7 @@ struct MenuBarPanelView: View {
     @State private var shortcutStore = ShortcutStore.shared
     @State private var registry = ToolRegistry.shared
     @State private var revealed = false
+    @State private var showTools = false
     @State private var selectedIndex: Int? = 0
     @State private var keyMonitor: Any?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -78,8 +79,9 @@ struct MenuBarPanelView: View {
             if !actions.isEmpty {
                 section(title: "快捷操作", items: actions, indexBase: 0)
             }
-            if !tools.isEmpty {
-                section(title: "工具", items: tools, indexBase: actions.count)
+            if showTools && !tools.isEmpty {
+                section(title: "效率工具", items: tools, indexBase: actions.count)
+                    .transition(LensoTransitions.inlineExpand(reduceMotion: reduceMotion))
             }
 
             footer
@@ -136,6 +138,16 @@ struct MenuBarPanelView: View {
 
             Spacer()
 
+            if !allTools.isEmpty {
+                footerButton(
+                    showTools ? "wrench.and.screwdriver.fill" : "wrench.and.screwdriver",
+                    help: showTools ? "收起工具箱" : "展开效率工具"
+                ) {
+                    LensoAnimations.withMotion(LensoAnimations.panel, reduceMotion: reduceMotion) {
+                        showTools.toggle()
+                    }
+                }
+            }
             footerButton("chart.bar.xaxis", help: "数据看板") {
                 openWindow(id: "library")
                 NSApp.activate(ignoringOtherApps: true)
@@ -178,27 +190,21 @@ struct MenuBarPanelView: View {
     private var allActions: [PanelItem] {
         [
             PanelItem(
-                id: "search", title: "全局搜索", subtitle: "检索截图与复制的文字",
-                symbol: "magnifyingglass",
-                shortcut: shortcutStore.combo(for: .globalSearch).displayString,
-                tool: nil
-            ),
-            PanelItem(
                 id: "capture", title: "区域截图", subtitle: "框选屏幕任意区域",
                 symbol: "viewfinder",
                 shortcut: shortcutStore.combo(for: .captureRegion).displayString,
                 tool: nil
             ),
             PanelItem(
-                id: "library", title: "打开图库", subtitle: "全部截图与文字收纳",
-                symbol: "square.grid.2x2",
-                shortcut: shortcutStore.combo(for: .openLibrary).displayString,
+                id: "search", title: "全局搜索", subtitle: "检索截图、剪贴板与文字便签",
+                symbol: "magnifyingglass",
+                shortcut: shortcutStore.combo(for: .globalSearch).displayString,
                 tool: nil
             ),
             PanelItem(
-                id: "clipboard", title: "剪贴板历史", subtitle: "最近复制的图片与文字",
-                symbol: "doc.on.clipboard",
-                shortcut: shortcutStore.combo(for: .clipboardHistory).displayString,
+                id: "library", title: "打开图库", subtitle: "按天归档与文字收纳",
+                symbol: "square.grid.2x2",
+                shortcut: shortcutStore.combo(for: .openLibrary).displayString,
                 tool: nil
             ),
         ]
@@ -229,8 +235,6 @@ struct MenuBarPanelView: View {
             CaptureCoordinator.shared.startRegionCapture()
         case "library":
             openLibrary()
-        case "clipboard":
-            ClipboardPanelController.shared.show()
         default:
             break
         }
@@ -248,7 +252,7 @@ struct MenuBarPanelView: View {
     private func installKeyMonitor() {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            let allItems = allActions + allTools
+            let allItems = showTools ? (allActions + allTools) : allActions
             switch event.keyCode {
             case 53: // Esc
                 StatusBarController.shared.hide()

@@ -57,7 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             SearchPanelController.shared.show()
         }
         GlobalHotKeyManager.shared.directHandlers[.clipboardHistory] = {
-            ClipboardPanelController.shared.show()
+            SearchPanelController.shared.show(initialCategory: .clipboard)
         }
         GlobalHotKeyManager.shared.directHandlers[.openAnalytics] = {
             NotificationCenter.default.post(name: .openAnalyticsSection, object: nil)
